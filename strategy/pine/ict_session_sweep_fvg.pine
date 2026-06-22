@@ -1,0 +1,201 @@
+//@version=5
+// ============================================================================
+//  ICT Session Sweep + FVG Reversal
+//  ---------------------------------------------------------------------------
+//  Estrategia basada en el flujo descrito:
+//    1. Marca el máximo/mínimo de las sesiones de Asia y Londres.
+//    2. Durante la "killzone" de Nueva York (desde las 09:00 NY) espera a que
+//       uno de esos niveles sea BARRIDO (liquidity sweep: la vela rompe el
+//       nivel y cierra de vuelta del otro lado).
+//    3. Tras el barrido, busca un Fair Value Gap (FVG) de 3 velas en la
+//       dirección de la reversión y entra.
+//    4. Stop en el extremo del barrido. Objetivo = siguiente "draw on
+//       liquidity" (la liquidez opuesta de sesión); con fallback a un RR fijo.
+//
+//  Pensado para gráficos de 1 minuto, pero todos los tiempos son configurables.
+//  overlay=true → dibuja niveles, sweeps y cajas de FVG sobre el precio.
+// ============================================================================
+strategy("ICT Session Sweep + FVG Reversal",
+     overlay              = true,
+     initial_capital      = 10000,
+     default_qty_type     = strategy.percent_of_equity,
+     default_qty_value    = 100,
+     pyramiding           = 0,
+     calc_on_every_tick   = false,
+     process_orders_on_close = true,
+     commission_type      = strategy.commission.percent,
+     commission_value     = 0.0)
+
+// ----------------------------------------------------------------------------
+//  Inputs
+// ----------------------------------------------------------------------------
+gT       = "Sesiones (hora del exchange / timezone elegido)"
+tz       = input.string("America/New_York", "Timezone", group = gT)
+asiaSess = input.session("2000-0000", "Sesión Asia",    group = gT)
+lonSess  = input.session("0200-0500", "Sesión Londres", group = gT)
+killSess = input.session("0900-1200", "Killzone de entrada (NY)", group = gT)
+
+gS       = "Lógica"
+useOuter = input.bool(true, "Usar liquidez externa (máx de altos / mín de bajos)",
+                 tooltip = "Si está activo, el nivel a barrer es el extremo entre Asia y Londres. Si no, se vigilan los 4 niveles por separado.",
+                 group = gS)
+oneTrade = input.bool(true, "Máximo una operación por día", group = gS)
+fvgOnTap = input.bool(true, "Entrar cuando el precio re-testea el FVG (si no, en la formación)", group = gS)
+
+gR       = "Riesgo / objetivo"
+rrFallbk = input.float(2.0, "RR fallback (si no hay liquidez opuesta válida)", minval = 0.5, step = 0.5, group = gR)
+slBufTk  = input.float(0.0, "Buffer de stop (en precio)", minval = 0.0, group = gR)
+
+gV       = "Visual"
+showSess = input.bool(true, "Dibujar niveles de sesión", group = gV)
+showFVG  = input.bool(true, "Dibujar cajas FVG", group = gV)
+
+// ----------------------------------------------------------------------------
+//  Detección de sesiones y construcción de máximos/mínimos
+// ----------------------------------------------------------------------------
+inAsia = not na(time(timeframe.period, asiaSess, tz))
+inLon  = not na(time(timeframe.period, lonSess,  tz))
+inKill = not na(time(timeframe.period, killSess, tz))
+
+var float asiaH = na, var float asiaL = na
+var float lonH  = na, var float lonL  = na
+
+// Reset al inicio de cada sesión y actualización mientras dura.
+if inAsia and not inAsia[1]
+    asiaH := high
+    asiaL := low
+else if inAsia
+    asiaH := math.max(asiaH, high)
+    asiaL := math.min(asiaL, low)
+
+if inLon and not inLon[1]
+    lonH := high
+    lonL := low
+else if inLon
+    lonH := math.max(lonH, high)
+    lonL := math.min(lonL, low)
+
+// Nuevo día NY → reseteamos el estado del setup.
+nyDay   = dayofmonth(time, tz)
+newDay  = ta.change(nyDay) != 0
+
+// ----------------------------------------------------------------------------
+//  Niveles de liquidez a vigilar
+// ----------------------------------------------------------------------------
+buyLevel  = useOuter ? math.max(asiaH, lonH) : na   // liquidez de compra (arriba)
+sellLevel = useOuter ? math.min(asiaL, lonL) : na   // liquidez de venta (abajo)
+
+// Cuando no se usa "externa", evaluamos los 4 niveles por separado.
+highs = array.from(asiaH, lonH)
+lows  = array.from(asiaL, lonL)
+
+// ----------------------------------------------------------------------------
+//  Estado del setup
+// ----------------------------------------------------------------------------
+var bool  armedShort = false   // se barrió un alto → buscamos venta
+var bool  armedLong  = false   // se barrió un bajo → buscamos compra
+var float sweepHi    = na      // extremo del barrido (para el stop)
+var float sweepLo    = na
+var float oppLevel   = na      // draw on liquidity opuesto (objetivo)
+var bool  tradedToday = false
+
+if newDay
+    armedShort  := false
+    armedLong   := false
+    sweepHi     := na
+    sweepLo     := na
+    tradedToday := false
+
+// Helper: ¿la vela barrió este nivel por arriba? (rompe y cierra debajo)
+sweptAbove(lvl) => not na(lvl) and high > lvl and close < lvl
+sweptBelow(lvl) => not na(lvl) and low  < lvl and close > lvl
+
+// Detección de barrido dentro de la killzone.
+sweepHigh = false
+sweepLow  = false
+if inKill
+    if useOuter
+        sweepHigh := sweptAbove(buyLevel)
+        sweepLow  := sweptBelow(sellLevel)
+    else
+        for i = 0 to array.size(highs) - 1
+            if sweptAbove(array.get(highs, i))
+                sweepHigh := true
+            if sweptBelow(array.get(lows, i))
+                sweepLow := true
+
+if sweepHigh and not armedShort
+    armedShort := true
+    armedLong  := false
+    sweepHi    := high
+    // objetivo: liquidez opuesta (el mínimo de sesión más bajo)
+    oppLevel   := math.min(nz(asiaL, low), nz(lonL, low))
+if sweepLow and not armedLong
+    armedLong  := true
+    armedShort := false
+    sweepLo    := low
+    oppLevel   := math.max(nz(asiaH, high), nz(lonH, high))
+
+// Mientras el setup está armado, seguimos el extremo del barrido para el stop.
+if armedShort
+    sweepHi := math.max(nz(sweepHi, high), high)
+if armedLong
+    sweepLo := math.min(nz(sweepLo, low), low)
+
+// ----------------------------------------------------------------------------
+//  Fair Value Gap (3 velas)
+// ----------------------------------------------------------------------------
+bullFVG = low > high[2]          // hueco alcista entre vela[2] y vela[0]
+bearFVG = high < low[2]          // hueco bajista
+fvgTop  = bullFVG ? low  : bearFVG ? low[2] : na
+fvgBot  = bullFVG ? high[2] : bearFVG ? high : na
+
+// ¿Entrada? Tras barrido, con FVG en la dirección de la reversión.
+canTrade = inKill and (not oneTrade or not tradedToday)
+
+longSig  = armedLong  and bullFVG and canTrade
+shortSig = armedShort and bearFVG and canTrade
+
+// ----------------------------------------------------------------------------
+//  Ejecución
+// ----------------------------------------------------------------------------
+// Stop y objetivo
+longStop  = (na(sweepLo) ? low  : sweepLo) - slBufTk
+shortStop = (na(sweepHi) ? high : sweepHi) + slBufTk
+
+longTgt  = not na(oppLevel) and oppLevel > close ? oppLevel : close + (close - longStop)  * rrFallbk
+shortTgt = not na(oppLevel) and oppLevel < close ? oppLevel : close - (shortStop - close) * rrFallbk
+
+if longSig and strategy.position_size == 0
+    strategy.entry("Long", strategy.long)
+    strategy.exit("L-exit", from_entry = "Long", stop = longStop, limit = longTgt)
+    tradedToday := true
+    armedLong   := false
+
+if shortSig and strategy.position_size == 0
+    strategy.entry("Short", strategy.short)
+    strategy.exit("S-exit", from_entry = "Short", stop = shortStop, limit = shortTgt)
+    tradedToday := true
+    armedShort  := false
+
+// ----------------------------------------------------------------------------
+//  Visual
+// ----------------------------------------------------------------------------
+plot(showSess ? asiaH : na, "Asia High", color.new(color.orange, 0), 1, plot.style_linebr)
+plot(showSess ? asiaL : na, "Asia Low",  color.new(color.orange, 0), 1, plot.style_linebr)
+plot(showSess ? lonH  : na, "London High", color.new(color.blue, 0), 1, plot.style_linebr)
+plot(showSess ? lonL  : na, "London Low",  color.new(color.blue, 0), 1, plot.style_linebr)
+
+plotshape(sweepHigh, "Sweep High", shape.triangledown, location.abovebar, color.red,  size = size.tiny)
+plotshape(sweepLow,  "Sweep Low",  shape.triangleup,   location.belowbar, color.green, size = size.tiny)
+
+if showFVG and (bullFVG or bearFVG)
+    box.new(left = bar_index - 2, right = bar_index, top = fvgTop, bottom = fvgBot,
+         border_color = color.new(bullFVG ? color.green : color.red, 40),
+         bgcolor      = color.new(bullFVG ? color.green : color.red, 85))
+
+// ----------------------------------------------------------------------------
+//  Alertas
+// ----------------------------------------------------------------------------
+alertcondition(longSig,  "Long setup",  "ICT: barrido de mínimos + FVG alcista → LONG")
+alertcondition(shortSig, "Short setup", "ICT: barrido de máximos + FVG bajista → SHORT")
