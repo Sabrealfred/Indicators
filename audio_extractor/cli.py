@@ -46,6 +46,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Sobrescribe el archivo de salida si ya existe (solo archivos locales).",
     )
     parser.add_argument(
+        "--insecure",
+        action="store_true",
+        help=(
+            "Omite la verificación del certificado TLS al descargar de una URL "
+            "(útil tras proxies que interceptan TLS)."
+        ),
+    )
+    parser.add_argument(
         "-V", "--version",
         action="version",
         version=f"%(prog)s {__version__}",
@@ -67,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             audio_format=args.audio_format,
             bitrate=args.bitrate,
             overwrite=args.overwrite,
+            insecure=args.insecure,
         )
     except AudioExtractionError as exc:
         print(f"Error: {exc}", file=sys.stderr)

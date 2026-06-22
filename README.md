@@ -54,6 +54,7 @@ python -m audio_extractor video.mp4
 | `-f, --format` | `mp3`, `wav`, `m4a`, `aac`, `flac`, `opus` | `mp3` |
 | `-b, --bitrate` | Bitrate, p. ej. `128k`, `192k`, `320k` | `192k` |
 | `--overwrite` | Sobrescribe la salida (solo archivos locales) | desactivado |
+| `--insecure` | Omite la verificación del certificado TLS (URLs, tras proxies que interceptan TLS) | desactivado |
 
 ## Uso como librería
 
@@ -69,3 +70,8 @@ print(ruta)
 
 - Para extraer de un video de TikTok, copia el enlace de "compartir" y pásalo entre comillas.
 - Los formatos `wav` y `flac` son sin pérdida; el bitrate se ignora para ellos.
+- Si estás tras un proxy corporativo que intercepta TLS y ves
+  `CERTIFICATE_VERIFY_FAILED`, añade `--insecure`.
+- Si recibes `403 host_not_allowed`, tu red/entorno bloquea el host por
+  política (no es un fallo de la herramienta); ejecútala en una red que
+  permita el dominio de origen.

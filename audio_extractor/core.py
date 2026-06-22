@@ -114,8 +114,13 @@ def extract_from_url(
     output_dir: str | os.PathLike[str] = ".",
     audio_format: str = "mp3",
     bitrate: str = "192k",
+    insecure: bool = False,
 ) -> Path:
     """Descarga un video de una URL y extrae su audio usando yt-dlp.
+
+    Si `insecure` es True, se omite la verificación del certificado TLS
+    (útil tras proxies corporativos que interceptan TLS con un certificado
+    autofirmado).
 
     Devuelve la ruta del archivo de audio generado.
     """
@@ -157,6 +162,7 @@ def extract_from_url(
         "progress_hooks": [_hook],
         "quiet": True,
         "no_warnings": True,
+        "nocheckcertificate": insecure,
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -194,6 +200,7 @@ def extract(
     audio_format: str = "mp3",
     bitrate: str = "192k",
     overwrite: bool = False,
+    insecure: bool = False,
 ) -> Path:
     """Punto de entrada unificado: detecta si `source` es URL o archivo local."""
     if is_url(source):
@@ -203,6 +210,7 @@ def extract(
             output_dir=out_dir,
             audio_format=audio_format,
             bitrate=bitrate,
+            insecure=insecure,
         )
     return extract_from_file(
         source,
