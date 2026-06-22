@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+
+# Pruebas
+.pytest_cache/
+
+# Archivos multimedia descargados/generados
+*.mp3
+*.wav
+*.m4a
+*.aac
+*.flac
+*.opus
+*.mp4
+*.webm
+*.mkv
