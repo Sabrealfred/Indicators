@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "audio-extractor"
+version = "0.1.0"
+description = "Extrae audio desde URLs (TikTok, YouTube, etc.) o archivos de video locales."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+dependencies = ["yt-dlp>=2024.1.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+audio-extractor = "audio_extractor.cli:main"
+
+[tool.setuptools]
+packages = ["audio_extractor"]
