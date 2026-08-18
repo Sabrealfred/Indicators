@@ -1,0 +1,68 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Unit tests + debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle.kts', 'gradle/libs.versions.toml') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build the debug APK
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload the APK as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: neopal-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # A rolling pre-release so the APK can be installed straight from a phone
+      # browser, without signing into GitHub or unzipping an artifact.
+      - name: Publish the rolling debug release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          cp "$apk" neopal-debug.apk
+          gh release delete debug-latest --yes --cleanup-tag || true
+          gh release create debug-latest neopal-debug.apk \
+            --prerelease \
+            --target "${{ github.sha }}" \
+            --title "NeoPal — debug APK" \
+            --notes "Debug build of ${{ github.sha }}. Download \`neopal-debug.apk\` on your phone and allow installing from unknown sources. Debug-signed: uninstall any previous copy before updating."
