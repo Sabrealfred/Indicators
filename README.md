@@ -7,10 +7,21 @@ tiempo real**: el proyecto no incluye un solo PNG ni un solo WAV.
 
 La lista completa de features está en **[docs/FEATURES.md](docs/FEATURES.md)**.
 
+## Descargar el APK
+
+Cada push a `main` o a una rama `claude/**` compila en GitHub Actions y refresca una
+pre-release rodante con el APK de debug:
+
+**https://github.com/Sabrealfred/Indicators/releases/tag/debug-latest**
+
+Abrí ese link desde el celular, bajá `neopal-debug.apk` y permití la instalación desde
+orígenes desconocidos. Está firmado con la clave de debug de Android: sirve para probar, pero
+para publicar en Play Store hace falta un keystore de release propio.
+
 ## Cómo compilarlo
 
-Este proyecto **no se compiló en el entorno donde se escribió** (no había Android SDK y el proxy
-bloquea `dl.google.com`), así que el primer build tiene que hacerse localmente:
+El primer build se hizo en CI (ver `.github/workflows/android.yml`), porque el entorno donde se
+escribió el proyecto no tenía Android SDK. En local:
 
 ```bash
 # Android Studio Ladybug o superior, JDK 17
