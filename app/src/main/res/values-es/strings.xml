@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NeoPal</string>
+    <string name="channel_care_name">Recordatorios de cuidado</string>
+    <string name="channel_care_description">Te avisa cuando tu mascota tiene hambre, está sucia o enferma.</string>
+    <string name="action_feed">Alimentar</string>
+    <string name="action_clean">Limpiar</string>
+    <string name="action_play">Jugar</string>
+    <string name="action_medicine">Medicina</string>
+    <string name="action_lights">Luces</string>
+    <string name="action_praise">Felicitar</string>
+    <string name="action_scold">Regañar</string>
+    <string name="action_shop">Tienda</string>
+    <string name="action_album">Álbum</string>
+    <string name="action_awards">Logros</string>
+    <string name="action_settings">Ajustes</string>
+</resources>

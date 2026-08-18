@@ -1,0 +1,328 @@
+package com.neopal.pet.domain
+
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
+
+/** The animation the creature should play as a reaction to an action. */
+enum class PetAnimation {
+    IDLE, EAT, HAPPY, PLAY, SLEEP, WAKE, CLEAN, HEAL, REFUSE, SCOLD, PRAISE, EVOLVE, HATCH, LEVEL_UP, DEAD
+}
+
+/** Result of one player interaction: the new state, what to animate, and what to say. */
+data class ActionResult(
+    val state: PetState,
+    val animation: PetAnimation = PetAnimation.IDLE,
+    val toast: String? = null,
+    val events: List<GameEvent> = emptyList(),
+    val accepted: Boolean = true,
+)
+
+/**
+ * Every direct player interaction. Each function is pure: give it a state, get a new one.
+ * Nothing here touches storage, time or Android APIs, which keeps it unit-testable.
+ */
+object CareActions {
+
+    private fun finish(
+        state: PetState,
+        animation: PetAnimation,
+        toast: String?,
+        events: MutableList<GameEvent>,
+        accepted: Boolean = true,
+    ): ActionResult {
+        val (withAchievements, unlocked) = Achievements.evaluate(state)
+        unlocked.forEach { events += GameEvent.Unlocked(it) }
+        return ActionResult(withAchievements, animation, toast, events.toList(), accepted)
+    }
+
+    private fun blocked(state: PetState, toast: String): ActionResult =
+        ActionResult(state, PetAnimation.REFUSE, toast, emptyList(), accepted = false)
+
+    /** Shared guard: eggs, sleeping pets and dead pets do not accept most interactions. */
+    private fun guard(state: PetState, allowWhileAsleep: Boolean = false): String? = when {
+        state.isDead -> "${state.name} is no longer with us."
+        state.isEgg -> "The egg is still warming up..."
+        state.isSleeping && !allowWhileAsleep -> "${state.name} is fast asleep."
+        else -> null
+    }
+
+    // ---------------------------------------------------------------- feeding
+
+    fun feed(state: PetState, itemId: String): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        val item = ItemCatalog[itemId] ?: return blocked(state, "Nothing to serve.")
+        if (!item.isConsumable) return blocked(state, "${item.name} is not food.")
+        if ((state.inventory[itemId] ?: 0) <= 0) return blocked(state, "You are out of ${item.name}.")
+        if (item.kind != ItemKind.MEDICINE && state.stats.satiety >= 96f) {
+            return blocked(state, "${state.name} is completely full.")
+        }
+        if (state.isSulking) return blocked(state, "${state.name} turns away, sulking.")
+
+        val events = mutableListOf<GameEvent>()
+        var s = consume(state, itemId)
+        s = s.copy(
+            stats = s.stats.copy(
+                satiety = s.stats.satiety + item.satiety,
+                happiness = s.stats.happiness + item.happiness,
+                energy = s.stats.energy + item.energy,
+                hygiene = s.stats.hygiene + item.hygiene,
+                health = s.stats.health + item.health,
+                bond = s.stats.bond + item.bond + 1f,
+            ).coerced(),
+            weightGrams = (s.weightGrams + item.weight).coerceIn(6f, 120f),
+            mealsEaten = s.mealsEaten + if (item.kind == ItemKind.MEAL) 1 else 0,
+        )
+        s = Simulation.applyXp(s, if (item.kind == ItemKind.MEAL) 6 else 3, events)
+        return finish(s, PetAnimation.EAT, "${state.name} ate the ${item.name}.", events)
+    }
+
+    fun useMedicine(state: PetState, itemId: String = "medicine"): ActionResult {
+        if (state.isDead) return blocked(state, "Too late for medicine.")
+        val item = ItemCatalog[itemId] ?: return blocked(state, "Unknown medicine.")
+        if ((state.inventory[itemId] ?: 0) <= 0) return blocked(state, "You are out of ${item.name}.")
+        if (!state.isSick && state.stats.health > 95f) return blocked(state, "${state.name} feels fine.")
+
+        val events = mutableListOf<GameEvent>()
+        var s = consume(state, itemId)
+        val cured = state.isSick && (itemId == "medicine_super" || s.stats.health + item.health >= 60f)
+        s = s.copy(
+            stats = s.stats.copy(
+                health = s.stats.health + item.health,
+                happiness = s.stats.happiness + item.happiness,
+            ).coerced(),
+            isSick = if (cured) false else s.isSick,
+            medicineDoses = s.medicineDoses + if (cured) 1 else 0,
+        )
+        if (cured) events += GameEvent.Recovered
+        s = Simulation.applyXp(s, 10, events)
+        val message = if (cured) "${state.name} is feeling better!" else "${state.name} needs another dose."
+        return finish(s, PetAnimation.HEAL, message, events)
+    }
+
+    // ---------------------------------------------------------------- hygiene
+
+    fun cleanRoom(state: PetState): ActionResult {
+        if (state.isDead) return blocked(state, "Nothing to clean up.")
+        if (state.poops == 0 && state.stats.hygiene > 92f) return blocked(state, "Everything is already spotless.")
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            poops = 0,
+            cleanups = state.cleanups + 1,
+            stats = state.stats.copy(
+                hygiene = state.stats.hygiene + 40f + state.poops * 8f,
+                happiness = state.stats.happiness + 4f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 5, events)
+        return finish(s, PetAnimation.CLEAN, "Room cleaned.", events)
+    }
+
+    fun bathe(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        if ((state.inventory["soap"] ?: 0) <= 0) return blocked(state, "You need Bubble Soap.")
+        val events = mutableListOf<GameEvent>()
+        var s = consume(state, "soap").let {
+            it.copy(
+                cleanups = it.cleanups + 1,
+                stats = it.stats.copy(hygiene = 100f, happiness = it.stats.happiness + 6f, bond = it.stats.bond + 2f).coerced(),
+            )
+        }
+        s = Simulation.applyXp(s, 6, events)
+        return finish(s, PetAnimation.CLEAN, "${state.name} is squeaky clean!", events)
+    }
+
+    // ---------------------------------------------------------------- rest
+
+    fun toggleLights(state: PetState): ActionResult {
+        if (state.isDead || state.isEgg) return blocked(state, "Nothing happens.")
+        val lightsOff = !state.lightsOff
+        val s = state.copy(lightsOff = lightsOff)
+        val toast = if (lightsOff) "Lights out. Good night." else "Lights on."
+        return ActionResult(s, if (lightsOff) PetAnimation.SLEEP else PetAnimation.WAKE, toast)
+    }
+
+    /** Manual nap. Refused if the pet is wide awake — it will not sleep on demand. */
+    fun putToSleep(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        if (state.stats.energy > 60f) return blocked(state, "${state.name} is not sleepy at all.")
+        val s = state.copy(isSleeping = true, lightsOff = true)
+        return ActionResult(s, PetAnimation.SLEEP, "${state.name} curls up and dozes off.")
+    }
+
+    fun wake(state: PetState): ActionResult {
+        if (!state.isSleeping) return blocked(state, "${state.name} is already awake.")
+        val s = state.copy(
+            isSleeping = false,
+            lightsOff = false,
+            stats = state.stats.copy(happiness = state.stats.happiness - 6f).coerced(),
+        )
+        return ActionResult(s, PetAnimation.WAKE, "You woke ${state.name} up early.")
+    }
+
+    // ---------------------------------------------------------------- affection & discipline
+
+    fun pet(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + 5f,
+                bond = state.stats.bond + 2.5f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 2, events)
+        return finish(s, PetAnimation.HAPPY, null, events)
+    }
+
+    fun praise(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            praises = state.praises + 1,
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + 8f,
+                bond = state.stats.bond + 4f,
+                discipline = state.stats.discipline + 2f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 4, events)
+        return finish(s, PetAnimation.PRAISE, "${state.name} beams with pride!", events)
+    }
+
+    /**
+     * Scolding raises discipline but costs happiness. It only works when the pet actually
+     * misbehaved (sulking, refusing food, or calling for attention).
+     */
+    fun scold(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        val deserved = state.isSulking || state.stats.discipline < 60f
+        if (!deserved) return blocked(state, "${state.name} did nothing wrong.")
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            scolds = state.scolds + 1,
+            stats = state.stats.copy(
+                discipline = state.stats.discipline + 10f,
+                happiness = state.stats.happiness - 6f,
+                bond = state.stats.bond - 1f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 3, events)
+        return finish(s, PetAnimation.SCOLD, "${state.name} looks down, then nods.", events)
+    }
+
+    // ---------------------------------------------------------------- play
+
+    /** Can the pet start a minigame right now? */
+    fun canPlay(state: PetState): String? = when {
+        state.isDead -> "${state.name} is no longer with us."
+        state.isEgg -> "Wait for the egg to hatch."
+        state.isSleeping -> "${state.name} is asleep."
+        state.stats.energy < 12f -> "${state.name} is too tired to play."
+        state.isSick -> "${state.name} is too sick to play."
+        else -> null
+    }
+
+    /**
+     * Applies the outcome of a minigame. [score] is normalised 0..1 by each game so the
+     * rewards stay comparable no matter which one was played.
+     */
+    fun finishGame(state: PetState, won: Boolean, score: Float, gameName: String): ActionResult {
+        val normalized = score.coerceIn(0f, 1f)
+        val events = mutableListOf<GameEvent>()
+        val coins = (8 + normalized * 30f * state.species.playBias).roundToInt()
+        var s = state.copy(
+            gamesPlayed = state.gamesPlayed + 1,
+            gamesWon = state.gamesWon + if (won) 1 else 0,
+            coins = state.coins + coins,
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + (if (won) 18f else 8f) * state.species.playBias,
+                energy = state.stats.energy - (6f + normalized * 6f),
+                bond = state.stats.bond + if (won) 3f else 1.5f,
+                satiety = state.stats.satiety - 3f,
+            ).coerced(),
+            weightGrams = max(6f, state.weightGrams - 0.6f),
+        )
+        s = Simulation.applyXp(s, if (won) 22 else 10, events)
+        val toast = if (won) "$gameName cleared! +$coins coins" else "$gameName over. +$coins coins"
+        return finish(s, PetAnimation.PLAY, toast, events)
+    }
+
+    // ---------------------------------------------------------------- economy
+
+    fun buy(state: PetState, itemId: String): ActionResult {
+        val item = ItemCatalog[itemId] ?: return blocked(state, "Unknown item.")
+        if (item.isCosmetic && (state.inventory[itemId] ?: 0) > 0) {
+            return blocked(state, "You already own ${item.name}.")
+        }
+        if (state.coins < item.price) return blocked(state, "Not enough coins.")
+        val events = mutableListOf<GameEvent>()
+        val s = state.copy(
+            coins = state.coins - item.price,
+            inventory = state.inventory + (itemId to (state.inventory[itemId] ?: 0) + 1),
+        )
+        return finish(s, PetAnimation.HAPPY, "Bought ${item.name}.", events)
+    }
+
+    fun equipHat(state: PetState, hatId: String?): ActionResult {
+        if (hatId != null && (state.inventory[hatId] ?: 0) <= 0) return blocked(state, "You do not own that yet.")
+        val s = state.copy(equippedHat = hatId, stats = state.stats.copy(happiness = state.stats.happiness + 2f).coerced())
+        return ActionResult(s, PetAnimation.HAPPY, hatId?.let { "Wearing ${ItemCatalog.require(it).name}." } ?: "Hat removed.")
+    }
+
+    fun setRoom(state: PetState, roomId: String): ActionResult {
+        if ((state.inventory[roomId] ?: 0) <= 0 && roomId != "room_default") {
+            return blocked(state, "You do not own that room.")
+        }
+        val s = state.copy(roomTheme = roomId, stats = state.stats.copy(happiness = state.stats.happiness + 3f).coerced())
+        return ActionResult(s, PetAnimation.HAPPY, "Room changed.")
+    }
+
+    fun rename(state: PetState, name: String): ActionResult {
+        val trimmed = name.trim().take(12)
+        if (trimmed.isEmpty()) return blocked(state, "Pick a name first.")
+        return ActionResult(state.copy(name = trimmed), PetAnimation.HAPPY, "Say hello to $trimmed!")
+    }
+
+    /** Photo mode: stores the current look in the album. */
+    fun snapshot(state: PetState, title: String, nowMillis: Long): ActionResult {
+        if (state.isEgg) return blocked(state, "There is nothing to photograph yet.")
+        val entry = AlbumEntry(
+            id = "snap_${nowMillis}",
+            title = title.ifBlank { "${state.name}, ${state.stage.displayName}" },
+            species = state.species,
+            stage = state.stage,
+            branch = state.branch,
+            hatId = state.equippedHat,
+            roomTheme = state.roomTheme,
+            petAgeSeconds = state.ageSeconds,
+            capturedAtMillis = nowMillis,
+        )
+        val events = mutableListOf<GameEvent>()
+        val s = state.copy(album = (state.album + entry).takeLast(60))
+        return finish(s, PetAnimation.HAPPY, "Picture saved to the album.", events)
+    }
+
+    private fun consume(state: PetState, itemId: String): PetState {
+        val left = (state.inventory[itemId] ?: 0) - 1
+        val inventory = if (left <= 0) state.inventory - itemId else state.inventory + (itemId to left)
+        return state.copy(inventory = inventory)
+    }
+
+    /** Convenience for the UI: how many of an item is left. */
+    fun count(state: PetState, itemId: String): Int = state.inventory[itemId] ?: 0
+
+    /** Highest-priority need, used for the "what does it want" hint bubble. */
+    fun topNeed(state: PetState): String? {
+        if (state.isDead || state.isEgg) return null
+        val needs = listOf(
+            "Hungry" to (100f - state.stats.satiety),
+            "Bored" to (100f - state.stats.happiness),
+            "Sleepy" to (100f - state.stats.energy),
+            "Dirty" to (100f - state.stats.hygiene) + state.poops * 15f,
+            "Sick" to if (state.isSick) 200f else 0f,
+        )
+        val (label, severity) = needs.maxBy { it.second }
+        return if (severity >= min(65f, 100f)) label else null
+    }
+}

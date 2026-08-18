@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NeoPal</string>
+    <string name="channel_care_name">Care reminders</string>
+    <string name="channel_care_description">Tells you when your pet is hungry, dirty or sick.</string>
+    <string name="action_feed">Feed</string>
+    <string name="action_clean">Clean</string>
+    <string name="action_play">Play</string>
+    <string name="action_medicine">Medicine</string>
+    <string name="action_lights">Lights</string>
+    <string name="action_praise">Praise</string>
+    <string name="action_scold">Scold</string>
+    <string name="action_shop">Shop</string>
+    <string name="action_album">Album</string>
+    <string name="action_awards">Awards</string>
+    <string name="action_settings">Settings</string>
+</resources>
