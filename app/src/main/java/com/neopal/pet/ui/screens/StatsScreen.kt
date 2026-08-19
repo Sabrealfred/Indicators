@@ -2,6 +2,7 @@ package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -9,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -25,9 +28,18 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
+import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.StatBar
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.roundToInt
@@ -48,9 +60,22 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.nav_back),
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
             }
-            Text(pet.name.uppercase(), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+            Text(
+                pet.name.uppercase(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { heading() },
+            )
         }
         Text(
             "${pet.species.displayName} · ${pet.stage.displayName} · ${pet.branch.displayName} · ${pet.personality.displayName}",
@@ -59,57 +84,84 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         )
         Spacer(Modifier.height(16.dp))
 
-        SectionCard("Needs") {
-            StatBar("Satiety", pet.stats.satiety, NeoColors.StatSatiety)
+        SectionCard(stringResource(R.string.stats_section_needs)) {
+            StatBar(stringResource(R.string.stat_satiety), pet.stats.satiety, NeoColors.StatSatiety)
             Spacer(Modifier.height(10.dp))
-            StatBar("Happiness", pet.stats.happiness, NeoColors.StatHappiness)
+            StatBar(stringResource(R.string.stat_happiness), pet.stats.happiness, NeoColors.StatHappiness)
             Spacer(Modifier.height(10.dp))
-            StatBar("Energy", pet.stats.energy, NeoColors.StatEnergy)
+            StatBar(stringResource(R.string.stat_energy), pet.stats.energy, NeoColors.StatEnergy)
             Spacer(Modifier.height(10.dp))
-            StatBar("Hygiene", pet.stats.hygiene, NeoColors.StatHygiene)
+            StatBar(stringResource(R.string.stat_hygiene), pet.stats.hygiene, NeoColors.StatHygiene)
             Spacer(Modifier.height(10.dp))
-            StatBar("Health", pet.stats.health, NeoColors.StatHealth)
+            StatBar(stringResource(R.string.stat_health), pet.stats.health, NeoColors.StatHealth)
             Spacer(Modifier.height(10.dp))
-            StatBar("Discipline", pet.stats.discipline, NeoColors.StatDiscipline)
+            StatBar(stringResource(R.string.stat_discipline), pet.stats.discipline, NeoColors.StatDiscipline)
             Spacer(Modifier.height(10.dp))
-            StatBar("Bond", pet.stats.bond, NeoColors.StatBond)
+            StatBar(stringResource(R.string.stat_bond), pet.stats.bond, NeoColors.StatBond)
         }
 
         Spacer(Modifier.height(12.dp))
-        SectionCard("Growth") {
-            InfoRow("Age", "${pet.ageInPetDays(config)} pet days")
-            InfoRow("Stage progress", "${(Simulation.stageProgress(pet, config) * 100).roundToInt()} %")
-            InfoRow("Weight", "${pet.weightGrams.roundToInt()} g")
-            InfoRow("Generation", "#${pet.generation}")
-            InfoRow("Care grade", careGrade(pet.stats.careScore))
+        SectionCard(stringResource(R.string.stats_section_growth)) {
+            InfoRow(
+                stringResource(R.string.stats_age),
+                stringResource(R.string.stats_age_value, pet.ageInPetDays(config)),
+            )
+            InfoRow(
+                stringResource(R.string.stats_stage_progress),
+                stringResource(
+                    R.string.stats_percent_value,
+                    (Simulation.stageProgress(pet, config) * 100).roundToInt(),
+                ),
+            )
+            InfoRow(
+                stringResource(R.string.stats_weight),
+                stringResource(R.string.stats_weight_value, pet.weightGrams.roundToInt()),
+            )
+            InfoRow(
+                stringResource(R.string.stats_generation),
+                stringResource(R.string.stats_generation_value, pet.generation),
+            )
+            // A bare letter grade is a riddle; the hint says which numbers it is averaging.
+            InfoRow(
+                stringResource(R.string.stats_care_grade),
+                careGrade(pet.stats.careScore),
+                hint = stringResource(R.string.stats_care_grade_hint),
+            )
             // Naming the exact next form turns raising a pet into reading a spec sheet.
-            InfoRow("Leaning toward", branchHint(Simulation.decideBranch(pet)))
+            InfoRow(
+                stringResource(R.string.stats_leaning_toward),
+                branchHint(Simulation.decideBranch(pet)),
+            )
         }
 
         Spacer(Modifier.height(12.dp))
-        SectionCard("Record") {
-            InfoRow("Meals served", "${pet.mealsEaten}")
-            InfoRow("Clean-ups", "${pet.cleanups}")
-            InfoRow("Games played", "${pet.gamesPlayed}")
-            InfoRow("Games won", "${pet.gamesWon}")
-            InfoRow("Praises", "${pet.praises}")
-            InfoRow("Scoldings", "${pet.scolds}")
-            InfoRow("Illnesses cured", "${pet.medicineDoses}")
-            InfoRow("Care mistakes", "${pet.careMistakes}")
+        SectionCard(stringResource(R.string.stats_section_record)) {
+            InfoRow(stringResource(R.string.stats_record_meals), "${pet.mealsEaten}")
+            InfoRow(stringResource(R.string.stats_record_cleanups), "${pet.cleanups}")
+            InfoRow(stringResource(R.string.stats_record_games_played), "${pet.gamesPlayed}")
+            InfoRow(stringResource(R.string.stats_record_games_won), "${pet.gamesWon}")
+            InfoRow(stringResource(R.string.stats_record_praises), "${pet.praises}")
+            InfoRow(stringResource(R.string.stats_record_scoldings), "${pet.scolds}")
+            InfoRow(stringResource(R.string.stats_record_cures), "${pet.medicineDoses}")
+            InfoRow(stringResource(R.string.stats_record_mistakes), "${pet.careMistakes}")
         }
         Spacer(Modifier.height(24.dp))
     }
 }
 
 /** A hint about where the care history is pointing, without naming the form outright. */
-private fun branchHint(branch: com.neopal.pet.domain.EvolutionBranch): String = when (branch) {
-    com.neopal.pet.domain.EvolutionBranch.ATHLETIC -> "restless, always moving"
-    com.neopal.pet.domain.EvolutionBranch.GOURMAND -> "fond of its meals"
-    com.neopal.pet.domain.EvolutionBranch.SCHOLAR -> "attentive, well behaved"
-    com.neopal.pet.domain.EvolutionBranch.FERAL -> "wary, left to itself"
-    com.neopal.pet.domain.EvolutionBranch.BALANCED -> "even tempered"
-}
+@Composable
+private fun branchHint(branch: EvolutionBranch): String = stringResource(
+    when (branch) {
+        EvolutionBranch.ATHLETIC -> R.string.branch_hint_athletic
+        EvolutionBranch.GOURMAND -> R.string.branch_hint_gourmand
+        EvolutionBranch.SCHOLAR -> R.string.branch_hint_scholar
+        EvolutionBranch.FERAL -> R.string.branch_hint_feral
+        EvolutionBranch.BALANCED -> R.string.branch_hint_balanced
+    },
+)
 
+// Grade letters are symbols, not prose, so they stay out of strings.xml.
 private fun careGrade(score: Float): String = when {
     score >= 0.9f -> "S"
     score >= 0.78f -> "A"
@@ -127,22 +179,71 @@ private fun SectionCard(title: String, content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = NeoColors.NeonCyan)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // The neon accent moved off the text and onto a rule: cyan type on the light
+                // theme sits at 1.9:1, the same cyan as a 3dp bar only has to clear 3:1.
+                Box(
+                    modifier = Modifier
+                        .size(width = 3.dp, height = 14.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(NeoAccents.cyan),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    title.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { heading() },
+                )
+            }
             Spacer(Modifier.height(12.dp))
             content()
         }
     }
 }
 
+/**
+ * Label on the left, value on the right. Both halves carry weight so a 1.3x font scale wraps
+ * the row instead of squeezing the value off the edge.
+ */
 @Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
+private fun InfoRow(label: String, value: String, hint: String? = null) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
+            .padding(vertical = 4.dp)
+            // Label, value and hint are one fact; TalkBack should say it in one breath.
+            .semantics(mergeDescendants = true) { },
     ) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.Top,
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.End,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        if (hint != null) {
+            Text(
+                hint,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
