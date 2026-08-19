@@ -67,22 +67,17 @@ class ParticleSystem(private val random: Random = Random(1)) {
 
     /** Advances the simulation by [dt] seconds and drops dead particles. */
     fun update(dt: Float) {
-        val iterator = particles.iterator()
-        val dead = mutableListOf<Particle>()
-        while (iterator.hasNext()) {
-            val p = iterator.next()
+        // One pass, no allocation: this runs sixty times a second behind the whole scene.
+        for (p in particles) {
             p.life -= dt
-            if (p.life <= 0f) {
-                dead += p
-                continue
-            }
+            if (p.life <= 0f) continue
             p.x += p.vx * dt
             p.y += p.vy * dt
             p.vy += gravity(p.kind) * dt
             p.vx *= 0.98f
             p.spin += p.spinSpeed * dt
         }
-        dead.forEach { particles.remove(it) }
+        particles.removeAll { it.life <= 0f }
     }
 
     fun draw(scope: DrawScope) = with(scope) {

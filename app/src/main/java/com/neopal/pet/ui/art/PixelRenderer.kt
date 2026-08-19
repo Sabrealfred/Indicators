@@ -25,6 +25,7 @@ import kotlin.math.roundToInt
 class PixelRenderer(private val targetHeight: Int = 144) {
 
     private var buffer: ImageBitmap? = null
+    private var bufferCanvas: Canvas? = null
     private val bufferScope = CanvasDrawScope()
 
     /** Renders [block] at low resolution and blits the result across [target]. */
@@ -34,12 +35,14 @@ class PixelRenderer(private val targetHeight: Int = 144) {
         val width = max(1, (height * aspect).roundToInt())
 
         var bitmap = buffer
-        if (bitmap == null || bitmap.width != width || bitmap.height != height) {
+        var canvas = bufferCanvas
+        if (bitmap == null || canvas == null || bitmap.width != width || bitmap.height != height) {
             bitmap = ImageBitmap(width, height)
+            // The canvas wraps the bitmap, so both are rebuilt together and reused every frame.
+            canvas = Canvas(bitmap)
             buffer = bitmap
+            bufferCanvas = canvas
         }
-
-        val canvas = Canvas(bitmap)
         bufferScope.draw(
             density = Density(1f),
             layoutDirection = LayoutDirection.Ltr,

@@ -85,7 +85,8 @@ private const val GOLDEN_AFTER = 15f
 fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
-    val best = pet.highScores[GAME_ID] ?: 0
+    // Frozen at entry: finishGame writes the new record before the result card renders.
+    val best = remember { pet.highScores[GAME_ID] ?: 0 }
     val motion = if (ui.config.reducedMotion) 0.3f else 1f
 
     val items = remember { mutableListOf<FallingItem>() }

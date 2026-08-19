@@ -25,6 +25,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -62,6 +63,7 @@ import com.neopal.pet.ui.art.drawSleepVignette
 import com.neopal.pet.ui.art.drawWeather
 import com.neopal.pet.ui.art.pingPong
 import com.neopal.pet.ui.theme.NeoColors
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -131,6 +133,15 @@ fun PetStage(
     onSwipeUp: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
+    // The frame loop and the gesture handlers outlive the composition that created them, so
+    // everything they read has to be kept fresh explicitly. Without this the loop keeps seeing
+    // the pet as the egg it was when the screen first appeared.
+    val live by rememberUpdatedState(state)
+    val onTap by rememberUpdatedState(onTapPet)
+    val onDoubleTap by rememberUpdatedState(onDoubleTapPet)
+    val onLongPress by rememberUpdatedState(onLongPressPet)
+    val onScoop by rememberUpdatedState(onScoopPoop)
+    val onFlick by rememberUpdatedState(onSwipeUp)
     val particles = remember { ParticleSystem() }
     val pixelRenderer = remember(config.pixelHeight) { PixelRenderer(config.pixelHeight) }
     val labels = remember { mutableStateListOf<FloatLabel>() }
@@ -163,7 +174,7 @@ fun PetStage(
                 particles.update(dt)
                 if (shake > 0f) shake = (shake - dt * 2.4f).coerceAtLeast(0f)
 
-                if (time > nextIdlePose && !state.isSleeping && !state.isDead && !state.isEgg) {
+                if (time > nextIdlePose && !live.isSleeping && !live.isDead && !live.isEgg) {
                     idlePose = IdlePose.entries[((time * 7).toInt() % (IdlePose.entries.size - 1)) + 1]
                     idlePoseStart = time
                     nextIdlePose = time + 9f + (time % 7f)
@@ -174,7 +185,7 @@ fun PetStage(
 
                 // A pet that never leaves the centre of the frame reads as a menu illustration.
                 // It picks a spot, walks there, then stands around for a while.
-                val canWander = !state.isSleeping && !state.isDead && !state.isEgg && !state.isSick
+                val canWander = !live.isSleeping && !live.isDead && !live.isEgg && !live.isSick
                 if (canWander) {
                     if (wanderPause > 0f) {
                         wanderPause -= dt
@@ -193,7 +204,7 @@ fun PetStage(
                 labels.removeAll { time - it.bornAt > LABEL_LIFETIME }
 
                 // Blink roughly every three seconds, twice as often when the pet is nervous.
-                val interval = if (state.stats.happiness < 35f) 1.6f else 3.2f
+                val interval = if (live.stats.happiness < 35f) 1.6f else 3.2f
                 if (time - lastBlink > interval) {
                     lastBlink = time
                     blinkPhase = 0.001f
@@ -228,10 +239,14 @@ fun PetStage(
         }
     }
 
-    // Ambient particles that belong to a state rather than to an action.
-    LaunchedEffect(state.mood, state.isSick, state.poops) {
-        if (state.mood == Mood.SLEEPING) particles.emit(ParticleKind.ZZZ, 0.58f, 0.42f, 3)
-        if (state.isSick) particles.emit(ParticleKind.DUST, 0.5f, 0.45f, 4, Color(0xFF7FBF6A))
+    // Ambient particles belong to a state, so they have to keep coming while the state holds.
+    // Emitting once meant a sleeping pet puffed three Zs and then slept in silence all night.
+    LaunchedEffect(state.mood, state.isSick) {
+        while (true) {
+            if (live.mood == Mood.SLEEPING) particles.emit(ParticleKind.ZZZ, 0.58f, 0.42f, 2)
+            if (live.isSick) particles.emit(ParticleKind.DUST, 0.5f, 0.45f, 3, Color(0xFF7FBF6A))
+            delay(2_200)
+        }
     }
 
     val night = if (Simulation.isNight(state, config)) 1f else 0f
@@ -321,14 +336,14 @@ fun PetStage(
                 .pointerInput(state.poops, state.isDead) {
                     detectTapGestures(
                         onTap = { position ->
-                            if (hitsPoop(position, size.width.toFloat(), size.height.toFloat(), state.poops)) {
-                                onScoopPoop()
+                            if (hitsPoop(position, size.width.toFloat(), size.height.toFloat(), live.poops)) {
+                                onScoop()
                             } else {
-                                onTapPet()
+                                onTap()
                             }
                         },
-                        onDoubleTap = { onDoubleTapPet() },
-                        onLongPress = { onLongPressPet() },
+                        onDoubleTap = { onDoubleTap() },
+                        onLongPress = { onLongPress() },
                     )
                 }
                 .pointerInput(state.isDead) {
@@ -343,8 +358,8 @@ fun PetStage(
                         onDragEnd = {
                             isStroking = false
                             // A flick upward tosses the pet; a sideways stroke is a long pet.
-                            if (verticalTravel < -size.height * 0.20f) onSwipeUp()
-                            else if (travelled > size.width * 0.25f) onTapPet()
+                            if (verticalTravel < -size.height * 0.20f) onFlick()
+                            else if (travelled > size.width * 0.25f) onTap()
                         },
                         onDragCancel = { isStroking = false },
                         onDrag = { change, dragAmount ->

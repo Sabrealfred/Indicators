@@ -41,6 +41,12 @@ class MainActivity : ComponentActivity() {
         viewModelRef?.onResumed()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Stop the foreground clock and flush the save; from here on, time counts as time away.
+        viewModelRef?.onPaused()
+    }
+
     private fun askForNotificationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)

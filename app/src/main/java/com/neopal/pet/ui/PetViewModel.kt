@@ -61,6 +61,14 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     private var saveJob: Job? = null
+    /**
+     * The foreground clock only runs while the screen is actually in front of someone. Left
+     * running in the background it fed the simulation a stream of one-second ticks, which look
+     * like presence, not absence — so the gentler offline rates and the health floor never
+     * applied to a phone sitting in a pocket.
+     */
+    @Volatile
+    private var inForeground: Boolean = true
     private var toastJob: Job? = null
 
     init {
@@ -87,6 +95,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             while (true) {
                 delay(1_000)
+                if (!inForeground) continue
                 val current = _ui.value
                 val pet = current.pet ?: continue
                 val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)
@@ -123,8 +132,15 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Called when the app leaves the screen, so the world is simulated as time away. */
+    fun onPaused() {
+        inForeground = false
+        _ui.value.pet?.let { persist(it, immediate = true) }
+    }
+
     /** Called when the app returns to the foreground so offline progress lands immediately. */
     fun onResumed() {
+        inForeground = true
         val current = _ui.value
         val pet = current.pet ?: return
         val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)

@@ -166,6 +166,8 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(padColor.copy(alpha = if (lit) 1f else 0.30f))
                                     .clickable(enabled = started && !playingBack && !finished) {
+                                        // Two fingers can land in the same frame, after the index has passed the end.
+                                        if (inputIndex >= sequence.size) return@clickable
                                         litPad = pad
                                         if (sequence[inputIndex] == pad) {
                                             if (ui.config.soundEnabled) {

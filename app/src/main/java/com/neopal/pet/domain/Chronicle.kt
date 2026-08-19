@@ -105,12 +105,16 @@ object Chronicle {
     }
 
     /** Milestones the player causes directly, written from the action rather than the tick. */
-    fun forPlayerMilestone(state: PetState, config: GameConfig): PetState = when {
-        state.mealsEaten == 1 -> append(state, "You fed me for the first time. I liked it.", ChronicleKind.CARE, config)
-        state.gamesWon == 1 -> append(state, "We played and I won. I want to do that again.", ChronicleKind.JOY, config)
-        state.cleanups == 10 -> append(state, "You keep my room clean. I notice.", ChronicleKind.CARE, config)
-        state.stats.bond >= 90f && state.chronicle.none { it.text.startsWith("I would follow") } ->
-            append(state, "I would follow you anywhere.", ChronicleKind.JOY, config)
-        else -> state
+    fun forPlayerMilestone(state: PetState, config: GameConfig): PetState {
+        // "Don't repeat the last line" is not enough: any simulation event in between pushed the
+        // first-time line off the end and it got written again on the next tap.
+        fun once(condition: Boolean, text: String, kind: ChronicleKind): PetState? =
+            if (condition && state.chronicle.none { it.text == text }) append(state, text, kind, config) else null
+
+        return once(state.mealsEaten >= 1, "You fed me for the first time. I liked it.", ChronicleKind.CARE)
+            ?: once(state.gamesWon >= 1, "We played and I won. I want to do that again.", ChronicleKind.JOY)
+            ?: once(state.cleanups >= 10, "You keep my room clean. I notice.", ChronicleKind.CARE)
+            ?: once(state.stats.bond >= 90f, "I would follow you anywhere.", ChronicleKind.JOY)
+            ?: state
     }
 }

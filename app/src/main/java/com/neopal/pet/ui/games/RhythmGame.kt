@@ -78,6 +78,7 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     var judgement by remember { mutableStateOf<Judgement?>(null) }
     var judgeTick by remember { mutableIntStateOf(0) }
     var flashLane by remember { mutableIntStateOf(-1) }
+    var flashLaneAt by remember { mutableFloatStateOf(-1f) }
 
     val duration = 32f
     val fallSpeed = 0.55f          // screen heights per second
@@ -110,7 +111,11 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                         combo = 0
                     }
                 }
-                notes.removeAll { it.y > 1.1f || (it.hit && it.y > hitLine + 0.02f) }
+                // A hit note stops moving, so a removal test based on its position could never
+                // fire for anything hit early — which is every PERFECT. Drop them on the spot.
+                notes.removeAll { it.y > 1.1f || it.hit }
+                // The lane highlight is a flash, not a latch.
+                if (flashLane >= 0 && time - flashLaneAt > 0.12f) flashLane = -1
 
                 if (time >= duration) finished = true
             }
@@ -210,6 +215,7 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                         .background(laneColors[lane].copy(alpha = if (flashLane == lane) 0.55f else 0.32f))
                         .clickable(enabled = started && !finished) {
                             flashLane = lane
+                            flashLaneAt = time
                             val target = notes
                                 .filter { it.lane == lane && !it.hit && !it.missed }
                                 .minByOrNull { abs(it.y - hitLine) }
