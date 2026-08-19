@@ -82,7 +82,8 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             InfoRow("Weight", "${pet.weightGrams.roundToInt()} g")
             InfoRow("Generation", "#${pet.generation}")
             InfoRow("Care grade", careGrade(pet.stats.careScore))
-            InfoRow("Next form", Simulation.decideBranch(pet).displayName)
+            // Naming the exact next form turns raising a pet into reading a spec sheet.
+            InfoRow("Leaning toward", branchHint(Simulation.decideBranch(pet)))
         }
 
         Spacer(Modifier.height(12.dp))
@@ -98,6 +99,15 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(24.dp))
     }
+}
+
+/** A hint about where the care history is pointing, without naming the form outright. */
+private fun branchHint(branch: com.neopal.pet.domain.EvolutionBranch): String = when (branch) {
+    com.neopal.pet.domain.EvolutionBranch.ATHLETIC -> "restless, always moving"
+    com.neopal.pet.domain.EvolutionBranch.GOURMAND -> "fond of its meals"
+    com.neopal.pet.domain.EvolutionBranch.SCHOLAR -> "attentive, well behaved"
+    com.neopal.pet.domain.EvolutionBranch.FERAL -> "wary, left to itself"
+    com.neopal.pet.domain.EvolutionBranch.BALANCED -> "even tempered"
 }
 
 private fun careGrade(score: Float): String = when {

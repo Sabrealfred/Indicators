@@ -46,7 +46,20 @@ object Chronicle {
         )
         // Never repeat the previous line verbatim; a diary that stutters reads as broken.
         if (state.chronicle.lastOrNull()?.text == text) return state
-        return state.copy(chronicle = (state.chronicle + entry).takeLast(MAX_ENTRIES))
+        return state.copy(chronicle = trim(state.chronicle + entry))
+    }
+
+    /**
+     * Trims to the cap by discarding ordinary days first. A blind `takeLast` eventually eats
+     * the hatching of the first generation, which is the one line nobody would ever want gone.
+     */
+    private fun trim(entries: List<ChronicleEntry>): List<ChronicleEntry> {
+        if (entries.size <= MAX_ENTRIES) return entries
+        val keepAlways = entries.filter { it.kind == ChronicleKind.MILESTONE || it.kind == ChronicleKind.LOSS }
+        val rest = entries.filter { it.kind != ChronicleKind.MILESTONE && it.kind != ChronicleKind.LOSS }
+        val room = (MAX_ENTRIES - keepAlways.size).coerceAtLeast(0)
+        val kept = (keepAlways + rest.takeLast(room)).sortedBy { it.atSeconds }
+        return kept.takeLast(MAX_ENTRIES)
     }
 
     private fun lineFor(event: GameEvent, state: PetState): Pair<String, ChronicleKind>? = when (event) {

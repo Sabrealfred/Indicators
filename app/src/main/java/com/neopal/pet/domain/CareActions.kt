@@ -236,7 +236,8 @@ object CareActions {
             stats = state.stats.copy(
                 happiness = state.stats.happiness + 8f,
                 bond = state.stats.bond + 4f,
-                discipline = state.stats.discipline + 2f,
+                // Consistent encouragement teaches as well as telling off does, and costs nothing.
+                discipline = state.stats.discipline + 6f,
             ).coerced(),
         )
         s = Simulation.applyXp(s, 4, events)
@@ -255,9 +256,9 @@ object CareActions {
         var s = state.copy(
             scolds = state.scolds + 1,
             stats = state.stats.copy(
-                discipline = state.stats.discipline + 10f,
+                discipline = state.stats.discipline + 7f,
                 happiness = state.stats.happiness - 6f,
-                bond = state.stats.bond - 1f,
+                bond = state.stats.bond - 2f,
             ).coerced(),
         )
         s = Simulation.applyXp(s, 3, events)
@@ -366,9 +367,20 @@ object CareActions {
             capturedAtMillis = nowMillis,
         )
         val events = mutableListOf<GameEvent>()
-        val s = state.copy(album = (state.album + entry).takeLast(60))
+        val s = state.copy(album = trimAlbum(state.album + entry))
         return finish(s, PetAnimation.HAPPY, "Picture saved to the album.", events)
     }
+
+    /** Evolutions are the album's spine; manual snapshots are what gets recycled when it fills. */
+    private fun trimAlbum(album: List<AlbumEntry>): List<AlbumEntry> {
+        if (album.size <= ALBUM_LIMIT) return album
+        val evolutions = album.filter { it.id.startsWith("evo_") }
+        val snapshots = album.filter { !it.id.startsWith("evo_") }
+        val room = (ALBUM_LIMIT - evolutions.size).coerceAtLeast(0)
+        return (evolutions + snapshots.takeLast(room)).sortedBy { it.petAgeSeconds }.takeLast(ALBUM_LIMIT)
+    }
+
+    private const val ALBUM_LIMIT = 60
 
     private fun consume(state: PetState, itemId: String): PetState {
         val left = (state.inventory[itemId] ?: 0) - 1

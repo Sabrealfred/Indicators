@@ -21,7 +21,7 @@ Leyenda: **[✔]** implementado en este repo · **[○]** diseñado, pendiente d
 | 1.4 | 5 ramas evolutivas (Balanced, Athletic, Gourmand, Scholar, Feral) decididas por cómo lo criaste, sin azar | ✔ |
 | 1.5 | 5 personalidades (Playful, Shy, Greedy, Brave, Calm) que alteran ritmos de decaimiento | ✔ |
 | 1.6 | Peso corporal dinámico: engorda al comer, adelgaza al jugar, y cambia la silueta dibujada | ✔ |
-| 1.7 | Muerte por inanición, enfermedad, negligencia o vejez, con pantalla memorial | ✔ |
+| 1.7 | Muerte por inanición, enfermedad, negligencia o vejez, con pantalla memorial. Vida completa ≈ 2 días reales (ajustable: Slow/Normal/Fast/Demo) | ✔ |
 | 1.8 | Generaciones: al morir, la siguiente hereda monedas, cosméticos, logros y álbum | ✔ |
 | 1.9 | Cruce entre dos mascotas / herencia genética de colores | ○ |
 | 1.10 | Especies secretas desbloqueables por condiciones de crianza perfecta | ○ |
@@ -32,12 +32,12 @@ Leyenda: **[✔]** implementado en este repo · **[○]** diseñado, pendiente d
 |---|---------|--------|
 | 2.1 | 7 stats continuas 0–100: saciedad, felicidad, energía, higiene, salud, disciplina y vínculo | ✔ |
 | 2.2 | Decaimiento en tiempo real, escalado por etapa, especie y personalidad | ✔ |
-| 2.3 | Ciclo día/noche interno con reloj propio de la mascota (día configurable, 20 min por defecto) | ✔ |
+| 2.3 | Ciclo día/noche con reloj propio (día configurable, 2 h por defecto; solo afecta la visual y el contador) | ✔ |
 | 2.4 | Sueño automático por cansancio o por apagar la luz; despertar por energía o amanecer | ✔ |
 | 2.5 | Popó acumulable con moscas; ensucia el cuarto y sube el riesgo de enfermedad | ✔ |
 | 2.6 | Enfermedad probabilística (suciedad, hambre, sobrepeso, vejez, salud baja) | ✔ |
 | 2.7 | Registro de "errores de cuidado" (care mistakes) con ventana de perdón de 1 minuto | ✔ |
-| 2.8 | Progreso offline: al reabrir la app se simula lo ocurrido, con tope de 12 h configurable | ✔ |
+| 2.8 | Progreso offline al 30% de velocidad, con tope de 12 h: la ausencia sola nunca mata a una mascota sana | ✔ |
 | 2.9 | Worker en segundo plano cada 15 min que avanza el mundo y decide si notificar | ✔ |
 | 2.10 | Clima y estaciones que afectan el ánimo | ○ |
 

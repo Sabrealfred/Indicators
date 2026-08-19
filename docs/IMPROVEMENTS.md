@@ -138,6 +138,20 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 93 | Voz de la mascota: balbuceos sintetizados distintos por especie | 🔜 |
 | 94 | Ducking del audio cuando entra una notificación del sistema | 💡 |
 
+## I bis. Balance de vida (hallazgos verificados y corregidos)
+
+Un agente de diseño auditó el simulador contra el código y encontró tres cosas que rompían el juego:
+
+| Hallazgo | Antes | Ahora |
+|---|---|---|
+| **Dormir mataba a la mascota** | Con las tasas reales, una mascota llena moría en **50 minutos** de ausencia; 8 h de sueño humano la mataban siempre | El tiempo ausente corre al 30% y la ausencia por sí sola nunca baja la salud del piso; solo una enfermedad que dejaste sin tratar sigue siendo mortal |
+| **La vida entera duraba 5 horas** | 15 días-mascota × 20 min = una vida completa mientras dormías | Etapas en tiempo real con curva adelantada: primera evolución a los 45 min, vida completa ≈ 2 días reales, ajustable (Slow/Normal/Fast/Demo) |
+| **Feral era el destino por defecto** | La disciplina caía 14,4 puntos/hora y regañar daba +10 contra +2 de felicitar: el único camino a Scholar era retar a la criatura | Disciplina cae 5,4/hora, felicitar da +6 y regañar +7 con más costo de vínculo: la constancia amable es una vía real |
+| El diario y el álbum borraban lo importante | `takeLast` se comía la eclosión y las evoluciones | La retención descarta días rutinarios y selfies primero; hitos y evoluciones no se borran |
+| La pantalla de stats spoileaba la evolución exacta | "Next form: Feral" | "Leaning toward: wary, left to itself" |
+| La notificación de muerte era un anzuelo | "Open the app to start a new generation" | "X is gone. Whenever you are ready." |
+| Un recién nacido perfecto sacaba nota C | `careScore` promediaba disciplina y vínculo, que empiezan bajos a propósito | Solo cuentan las cinco necesidades |
+
 ## I. Progresión, narrativa y sistema (95–100)
 
 | # | Mejora | Estado |

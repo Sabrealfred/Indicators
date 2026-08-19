@@ -37,23 +37,42 @@ object Simulation {
     private const val ENERGY_RECOVERY = 0.320f
     private const val HYGIENE_DRAIN = 0.028f
     private const val BOND_DRAIN = 0.005f
-    private const val DISCIPLINE_DRAIN = 0.004f
+    private const val DISCIPLINE_DRAIN = 0.0015f
     private const val HEALTH_DRAIN_CRITICAL = 0.055f
     private const val HEALTH_REGEN = 0.020f
 
     private const val EGG_HATCH_SECONDS = 90L
+    /** Gap that means the app was closed rather than merely idle. */
+    private const val CATCH_UP_THRESHOLD_SECONDS = 180L
     private const val POOP_CHANCE_PER_SECOND = 0.0009f
     private const val SICK_CHECK_INTERVAL = 30L
 
-    /** How long each stage lasts, in pet seconds, before the pet is eligible to evolve. */
-    fun stageDuration(stage: LifeStage, config: GameConfig): Long = when (stage) {
+    /**
+     * How long each stage lasts, in real seconds at [GameConfig.lifeSpeed] 1.0.
+     *
+     * The curve is deliberately front-loaded: the first evolution lands inside a single
+     * sitting so a new player sees the game's one big promise quickly, and the later stages
+     * stretch to hours so the relationship has time to mean something. The whole arc runs
+     * about two days — long enough that a night's sleep is a chapter, not the ending.
+     */
+    private fun baseStageSeconds(stage: LifeStage): Long = when (stage) {
         LifeStage.EGG -> EGG_HATCH_SECONDS
-        LifeStage.BABY -> config.secondsPerPetDay
-        LifeStage.CHILD -> config.secondsPerPetDay * 2
-        LifeStage.TEEN -> config.secondsPerPetDay * 3
-        LifeStage.ADULT -> config.secondsPerPetDay * 5
-        LifeStage.ELDER -> config.secondsPerPetDay * 4
+        LifeStage.BABY -> 45L * 60L
+        LifeStage.CHILD -> 3L * 3600L
+        LifeStage.TEEN -> 8L * 3600L
+        LifeStage.ADULT -> 24L * 3600L
+        LifeStage.ELDER -> 12L * 3600L
     }
+
+    /** How long each stage lasts for this run, after the player's pace setting. */
+    fun stageDuration(stage: LifeStage, config: GameConfig): Long {
+        val speed = config.lifeSpeed.coerceIn(0.1f, 20f)
+        return max(1L, (baseStageSeconds(stage) / speed).toLong())
+    }
+
+    /** Total lifespan in real seconds, for the settings screen to explain the pace honestly. */
+    fun expectedLifetimeSeconds(config: GameConfig): Long =
+        LifeStage.entries.sumOf { stageDuration(it, config) }
 
     fun stageProgress(state: PetState, config: GameConfig): Float {
         val total = stageDuration(state.stage, config).toFloat()
@@ -113,13 +132,29 @@ object Simulation {
         var current = state
         val random = Random(state.rngSeed)
 
+        // Anything longer than a few minutes means the app was closed. Time away is simulated
+        // at a fraction of the live rate, and — unless the pet was already ill — absence alone
+        // is not allowed to kill it. Losing a pet should be something you did, not something
+        // that happened while you slept.
+        val isCatchUp = rawElapsed > CATCH_UP_THRESHOLD_SECONDS
+        val decayScale = if (isCatchUp) config.offlineDecayMultiplier.coerceIn(0.05f, 1f) else 1f
+        val protectHealth = isCatchUp && !state.isSick && state.stats.health > config.offlineHealthFloor
+
         // Bound the loop: long absences use coarser steps instead of more iterations.
         val maxSteps = 2_000
         val step = max(1L, ceil(elapsed.toDouble() / maxSteps).toLong()).coerceAtMost(60L)
         var remaining = elapsed
         while (remaining > 0 && !current.isDead) {
             val dt = min(step, remaining)
-            current = stepOnce(current, dt, config, random, events)
+            current = stepOnce(
+                state = current,
+                dt = dt,
+                config = config,
+                random = random,
+                events = events,
+                decayScale = decayScale,
+                healthFloor = if (protectHealth) config.offlineHealthFloor else 0f,
+            )
             remaining -= dt
         }
 
@@ -138,9 +173,13 @@ object Simulation {
         config: GameConfig,
         random: Random,
         events: MutableList<GameEvent>,
+        decayScale: Float = 1f,
+        /** Floor applied before death is evaluated, so absence alone cannot be fatal. */
+        healthFloor: Float = 0f,
     ): PetState {
         var s = state.copy(ageSeconds = state.ageSeconds + dt)
-        val d = dt.toFloat()
+        // Needs move at the scaled rate; age, sleep and evolution still run on real seconds.
+        val d = dt.toFloat() * decayScale
 
         if (s.stage == LifeStage.EGG) {
             return if (s.secondsInStage >= stageDuration(LifeStage.EGG, config)) {
@@ -207,6 +246,7 @@ object Simulation {
 
         // Weight drifts down slowly when the pet is not overfed.
         val weight = (s.weightGrams - 0.0015f * d).coerceIn(6f, 120f)
+        stats = stats.copy(health = stats.health.coerceAtLeast(healthFloor))
         s = s.copy(stats = stats.coerced(), weightGrams = weight)
 
         s = handleSleepCycle(s, config, events)

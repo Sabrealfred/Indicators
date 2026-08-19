@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.launch
@@ -161,23 +162,48 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         }
 
         Spacer(Modifier.height(10.dp))
-        SettingsCard("Pace", "How fast pet time runs against real time.") {
+        SettingsCard("Pace", "How long a whole life takes, and how fast the clock runs.") {
+            val lifetimeHours = Simulation.expectedLifetimeSeconds(config) / 3600f
             Text(
-                "One pet day lasts ${config.secondsPerPetDay / 60} minutes.",
+                "A full life takes about ${"%.1f".format(lifetimeHours)} hours of real time.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.height(8.dp))
+            // Presets rather than a raw multiplier: nobody knows what "1.8x life speed" means.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    "Slow" to 0.5f,
+                    "Normal" to 1f,
+                    "Fast" to 3f,
+                    "Demo" to 12f,
+                ).forEach { (label, speed) ->
+                    FilterChip(
+                        selected = kotlin.math.abs(config.lifeSpeed - speed) < 0.01f,
+                        onClick = { viewModel.updateConfig { it.copy(lifeSpeed = speed) } },
+                        label = { Text(label) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Clock: one pet day lasts ${config.secondsPerPetDay / 60} minutes.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Slider(
                 value = (config.secondsPerPetDay / 60f),
                 onValueChange = { minutes ->
-                    viewModel.updateConfig { it.copy(secondsPerPetDay = (minutes.toLong().coerceAtLeast(2L)) * 60L) }
+                    viewModel.updateConfig { it.copy(secondsPerPetDay = (minutes.toLong().coerceAtLeast(5L)) * 60L) }
                 },
-                valueRange = 2f..60f,
-                steps = 28,
+                valueRange = 5f..240f,
+                steps = 46,
             )
             Text(
-                "Shorter days mean faster growth and faster needs. Offline progress is capped at " +
-                    "${config.maxOfflineSeconds / 3600} hours so a long break never wipes a healthy pet.",
+                "The clock only sets day, night and the day counter. Time away is simulated at " +
+                    "${(config.offlineDecayMultiplier * 100).toInt()}% speed and capped at " +
+                    "${config.maxOfflineSeconds / 3600} hours, and absence alone will never kill a " +
+                    "healthy pet — only illness you left untreated can.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

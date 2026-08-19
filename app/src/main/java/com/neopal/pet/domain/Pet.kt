@@ -45,7 +45,7 @@ enum class EvolutionBranch(val displayName: String) {
     FERAL("Feral"),
 }
 
-/** Flavour trait rolled from the first hours of care. Tweaks decay rates and dialogue. */
+/** Flavour trait rolled when the egg is created. Tweaks decay rates and dialogue. */
 @Serializable
 enum class Personality(val displayName: String) {
     PLAYFUL("Playful"),
@@ -91,9 +91,13 @@ data class Stats(
         bond = bond.coerceIn(0f, 100f),
     )
 
-    /** 0..1 summary used for evolution scoring and the "care grade" on the stats screen. */
+    /**
+     * 0..1 summary used for the care grade. Only the five needs count: discipline and bond
+     * start deliberately low and grow over a lifetime, so folding them in would grade a
+     * perfectly-cared-for newborn a C for the crime of being new.
+     */
     val careScore: Float
-        get() = ((satiety + happiness + hygiene + health + discipline + bond) / 6f) / 100f
+        get() = ((satiety + happiness + hygiene + health + energy) / 5f) / 100f
 }
 
 /** One picture in the album: a snapshot of the pet at a milestone. */
@@ -204,10 +208,25 @@ data class PetState(
 /** Tunables. Exposed in settings so a run can be sped up for testing or slowed for a long game. */
 @Serializable
 data class GameConfig(
-    /** Real seconds that make up one pet day. 20 real minutes by default. */
-    val secondsPerPetDay: Long = 1_200L,
+    /**
+     * Real seconds that make up one pet day. This drives the day/night clock and the day
+     * counter only — how fast the pet grows up is [lifeSpeed].
+     */
+    val secondsPerPetDay: Long = 7_200L,
+    /**
+     * Multiplies how fast life stages advance. At 1.0 a pet lives about two real days, which
+     * is the point: a life you can sleep through is not a life you can care for.
+     */
+    val lifeSpeed: Float = 1f,
     /** Offline progress is simulated at most this far back, so a week away is survivable. */
     val maxOfflineSeconds: Long = 12L * 3600L,
+    /**
+     * Time away drains needs at this fraction of the live rate. Without it a full pet starves
+     * to death in under an hour, which means a night's sleep kills it every single time.
+     */
+    val offlineDecayMultiplier: Float = 0.30f,
+    /** Absence alone can never take health below this; only illness left untreated can. */
+    val offlineHealthFloor: Float = 12f,
     val soundEnabled: Boolean = true,
     /** 0..1 master volume for the synthesised effects. */
     val sfxVolume: Float = 0.8f,

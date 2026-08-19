@@ -44,7 +44,8 @@ object Notifications {
      * worker stays quiet instead of nagging.
      */
     fun careMessage(state: PetState): Pair<String, String>? {
-        if (state.isDead) return state.name to "Your pet has passed away. Open the app to start a new generation."
+        // Nothing about a death should read as a call to action.
+        if (state.isDead) return state.name to "${state.name} is gone. Whenever you are ready."
         if (state.isEgg) return null
         return when {
             state.isSick -> state.name to "${state.name} is sick and needs medicine."
