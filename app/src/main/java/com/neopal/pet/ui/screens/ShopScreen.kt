@@ -19,6 +19,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -53,6 +56,7 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
     var tab by remember { mutableIntStateOf(0) }
+    var inspecting by remember { mutableStateOf<Item?>(null) }
     val tabs = listOf("Food", "Care", "Toys", "Hats", "Rooms")
 
     val items = when (tab) {
@@ -95,32 +99,38 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(items) { item ->
-                ShopCard(
-                    item = item,
-                    pet = pet,
-                    onBuy = { viewModel.buy(item.id) },
-                    onEquip = {
-                        when (item.kind) {
-                            ItemKind.HAT -> viewModel.equipHat(if (pet.equippedHat == item.id) null else item.id)
-                            ItemKind.ROOM -> viewModel.setRoom(item.id)
-                            else -> viewModel.feed(item.id)
-                        }
-                    },
-                )
+                ShopCard(item = item, pet = pet, onClick = { inspecting = item })
             }
         }
+    }
+
+    inspecting?.let { item ->
+        ItemDetailDialog(
+            item = item,
+            pet = pet,
+            onDismiss = { inspecting = null },
+            onBuy = { viewModel.buy(item.id) },
+            onUse = {
+                when (item.kind) {
+                    ItemKind.HAT -> viewModel.equipHat(if (pet.equippedHat == item.id) null else item.id)
+                    ItemKind.ROOM -> viewModel.setRoom(item.id)
+                    ItemKind.MEDICINE -> viewModel.useMedicine(item.id)
+                    else -> viewModel.feed(item.id)
+                }
+            },
+        )
     }
 }
 
 @Composable
-private fun ShopCard(item: Item, pet: PetState, onBuy: () -> Unit, onEquip: () -> Unit) {
+private fun ShopCard(item: Item, pet: PetState, onClick: () -> Unit) {
     val owned = pet.inventory[item.id] ?: 0
     val equipped = pet.equippedHat == item.id || pet.roomTheme == item.id
     val canAfford = pet.coins >= item.price
     val tint = Color(item.tint)
 
     Card(
-        onClick = { if (item.isCosmetic && owned > 0) onEquip() else if (canAfford) onBuy() },
+        onClick = onClick,
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
         modifier = Modifier.fillMaxWidth(),
@@ -170,4 +180,84 @@ private fun ShopCard(item: Item, pet: PetState, onBuy: () -> Unit, onEquip: () -
             }
         }
     }
+}
+
+/**
+ * What an item actually does, before you spend on it. Buying blind is the fastest way to
+ * make a shop feel like a slot machine.
+ */
+@Composable
+private fun ItemDetailDialog(
+    item: Item,
+    pet: PetState,
+    onDismiss: () -> Unit,
+    onBuy: () -> Unit,
+    onUse: () -> Unit,
+) {
+    val owned = pet.inventory[item.id] ?: 0
+    val equipped = pet.equippedHat == item.id || pet.roomTheme == item.id
+    val canAfford = pet.coins >= item.price
+    val effects = listOfNotNull(
+        item.satiety.takeIf { it != 0f }?.let { "Satiety" to it },
+        item.happiness.takeIf { it != 0f }?.let { "Happiness" to it },
+        item.energy.takeIf { it != 0f }?.let { "Energy" to it },
+        item.hygiene.takeIf { it != 0f }?.let { "Hygiene" to it },
+        item.health.takeIf { it != 0f }?.let { "Health" to it },
+        item.bond.takeIf { it != 0f }?.let { "Bond" to it },
+        item.weight.takeIf { it != 0f }?.let { "Weight" to it },
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(item.name) },
+        text = {
+            Column {
+                Text(item.description, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                if (effects.isEmpty()) {
+                    Text(
+                        "Pure decoration. It changes nothing but how your pet looks.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    effects.forEach { (label, value) ->
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = (if (value > 0) "+" else "") + value.toInt(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (value > 0) NeoColors.NeonGreen else NeoColors.NeonRed,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = when {
+                        item.isCosmetic && owned > 0 -> if (equipped) "In use" else "Owned"
+                        owned > 0 -> "You have $owned"
+                        else -> "${item.price} coins · you have ${pet.coins}"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (canAfford || owned > 0) NeoColors.NeonCyan else NeoColors.NeonRed,
+                )
+            }
+        },
+        confirmButton = {
+            when {
+                owned > 0 -> TextButton(onClick = { onUse(); onDismiss() }) {
+                    Text(if (item.isCosmetic) (if (equipped) "Take off" else "Wear it") else "Use it")
+                }
+                canAfford -> TextButton(onClick = { onBuy(); onDismiss() }) { Text("Buy") }
+                else -> TextButton(onClick = onDismiss, enabled = false) { Text("Not enough coins") }
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
