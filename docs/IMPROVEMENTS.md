@@ -25,11 +25,11 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 
 | # | Mejora | Estado |
 |---|--------|--------|
-| 13 | Salto real con anticipación, elevación y aterrizaje con squash (hoy es un bob senoidal) | 🔜 |
+| 13 | Salto real con anticipación, impulso, flotación y squash de aterrizaje | ✅ |
 | 14 | Caminar por el cuarto solo: elige un punto, camina hasta ahí y se queda un rato | ✅ |
 | 15 | Mirada que sigue tu dedo mientras acariciás | ✅ |
 | 16 | Parpadeo doble ocasional y parpadeo más rápido cuando está nerviosa | ✅ (parcial: falta el doble) |
-| 17 | Cambio de color según el ánimo: verde enfermo, rojizo enojado, pálido con hambre | ✅ (enfermo) 🔜 (resto) |
+| 17 | Cambio de color según el ánimo: enfermo, hambriento, cansado, triste, sucio y feliz | ✅ |
 | 18 | Rubor progresivo cuando el vínculo sube, no un estado binario | 🔜 |
 | 19 | Respiración visible distinta despierta/dormida/enferma | ✅ |
 | 20 | Cola con física de resorte que sigue al cuerpo con retardo | 🔜 |
@@ -37,7 +37,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 22 | Poses idle secundarias: bostezo, rascarse y mirar al techo, cada ~9 s | ✅ (falta sentarse) |
 | 23 | Reacción al toque por zona: cabeza = feliz, panza = risa, cola = molestia | 💡 |
 | 24 | Estirarse al despertar antes de volver al idle | 🔜 |
-| 25 | Animación de comer con la comida visible en pantalla, no solo migas | 🔜 |
+| 25 | La comida se ve y se achica bocado a bocado mientras come | ✅ |
 | 26 | Transición de evolución con silueta a contraluz antes del fogonazo | ✅ (fogonazo) 🔜 (silueta) |
 | 27 | Anillo de "aura" según la rama evolutiva (Athletic deja estela al moverse) | 💡 |
 | 28 | Mirada vertical: la criatura puede mirar arriba y abajo, no solo a los costados | ✅ |
@@ -64,7 +64,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 44 | Vibración diferenciada por peso de la acción | ✅ |
 | 45 | Rechazos con lenguaje corporal, no solo un cartel | ✅ |
 | 46 | Deshacer inmediato tras una acción equivocada (5 s) | 💡 |
-| 47 | Modo zurdo: dock y rieles espejados | 🔜 |
+| 47 | Modo zurdo: dock y rieles espejados | 💡 |
 | 48 | Atajo de "cuidado rápido": una acción resuelve la necesidad más urgente | 🔜 |
 
 ## D. UI, pantallas y flujo (49–64)
@@ -76,17 +76,17 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 51 | Botones que se hunden al presionar, con rebote de resorte | ✅ |
 | 52 | Badge urgente que late para llevar el ojo sin cambiar de color | ✅ |
 | 53 | Sacudida de pantalla en evolución, nivel y muerte | ✅ |
-| 54 | Pantalla de "mientras no estabas": resumen de lo que pasó offline | 🔜 |
+| 54 | Pantalla de "mientras no estabas": resumen de lo que pasó offline | ✅ |
 | 55 | Widget de pantalla de inicio con el estado y una acción rápida | 🔜 |
 | 56 | Diario de la mascota escrito en primera persona, con línea de tiempo | ✅ |
 | 57 | Récords por minijuego visibles en el menú de juegos | ✅ |
 | 58 | Comparativa de generaciones (esta vs. la anterior) | 🔜 |
-| 59 | Pantalla de detalle de ítem antes de comprar (qué sube, qué baja) | 🔜 |
+| 59 | Ficha de ítem antes de comprar: cada stat que mueve, precio contra saldo | ✅ |
 | 60 | Búsqueda y filtros en la tienda cuando haya más de 40 ítems | 💡 |
-| 61 | Modo una mano: dock más abajo, alcanzable con el pulgar | 🔜 |
-| 62 | Estados vacíos con personalidad (álbum vacío, tienda sin monedas) | 🔜 |
+| 61 | Layouts reales por tamaño: teléfono chico sin rieles, landscape y tablet a dos paneles | ✅ |
+| 62 | Estados vacíos con personalidad (álbum y diario) | ✅ |
 | 63 | Transiciones compartidas entre la mascota del home y la del álbum | 💡 |
-| 64 | Modo horizontal y layout de tablet a dos columnas | 🔜 |
+| 64 | Modo horizontal y layout de tablet a dos columnas | ✅ |
 
 ## E. Iconos, tipografía y color (65–74)
 
@@ -97,7 +97,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 67 | Barrido de brillo animado en ítems nuevos o destacados | ✅ (API lista) 🔜 (usarlo) |
 | 68 | Siluetas inconfundibles: ningún par de iconos se confunde a 24 px | ✅ |
 | 69 | Fuente bitmap propia para los números del HUD | 🔜 |
-| 70 | Paleta accesible verificada para daltonismo en las barras de stats | 🔜 |
+| 70 | Contraste WCAG AA verificado y corregido (8 pares fallaban en tema claro) | ✅ |
 | 71 | Iconos animados en el dock (la comida humea, el jabón burbujea) | 💡 |
 | 72 | Set de iconos alternativo "line art" como opción | 💡 |
 | 73 | Color de acento configurable por el jugador | 💡 |
@@ -164,6 +164,18 @@ Un agente de diseño auditó el simulador contra el código y encontró tres cos
 | 100 | Tests de UI con capturas de regresión visual para el arte procedural | 🔜 |
 
 ---
+
+## Accesibilidad y tamaños de pantalla
+
+| # | Mejora | Estado |
+|---|--------|--------|
+| A1 | Área táctil mínima de 48dp garantizada (los botones del riel medían 20-26dp) | ✅ |
+| A2 | Lectores de pantalla: cada control anuncia una sola frase coherente en vez de cuatro fragmentos | ✅ |
+| A3 | Contraste WCAG AA calculado par por par; ocho combinaciones fallaban en tema claro | ✅ |
+| A4 | Escala de fuente 1.3x sin recortes: filas que crecen o elipsan en vez de cortar | ✅ |
+| A5 | 43 textos extraídos a `strings.xml` con traducción al español (68 claves, ambos idiomas en sync) | ✅ |
+| A6 | Marca en el 25% de cada barra: el punto donde el juego considera crítica una necesidad | ✅ |
+| A7 | Faltan ~50 textos en el resto de la UI y ~170 en el dominio (requiere plumbing de recursos) | 🔜 |
 
 ## Lo que se implementó en esta tanda
 
