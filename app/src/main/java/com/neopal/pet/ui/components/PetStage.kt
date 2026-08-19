@@ -56,6 +56,7 @@ import com.neopal.pet.ui.art.drawPoops
 import com.neopal.pet.ui.art.drawScene
 import com.neopal.pet.ui.art.drawSickAura
 import com.neopal.pet.ui.art.drawSleepVignette
+import com.neopal.pet.ui.art.drawWeather
 import com.neopal.pet.ui.art.pingPong
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.PI
@@ -137,6 +138,14 @@ fun PetStage(
     var shake by remember { mutableFloatStateOf(0f) }
     var pointerX by remember { mutableFloatStateOf(0.5f) }
     var isStroking by remember { mutableStateOf(false) }
+    // Where the pet has wandered to, 0..1 across the floor, and which way it is facing.
+    var wanderX by remember { mutableFloatStateOf(0.5f) }
+    var wanderTarget by remember { mutableFloatStateOf(0.5f) }
+    var wanderPause by remember { mutableFloatStateOf(2f) }
+    // Small unprompted behaviours, so an idle pet still looks like it is thinking about something.
+    var idlePose by remember { mutableStateOf(IdlePose.NONE) }
+    var idlePoseStart by remember { mutableFloatStateOf(0f) }
+    var nextIdlePose by remember { mutableFloatStateOf(9f) }
 
     // Frame loop: advance the clock, the particles, the blink and the screen shake.
     LaunchedEffect(Unit) {
@@ -148,6 +157,34 @@ fun PetStage(
                 time += dt
                 particles.update(dt)
                 if (shake > 0f) shake = (shake - dt * 2.4f).coerceAtLeast(0f)
+
+                if (time > nextIdlePose && !state.isSleeping && !state.isDead && !state.isEgg) {
+                    idlePose = IdlePose.entries[((time * 7).toInt() % (IdlePose.entries.size - 1)) + 1]
+                    idlePoseStart = time
+                    nextIdlePose = time + 9f + (time % 7f)
+                }
+                if (idlePose != IdlePose.NONE && time - idlePoseStart > idlePose.seconds) {
+                    idlePose = IdlePose.NONE
+                }
+
+                // A pet that never leaves the centre of the frame reads as a menu illustration.
+                // It picks a spot, walks there, then stands around for a while.
+                val canWander = !state.isSleeping && !state.isDead && !state.isEgg && !state.isSick
+                if (canWander) {
+                    if (wanderPause > 0f) {
+                        wanderPause -= dt
+                    } else if (abs(wanderX - wanderTarget) < 0.01f) {
+                        // Deterministic-enough wandering: the clock picks the next spot.
+                        wanderTarget = 0.28f + ((sin(time * 0.37f) + 1f) / 2f) * 0.44f
+                        wanderPause = 2.5f + ((sin(time * 0.11f) + 1f) / 2f) * 5f
+                    } else {
+                        val direction = if (wanderTarget > wanderX) 1f else -1f
+                        wanderX = (wanderX + direction * dt * 0.055f).coerceIn(0.2f, 0.8f)
+                    }
+                } else {
+                    // Sleeping, sick or gone: settle back to the middle of the room.
+                    wanderX += (0.5f - wanderX) * dt * 0.8f
+                }
                 labels.removeAll { time - it.bornAt > LABEL_LIFETIME }
 
                 // Blink roughly every three seconds, twice as often when the pet is nervous.
@@ -208,6 +245,10 @@ fun PetStage(
         hatchProgress = hatchProgress,
         pointerX = pointerX,
         isStroking = isStroking,
+        walking = abs(wanderX - wanderTarget) > 0.01f && wanderPause <= 0f,
+        facing = if (wanderTarget > wanderX) 1f else -1f,
+        idlePose = idlePose,
+        idleProgress = ((time - idlePoseStart) / idlePose.seconds).coerceIn(0f, 1f),
     )
 
     // The whole world in one lambda, so it can be drawn straight to the screen or through
@@ -221,8 +262,17 @@ fun PetStage(
             parallax = sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f,
         )
         drawPoops(state.poops, time)
+        // Every third pet day turns wet, and the space and arcade rooms are indoors.
+        val day = state.ageInPetDays(config)
+        val weather = when {
+            state.roomTheme == "room_space" || state.roomTheme == "room_arcade" -> "none"
+            day % 3 == 2 && state.roomTheme == "room_forest" -> "rain"
+            day % 4 == 3 -> "rain"
+            else -> "none"
+        }
+        if (weather != "none") drawWeather(weather, time, intensity = 0.7f)
 
-        val center = Offset(size.width * 0.5f, size.height * 0.60f)
+        val center = Offset(size.width * wanderX, size.height * 0.60f)
         val unit = size.minDimension
         if (state.isSick) drawSickAura(center, unit * 0.34f, time)
         drawCreature(
@@ -350,6 +400,10 @@ private fun buildFrame(
     hatchProgress: Float,
     pointerX: Float,
     isStroking: Boolean,
+    walking: Boolean = false,
+    facing: Float = 0f,
+    idlePose: IdlePose = IdlePose.NONE,
+    idleProgress: Float = 0f,
 ): CreatureFrame {
     val motion = if (reducedMotion) 0.35f else 1f
     val blink = if (blinkPhase > 0f) {
@@ -359,17 +413,46 @@ private fun buildFrame(
     } else 1f
 
     // Baseline idle: a slow breath plus a wandering gaze that snaps to your finger.
-    val gaze = if (isStroking) ((pointerX - 0.5f) * 2f).coerceIn(-1f, 1f) else sin(time * 0.35f)
+    val gaze = when {
+        isStroking -> ((pointerX - 0.5f) * 2f).coerceIn(-1f, 1f)
+        walking -> facing
+        else -> sin(time * 0.35f)
+    }
+    // Walking gets a faster bounce, swinging arms and a lean into the direction of travel.
     var frame = CreatureFrame(
-        bobY = sin(time * 1.6f) * 0.012f * motion,
-        squash = 1f + sin(time * 1.6f) * 0.025f * motion,
+        bobY = if (walking) abs(sin(time * 6f)) * -0.02f * motion else sin(time * 1.6f) * 0.012f * motion,
+        squash = 1f + sin(time * (if (walking) 6f else 1.6f)) * 0.025f * motion,
         eyeOpen = blink,
         mouthOpen = if (isStroking) 0.25f else 0f,
-        lean = sin(time * 0.5f) * 1.2f * motion,
-        armSwing = sin(time * 1.2f) * 0.25f * motion,
+        lean = if (walking) facing * 5f * motion else sin(time * 0.5f) * 1.2f * motion,
+        armSwing = sin(time * (if (walking) 6f else 1.2f)) * (if (walking) 0.8f else 0.25f) * motion,
         gaze = gaze,
         crack = hatchProgress,
     )
+
+    if (idlePose != IdlePose.NONE && !state.isSleeping && !state.isDead) {
+        val q = idleProgress
+        val arc = sin(q * PI.toFloat())
+        frame = when (idlePose) {
+            IdlePose.YAWN -> frame.copy(
+                mouthOpen = arc,
+                eyeOpen = blink * (1f - arc * 0.9f),
+                squash = 1f + arc * 0.05f * motion,
+                bobY = frame.bobY - arc * 0.01f,
+            )
+            IdlePose.SCRATCH -> frame.copy(
+                armSwing = sin(q * 34f) * 0.9f * motion,
+                lean = sin(q * 17f) * 4f * motion,
+                eyeOpen = blink * 0.6f,
+            )
+            IdlePose.LOOK_UP -> frame.copy(
+                gazeY = -arc,
+                lean = -arc * 3f * motion,
+                mouthOpen = arc * 0.15f,
+            )
+            IdlePose.NONE -> frame
+        }
+    }
 
     if (state.isSleeping) {
         frame = frame.copy(
@@ -468,6 +551,14 @@ private fun buildFrame(
         )
         PetAnimation.DEAD -> frame.copy(eyeOpen = 0f, lean = 18f * p, bobY = 0.06f * p)
     }
+}
+
+/** Unprompted little behaviours that break up standing still. */
+internal enum class IdlePose(val seconds: Float) {
+    NONE(1f),
+    YAWN(1.6f),
+    SCRATCH(1.4f),
+    LOOK_UP(2.0f),
 }
 
 /** One jump, expressed as height plus the stretch that goes with it. */

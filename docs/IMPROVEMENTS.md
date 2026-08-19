@@ -26,7 +26,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | # | Mejora | Estado |
 |---|--------|--------|
 | 13 | Salto real con anticipación, elevación y aterrizaje con squash (hoy es un bob senoidal) | 🔜 |
-| 14 | Caminar por el cuarto solo: la mascota deambula y se detiene en props | 🔜 |
+| 14 | Caminar por el cuarto solo: elige un punto, camina hasta ahí y se queda un rato | ✅ |
 | 15 | Mirada que sigue tu dedo mientras acariciás | ✅ |
 | 16 | Parpadeo doble ocasional y parpadeo más rápido cuando está nerviosa | ✅ (parcial: falta el doble) |
 | 17 | Cambio de color según el ánimo: verde enfermo, rojizo enojado, pálido con hambre | ✅ (enfermo) 🔜 (resto) |
@@ -34,13 +34,13 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 19 | Respiración visible distinta despierta/dormida/enferma | ✅ |
 | 20 | Cola con física de resorte que sigue al cuerpo con retardo | 🔜 |
 | 21 | Sombra que se achica y aclara cuando salta | 🔜 |
-| 22 | Poses idle secundarias: bostezo, rascarse, mirar al techo, sentarse | 🔜 |
+| 22 | Poses idle secundarias: bostezo, rascarse y mirar al techo, cada ~9 s | ✅ (falta sentarse) |
 | 23 | Reacción al toque por zona: cabeza = feliz, panza = risa, cola = molestia | 💡 |
 | 24 | Estirarse al despertar antes de volver al idle | 🔜 |
 | 25 | Animación de comer con la comida visible en pantalla, no solo migas | 🔜 |
 | 26 | Transición de evolución con silueta a contraluz antes del fogonazo | ✅ (fogonazo) 🔜 (silueta) |
 | 27 | Anillo de "aura" según la rama evolutiva (Athletic deja estela al moverse) | 💡 |
-| 28 | Micro-expresiones: la ceja se mueve al tocar la pantalla aunque no haya acción | 🔜 |
+| 28 | Mirada vertical: la criatura puede mirar arriba y abajo, no solo a los costados | ✅ |
 | 29 | Sudor cuando la energía está baja y tirita cuando está enferma | 🔜 |
 | 30 | Pupilas que se dilatan al ver comida | 💡 |
 | 31 | Envejecimiento visual gradual dentro de cada etapa, no solo al cambiar de etapa | 💡 |
@@ -110,7 +110,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 75 | Ciclo día/noche continuo con amanecer y atardecer teñidos | ✅ |
 | 76 | Movimiento ambiental por tema: nubes, olas, cometa, hojas, marquesina | ✅ |
 | 77 | Capa de primer plano con parallax invertido para dar profundidad | ✅ |
-| 78 | Sistema de clima (lluvia, nieve) disponible para eventos | ✅ (API) 🔜 (integrarlo) |
+| 78 | Clima conectado al calendario de la mascota: llueve cada tercer día, los cuartos interiores no | ✅ |
 | 79 | Estaciones que cambian la decoración cada N días de mascota | 🔜 |
 | 80 | Cacas con variación de tamaño y rotación por índice | ✅ |
 | 81 | Objetos del cuarto interactuables (tocar la lámpara la enciende) | 🔜 |

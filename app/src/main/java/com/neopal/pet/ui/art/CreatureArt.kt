@@ -49,6 +49,8 @@ data class CreatureFrame(
     val flash: Float = 0f,
     /** Horizontal look direction, −1 left .. 1 right. */
     val gaze: Float = 0f,
+    /** Vertical look direction, −1 up .. 1 down. */
+    val gazeY: Float = 0f,
     /** Egg-only: 0 = intact, 1 = fully cracked. */
     val crack: Float = 0f,
 )
@@ -400,6 +402,7 @@ private fun DrawScope.drawFace(
     val spread = bodyR * p.eyeSpread
     val r = bodyR * p.eyeRadius * 3.2f
     val gaze = frame.gaze * r * 0.28f
+    val gazeUp = frame.gazeY * r * 0.22f
     val open = frame.eyeOpen.coerceIn(0f, 1f)
 
     listOf(-1f, 1f).forEach { side ->
@@ -424,13 +427,13 @@ private fun DrawScope.drawFace(
             )
             drawOval(
                 color = palette.eye,
-                topLeft = Offset(ex - r * 0.52f + gaze, eyeY - r * 0.60f * open),
+                topLeft = Offset(ex - r * 0.52f + gaze, eyeY - r * 0.60f * open + gazeUp),
                 size = Size(r * 1.04f, r * 1.2f * open),
             )
             drawCircle(
                 color = Color.White.copy(alpha = 0.9f),
                 radius = r * 0.22f * open,
-                center = Offset(ex - r * 0.18f + gaze, eyeY - r * 0.28f * open),
+                center = Offset(ex - r * 0.18f + gaze, eyeY - r * 0.28f * open + gazeUp),
             )
             drawOval(
                 color = palette.outline,
