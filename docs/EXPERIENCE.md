@@ -5,8 +5,15 @@
 > entre en conflicto con este documento, se discute aquí primero.
 >
 > Todos los números citados están verificados contra `domain/Simulation.kt`, `domain/Pet.kt`,
-> `domain/CareActions.kt`, `domain/Items.kt`, `domain/Achievements.kt` y `domain/Chronicle.kt`
-> al día de escritura. Si el código cambia, este documento se corrige, no al revés.
+> `domain/CareActions.kt`, `domain/Items.kt`, `domain/Achievements.kt`, `domain/Chronicle.kt`,
+> `work/Notifications.kt`, `ui/screens/StatsScreen.kt` y `test/BalanceTest.kt` al día de
+> escritura. Si el código cambia, este documento se corrige, no al revés.
+>
+> **Revisión 2 — post rebalanceo del ciclo de vida.** El simulador pasó de una vida de ~5 horas
+> a una de ~48 horas y la ausencia dejó de ser mortal por hambre. Todo el §2, el §5, el §9 y el
+> apéndice están recalculados. El §8 conserva los hallazgos viejos con su estado (resuelto /
+> parcial / abierto) porque el registro de qué estaba mal es parte del valor del documento — y
+> suma cinco hallazgos nuevos, tres de ellos graves, que el ritmo nuevo creó o destapó.
 
 ---
 
@@ -16,10 +23,10 @@ Una mascota virtual no es un simulador de crianza. Es un aparato para fabricar *
 proporcional al cariño**, y ese es todo el truco.
 
 El género se inventó con una premisa incómoda: te entrego una criatura que depende de que
-mires una pantalla, y que se degrada exactamente igual de rápido estés mirando o no. No hay
-pausa. No hay "guardar y salir". El tiempo que pasás sin pensar en ella es tiempo que ella
-pasa esperándote. Esa es la única mecánica que importa; todo lo demás —las estadísticas, las
-monedas, los minijuegos, los sombreros— es andamiaje para que esa asimetría se pueda medir.
+mires una pantalla, y que se degrada esté o no mirando alguien. No hay pausa. No hay "guardar y
+salir". El tiempo que pasás sin pensar en ella es tiempo que ella pasa esperándote. Esa es la
+única mecánica que importa; todo lo demás —las estadísticas, las monedas, los minijuegos, los
+sombreros— es andamiaje para que esa asimetría se pueda medir.
 
 **NeoPal es un juego sobre la atención, no sobre la optimización.** La diferencia es
 concreta y tiene consecuencias de diseño:
@@ -32,23 +39,30 @@ concreta y tiene consecuencias de diseño:
   evolutivas (`Balanced`, `Athletic`, `Gourmand`, `Scholar`, `Feral`) **no están ordenadas de
   peor a mejor**: son cinco retratos de cinco maneras de estar presente. `Feral` no es el
   fracaso; es la criatura que aprendió a arreglárselas sola. Si el juego alguna vez sugiere lo
-  contrario —y hoy lo sugiere, ver §8— está trabajando en contra de sí mismo.
+  contrario —y todavía lo sugiere, ver §8.2 y §8.12— está trabajando en contra de sí mismo.
 - Un juego de optimización se termina. NeoPal termina siempre, y siempre igual: la criatura se
   muere. `DeathReason.OLD_AGE` no es una condición de derrota, es el final bueno. La partida
   perfecta también acaba en una lápida.
 
 La mortalidad no es un castigo colgado al final del tubo: es lo que le da precio al minuto de
-hoy. Sabemos, desde el segundo uno, que esto dura unas **cinco horas de reloj real** (18.090
-segundos, §2). Nada de lo que hagas lo alarga. Lo único que podés decidir es **cómo fueron esas
-cinco horas** — y eso es exactamente lo que el álbum y el cuaderno existen para guardar.
+hoy. Sabemos, desde el segundo uno, que esto dura **unas 48 horas de reloj real** (171.990
+segundos a ritmo Normal, §2). Nada de lo que hagas lo alarga. Lo único que podés decidir es
+**cómo fueron esas dos jornadas** — y eso es exactamente lo que el álbum y el cuaderno existen
+para guardar.
+
+El rebalanceo cambió la escala pero no la tesis: la afiló. Una vida de cinco horas se podía
+atravesar de una sentada, y una cosa que se atraviesa de una sentada es una sesión, no una
+relación. Una vida de dos días **obliga a dormir en el medio**, y por lo tanto obliga al juego
+a tener una postura sobre lo que pasa mientras no estás. Esa postura ahora está escrita en el
+código, en `offlineDecayMultiplier` y `offlineHealthFloor`, y es la correcta: *perder una
+mascota tiene que ser algo que hiciste, no algo que pasó mientras dormías.*
 
 Corolario, y es la regla que más veces vamos a tener que defender: **NeoPal nunca debe usar la
 culpa como palanca de retención.** La culpa es el material del que está hecho el juego, no la
-herramienta con la que se lo vende. Una notificación que dice "tu mascota murió, abrí la app
-para empezar de nuevo" convierte un duelo en un embudo. Una pantalla que te muestra el contador
-de "errores de cuidado" en el memorial convierte un recuerdo en una boleta. El juego puede —
-debe — dejar que la criatura diga que la pasó mal. No puede decirte que sos mala persona, y no
-puede insinuar que si volvés más seguido eso se arregla.
+herramienta con la que se lo vende. La notificación de muerte ya se corrigió ("X is gone.
+Whenever you are ready.") y esa corrección es el modelo de todas las que faltan. El juego puede
+— debe — dejar que la criatura diga que la pasó mal. No puede decirte que sos mala persona, y
+no puede insinuar que si volvés más seguido eso se arregla.
 
 Lo que queremos que quede después de desinstalar: no un puntaje. Una frase del cuaderno.
 
@@ -56,44 +70,95 @@ Lo que queremos que quede después de desinstalar: no un puntaje. Una frase del 
 
 ## 2. El arco de una vida
 
-### 2.1 Los tiempos reales
+### 2.1 Los dos relojes
 
-`GameConfig.secondsPerPetDay` vale `1_200` por defecto: **un día-mascota = 20 minutos reales**.
-El ajuste "Pace" lo mueve entre 2 y 60 minutos, así que todo lo de abajo escala salvo el huevo.
+Después del rebalanceo hay **dos relojes independientes** y confundirlos es el error más fácil
+de cometer al diseñar cualquier pantalla:
 
-`Simulation.stageDuration()` define, en días-mascota:
+1. **El reloj de la vida.** `Simulation.baseStageSeconds()` mide cada etapa en **segundos
+   reales**, no en días-mascota. `GameConfig.lifeSpeed` los divide.
+   `Simulation.expectedLifetimeSeconds(config)` devuelve el total.
+2. **El reloj del día.** `GameConfig.secondsPerPetDay = 7_200` (2 horas reales por día-mascota,
+   ajustable de 5 min a 4 h). **Sólo** maneja el ciclo día/noche (`isNight`: de 21:30 a 6:30,
+   o sea 45 minutos de cada 2 horas) y el contador de días. **No** hace crecer a nadie.
 
-| Etapa | Duración (días-mascota) | Real (por defecto) | Edad al terminar | Multiplicador de desgaste |
-|---|---|---|---|---|
-| Huevo | `EGG_HATCH_SECONDS = 90 s` **fijo** | 1 min 30 s | 1,5 min | 0 (nada decae) |
-| Bebé | 1 | 20 min | 21,5 min | ×1,30 |
-| Niño | 2 | 40 min | 1 h 01 min | ×1,10 |
-| Adolescente | 3 | 60 min | 2 h 01 min | ×1,00 |
-| Adulto | 5 | 100 min | 3 h 41 min | ×0,90 |
-| Anciano | 4 | 80 min | 5 h 01 min | ×1,05 |
+### 2.2 Las etapas (a `lifeSpeed = 1.0`, "Normal")
 
-**Vida completa por vejez: 18.090 segundos ≈ 5 h 01 min de reloj real ≈ 15 días-mascota.**
-No son cinco horas *de juego*: son cinco horas *de existir*, y el mundo avanza igual con la app
-cerrada (con el tope de `maxOfflineSeconds = 12 h`).
+| Etapa | Base | Real | Edad acumulada | Día-mascota | Desgaste |
+|---|---|---|---|---|---|
+| Huevo | 90 s | 1 min 30 s | 0:01:30 | 0,0 | ×0 (nada decae) |
+| Bebé | 45 min | 45 min | 0:46:30 | 0,4 | ×1,30 |
+| Niño | 3 h | 3 h | 3:46:30 | 1,9 | ×1,10 |
+| Adolescente | 8 h | 8 h | 11:46:30 | 5,9 | ×1,00 |
+| Adulto | 24 h | 24 h | 1 d 11:46:30 | 17,9 | ×0,90 |
+| Anciano | 12 h | 12 h | 1 d 23:46:30 | 23,9 | ×1,05 |
 
-Ritmos derivados que hay que tener en la cabeza al diseñar cualquier pantalla:
+**Vida completa por vejez: 171.990 s = 47 h 46 min 30 s ≈ 2 días reales ≈ 24 días-mascota.**
 
-| Necesidad | Fórmula (por segundo) | Ventana práctica |
-|---|---|---|
-| Saciedad | `0,085 × etapa × hungerBias × (1,2 si Greedy)` | de 100 a 0 en **13 a 26 min** según especie y etapa |
-| Energía | `0,050 × etapa × energyBias` | se duerme sola (energía ≤ 8) cada **15–25 min** |
-| Sueño | recupera `0,320` hasta 98 | siesta de **≈ 4,7 min** |
-| Felicidad | `0,045 × etapa × personalidad` | entra en enfurruñe (< 12) en **15 a 35 min** |
-| Higiene | `0,028 × etapa + 0,02 por cada popó` | "sucio" (< 30) en **≈ 45 min** limpio, mucho antes con popó |
-| Disciplina | `0,004` sólo despierta | cae de 20 a 15 en **≈ 21 min despierta** |
-| Vínculo | `0,005` | −18 puntos por hora sin intervenir |
-| Popó | prob. `0,0009 × (0,5 + saciedad/100)` por segundo | uno cada **≈ 14 min** bien alimentada |
-| Enfermedad | chequeo cada 30 s, riesgo base 0,4 % | ≈ 38 % por hora en condiciones limpias; sube a >15 % *por chequeo* con sala sucia + hambre |
-| Muerte por abandono total | saciedad a 0, luego salud a `−0,055/s` | **43 a 56 min** desde estadísticas llenas |
+La curva está deliberadamente cargada adelante y hay que entender por qué: **la primera
+evolución cae a los 46 minutos y medio**, dentro de una única sesión larga. El juego le muestra
+su promesa grande a un jugador nuevo antes de pedirle que vuelva mañana. Después las etapas se
+estiran hasta que la etapa Adulto sola es la mitad de la vida.
 
-Ese último número es el más importante del juego y hoy está roto (§8.1).
+### 2.3 Los presets de ritmo
 
-### 2.2 Huevo — 90 segundos
+`SettingsScreen` ofrece cuatro, y cada uno es un producto distinto:
+
+| Preset | `lifeSpeed` | Vida completa | Para quién |
+|---|---|---|---|
+| Slow | 0,5 | **95 h 33 min ≈ 4 días** | el jugador que quiere una relación, no una partida |
+| Normal | 1,0 | **47 h 47 min ≈ 2 días** | el default, y el que este documento asume |
+| Fast | 3,0 | **15 h 55 min** | una vida entera entre hoy y mañana |
+| Demo | 12,0 | **3 h 59 min** | pruebas, capturas, tienda de aplicaciones |
+
+Advertencia de diseño: `lifeSpeed` alarga la vida pero **no toca el metabolismo**. Las tasas de
+desgaste son constantes absolutas. En "Demo" la criatura vive 4 horas y hay que darle de comer
+unas 12 veces; en "Slow" vive 4 días y hay que darle de comer unas 250. El ritmo de cuidado y
+el ritmo de vida están desacoplados y hoy nadie los reconcilia (§8.15).
+
+### 2.4 Ritmos de necesidad
+
+Las constantes de desgaste **no cambiaron**. Lo que cambió es que ahora hay dos regímenes:
+en vivo (app abierta, o hueco de menos de 180 s) y en ausencia (`decayScale = 0,30`).
+
+| Necesidad | Tasa base (por segundo) | En vivo | En ausencia (×0,30) |
+|---|---|---|---|
+| Saciedad | `0,085 × etapa × hungerBias × (1,2 Greedy)` |  100 → 0 en **11–26 min** | **35 min – 1 h 27 min** |
+| Energía | `0,050 × etapa × energyBias` | siesta cada **15–25 min** | cada **50–85 min** |
+| Sueño | recupera `0,320` hasta 98 | siesta de **≈ 4,7 min** | ≈ 15 min |
+| Felicidad | `0,045 × etapa × personalidad` | enfurruñe (<12) en **15–35 min** | **50 min – 1 h 55 min** |
+| Higiene | `0,028 × etapa + 0,02 por popó` | "sucio" (<30) en **≈ 45 min** | ≈ 2 h 30 min |
+| Disciplina | `0,0015` sólo despierta | **5,4 / hora** (era 14,4) | 1,6 / hora |
+| Vínculo | `0,005` | 18 / hora | 5,4 / hora |
+| Popó | `0,0009 × (0,5 + saciedad/100)` por s | ~1 cada **14 min** · tope 6 | ~1 cada 45 min |
+| Enfermedad | chequeo cada 30 s, riesgo base 0,4 % | **≈ 38 % por hora** | igual (no escala) |
+
+### 2.5 Qué pasa mientras no estás
+
+Esta es la regla nueva y hay que saberla de memoria, porque reescribe la mitad del juego:
+
+- Si el hueco supera **180 segundos**, la simulación entra en modo puesta al día: las
+  necesidades caen al **30 %** de la tasa viva.
+- La salud **no puede bajar de `offlineHealthFloor = 12`** — pero la protección se decide
+  **una sola vez, con el estado en que la dejaste**: `protectHealth = isCatchUp && !isSick &&
+  health > 12`. Si te fuiste con la mascota enferma, o con la salud ya por el piso, la ausencia
+  puede matarla.
+- **La edad, el sueño y la evolución corren a tiempo real, sin escalar.** Sólo las necesidades
+  se ralentizan. Es decir: **la criatura crece mientras no estás.**
+- `maxOfflineSeconds = 12 h` sigue capando el hueco simulado. Una semana afuera envejece a la
+  mascota 12 horas y le cuesta lo mismo que una noche. La vida de 48 horas es **elástica**: se
+  estira con tus ausencias largas.
+
+Traducción emocional, que es lo que importa: **volver después de una noche encuentra una
+criatura arruinada pero viva.** Famélica (saciedad en 0 desde hace horas), de mal humor, sucia,
+y con la salud raspando el piso. Repararla lleva dos minutos. `BalanceTest` fija exactamente
+eso: *"Surviving is not the same as being fine — the guilt has to survive the fix."* Es la
+línea de diseño mejor escrita que hay en el repo y define el tono entero del juego.
+
+Lo que **sigue matando**: la enfermedad que dejaste sin curar (§4.3, §8.13) y la negligencia
+con la app abierta.
+
+### 2.6 Huevo — 90 segundos
 
 - **Qué siente el jugador:** impaciencia con permiso. Es el único momento en que no hacer nada
   es lo correcto, y hay que venderlo como tal.
@@ -102,105 +167,121 @@ Ese último número es el más importante del juego y hoy está roto (§8.1).
   aunque cierres la app; volver y encontrarlo más agrietado enseña la regla central sin una
   línea de tutorial.
 - **La tensión:** ninguna, y está bien. Es el respiro antes del contrato.
-- **La mecánica que lo sostiene:** el temporizador y la animación de grieta progresiva. Hoy
+- **La mecánica que lo sostiene:** el temporizador y la animación de grieta. Hoy
   `CareActions.guard()` bloquea absolutamente todo con "The egg is still warming up...", así que
-  el primer minuto y medio de NeoPal es una pantalla que dice que no a todo. Eso hay que
-  arreglarlo (§9, R5): el jugador debe poder tocar, abrigar o hablarle al huevo, aunque no
-  cambie nada mecánicamente. Un gesto sin efecto sigue siendo un gesto.
-- **Nota:** los 90 s son constantes, **no** escalan con "Pace". Un jugador que ponga el día en
-  2 minutos igual espera 90 segundos. Es defendible (el nacimiento no se acelera) pero hay que
-  decidirlo a propósito, no por descuido.
+  el primer minuto y medio de NeoPal es una pantalla que dice que no a todo (§9 R8).
+- **Nota:** los 90 s **sí** escalan con `lifeSpeed` (`stageDuration` divide todo). En "Demo" el
+  huevo dura 7 segundos, que es demasiado poco para que se lea como un nacimiento. Vale la pena
+  ponerle un piso de ~20 s.
 
-### 2.3 Bebé — 20 minutos
+### 2.7 Bebé — 45 minutos
 
-- **Qué siente el jugador:** susto útil. La cría gasta un 30 % más rápido que nadie
-  (`stageMult = 1,30`); un Ember glotón vacía la saciedad en **12 min 40 s**. Es la etapa donde
-  se aprende que esto pide algo.
+- **Qué siente el jugador:** susto útil, y después el primer triunfo. Es la etapa más exigente
+  (`×1,30`): un Ember bebé vacía la saciedad en **12 min 34 s**, y con personalidad Greedy en **10 min 30 s**, así que en 45 minutos hay
+  tres comidas, una siesta y probablemente un popó.
 - **Qué necesita la mascota:** comida y presencia física. Al eclosionar arranca con
-  `happiness = 80`, `satiety = 60` — no llena: **con hambre desde el primer segundo**. Es
-  deliberado y es correcto.
+  `happiness = 80`, `satiety = 60` — no llena: **con hambre desde el primer segundo**.
+  Es deliberado y es correcto.
 - **Qué debe revelar el juego:** los cuatro botones que importan (comer, limpiar, luz, mimo) y
   el hecho de que la criatura **reacciona a que la toques** (`pet`, `tickle`, `toss`) sin que
   eso sea "productivo".
 - **La tensión:** el jugador todavía no sabe cuánto tiempo tiene. Todo se siente urgente.
-- **La mecánica que lo sostiene:** frecuencia. En 20 minutos hay ~2 comidas, ~1,5 popós y ~1
-  siesta. Es un tutorial hecho de eventos reales, no de carteles.
+- **La mecánica que lo sostiene:** la duración. 45 minutos es exactamente una sesión larga de
+  descubrimiento, y termina en una evolución. **La primera sesión de NeoPal contiene un ciclo
+  completo: conocer, cuidar, ver crecer.** Ese es el diseño más importante del rebalanceo y hay
+  que protegerlo de cualquier futuro ajuste.
 
-### 2.4 Niño — 40 minutos
+### 2.8 Niño — 3 horas
 
-- **Qué siente el jugador:** competencia. Ya sabe el ritmo, empieza a anticiparse.
-- **Qué necesita la mascota:** variedad. Es cuando los minijuegos y la tienda empiezan a tener
-  sentido: hay energía de sobra y monedas que gastar.
-- **Qué debe revelar el juego:** que **cómo** cuidás importa, no sólo **si** cuidás. Es la
-  ventana donde `careMistakes`, `praises`, `gamesPlayed`, `weightGrams` y `mealsEaten` se están
-  acumulando calladamente hacia el veredicto del minuto 61.
-- **La tensión:** invisible y por eso peligrosa. El jugador está tomando decisiones que le van a
-  cambiar la criatura y no lo sabe. Está bien que no lo sepa **con números**; está mal que no lo
-  intuya. La solución no es una barra de progreso hacia "Scholar": es que la criatura empiece a
-  tener manías observables (se pone a saltar sola si jugaste mucho; se queda mirando la despensa
-  si la sobrealimentaste).
-- **La mecánica que lo sostiene:** el peso corporal. Es el único stat que ya se ve en la
-  silueta. Debería haber tres o cuatro más de esos.
+- **Qué siente el jugador:** competencia, y el primer cambio de marcha. Tres horas es demasiado
+  para quedarse mirando: acá es donde el jugador aprende a **irse y volver**.
+- **Qué necesita la mascota:** variedad. Los minijuegos y la tienda empiezan a tener sentido:
+  hay energía de sobra y monedas que gastar. Y son tres horas: entran unas 8 comidas.
+- **Qué debe revelar el juego:** que la ausencia es normal y no es letal. Es la primera vez que
+  el jugador cierra la app con una criatura viva y la encuentra viva. Ese descubrimiento merece
+  ser explícito: la tarjeta de reencuentro (§9 R3) debería aparecer por primera vez acá.
+- **La tensión:** invisible y por eso peligrosa. `careMistakes`, `praises`, `gamesPlayed`,
+  `weightGrams` y `mealsEaten` se están acumulando calladamente hacia el veredicto de las
+  3 h 46 min. Está bien que el jugador no lo sepa **con números**; está mal que no lo intuya.
+  La criatura debería empezar a tener manías observables.
+- **La mecánica que lo sostiene:** el peso corporal, único stat que ya se ve en la silueta.
+  Debería haber tres o cuatro más de esos.
 
-### 2.5 Adolescente — 60 minutos
+### 2.9 Adolescente — 8 horas
 
-- **Qué siente el jugador:** el primer orgullo, y el primer arrepentimiento. A los **61,5
-  minutos** se ejecuta `decideBranch()` por primera vez y la criatura sale de la pantalla blanca
+- **Qué siente el jugador:** el primer orgullo, y el primer arrepentimiento. A las **3 h 46 min
+  30 s** se ejecuta `decideBranch()` por primera vez y la criatura sale de la pantalla blanca
   siendo alguien.
-- **Qué necesita la mascota:** menos comida (`stageMult = 1,00`) y más interacción. La
-  felicidad y el vínculo pesan más que la saciedad.
+- **Qué necesita la mascota:** menos comida (`×1,00`) y más interacción. La felicidad y el
+  vínculo pesan más que la saciedad.
 - **Qué debe revelar el juego:** el veredicto. Es el clímax medio de la partida y hoy se
-  entrega como un flash blanco y un logro. Merece un texto: **una línea del cuaderno escrita en
-  primera persona** que explique la forma en términos de lo que pasó, no de umbrales
-  ("Aprendí a esperar sola. No fue por maldad tuya, pero lo aprendí").
-- **La tensión:** la rama no es definitiva. `handleEvolution()` vuelve a llamar a
-  `decideBranch()` en el salto a Adulto (minuto **121,5**). Hay una segunda oportunidad y el
-  juego jamás la menciona. Debería: "todavía puedo cambiar" es la frase más motivadora que
-  NeoPal puede decir sin mentir.
+  entrega como un flash blanco y un toast. Merece un texto: **una línea del cuaderno en primera
+  persona** que explique la forma en términos de lo que pasó, no de umbrales.
+- **La tensión estructural nueva:** ocho horas es una noche de sueño. Un jugador que empieza a
+  la tarde **pasa toda la etapa adolescente durmiendo**, y el segundo `decideBranch()` (el
+  definitivo, en el salto a Adulto a las 11 h 46 min) se ejecuta con él inconsciente. La
+  segunda oportunidad existe y es invisible por partida doble: el juego no la menciona y encima
+  la resuelve mientras no mirás (§8.14).
 - **La mecánica que lo sostiene:** `decideBranch()` es 100 % determinista. Dos jugadores que
   crían igual obtienen la misma criatura. Eso es un valor y hay que protegerlo.
 
-### 2.6 Adulto — 100 minutos
+### 2.10 Adulto — 24 horas
 
-- **Qué siente el jugador:** calma, y después aburrimiento si no hacemos nada. Es la etapa más
-  larga (un tercio de la vida) y la de menor desgaste (`×0,90`).
+- **Qué siente el jugador:** calma, y después aburrimiento si no hacemos nada. Es **la mitad de
+  la vida entera** en una sola etapa, con el menor desgaste (`×0,90`) y ninguna transformación
+  a la vista.
 - **Qué necesita la mascota:** compañía sin urgencia. Es la primera vez que se la puede dejar
-  sola 25 minutos sin drama.
+  sola cuatro horas sin drama.
 - **Qué debe revelar el juego:** la rutina como forma de cariño. Aquí es donde el juego deja de
-  pedir y empieza a **acompañar**: es el territorio natural de las estaciones, la música de
-  cuarto, las fotos, el cuaderno, los sombreros.
+  pedir y empieza a **acompañar**: es el territorio natural de las estaciones, las fotos, el
+  cuaderno, los sombreros, los hitos diarios.
 - **La tensión:** el riesgo real es el olvido. Un adulto sano no te llama, y un jugador que no
   es llamado se va. La respuesta correcta **no** es subir el desgaste ni inventar urgencia: es
-  darle a la criatura cosas que ofrecer (un dibujo, un recuerdo, una manía nueva). Que valga la
-  pena volver aunque no haga falta.
-- **La mecánica que lo sostiene:** hoy, casi ninguna. Es el hueco más grande del juego y la
-  razón por la que §9 tiene tantos ítems de "presencia".
+  darle a la criatura cosas que ofrecer.
+- **La mecánica que lo sostiene:** hoy, ninguna. **Este es el hueco más grande del producto y
+  el rebalanceo lo multiplicó por cinco** — antes eran 100 minutos, ahora son 24 horas. Con el
+  reloj de 2 h por día-mascota, dentro de la etapa Adulto pasan **12 días-mascota**: hay una
+  estructura natural de doce capítulos esperando que alguien la use (§9 R7).
 
-### 2.7 Anciano — 80 minutos
+### 2.11 Anciano — 12 horas
 
 - **Qué siente el jugador:** ternura y anticipación del duelo. Sabe lo que viene.
 - **Qué necesita la mascota:** cuidados otra vez, pero por otro motivo. El desgaste sube a
   `×1,05` y `handleSickness()` le suma un **+2 % fijo de riesgo por chequeo** por ser Elder.
-  Se enferma más y se recupera peor.
+  Se enferma más y se recupera peor. Con 12 horas de etapa, eso significa varias enfermedades
+  garantizadas, y **cada una es potencialmente mortal si te agarra yéndote a dormir** (§8.13).
 - **Qué debe revelar el juego:** que el cuidado ya no construye nada. No hay evolución después.
   Alimentarla en la vejez es puro cuidado sin retorno, y ese es el gesto más limpio del juego.
-  Hay que dejar que se sienta así: **menos recompensas, menos monedas, menos XP en esta etapa**,
-  no más.
-- **La tensión:** cada enfermedad ahora puede ser la última, y el reloj de 80 minutos corre
-  aunque hagas todo perfecto.
+  Hay que dejar que se sienta así: **menos monedas y menos XP en esta etapa**, no más.
+- **La tensión:** el reloj de 12 horas corre aunque hagas todo perfecto.
 - **La mecánica que lo sostiene:** `handleDeath()` mata por `OLD_AGE` en cuanto
-  `secondsInStage >= stageDuration(ELDER)`. Es inevitable por diseño. El jugador debería poder
-  **ver** cuánto queda —un reloj honesto en la pantalla de estadísticas, no una barra de
-  progreso hacia la muerte— para poder despedirse a tiempo.
+  `secondsInStage >= stageDuration(ELDER)`, y `BalanceTest` fija que **la vejez llega aunque
+  hayas estado afuera**. Es inevitable por diseño, y está bien. El jugador debería poder **ver**
+  cuánto queda para poder despedirse a tiempo.
 
-### 2.8 Muerte
+### 2.12 Muerte
 
 Cuatro salidas: `STARVATION`, `ILLNESS`, `NEGLECT`, `OLD_AGE`. Las tres primeras son fallos del
-jugador; la cuarta es el final del cuento. **El juego debe tratarlas distinto y hoy no lo hace**
-(§8.4): el memorial usa la misma lápida, la misma tipografía y el mismo botón para "se murió de
-vieja a los 15 días" y para "la dejaste morir de hambre a los 40 minutos".
+jugador; la cuarta es el final del cuento. Después del rebalanceo la distribución real cambió:
 
-Lo que debe pasar en los dos casos: el jugador ve **qué vida fue**, no **qué puntaje sacó**.
+- `STARVATION` y `NEGLECT` ahora requieren **negligencia con la app abierta** — un jugador
+  activo que ignora una criatura famélica. Es raro y es justo.
+- `ILLNESS` es la única que todavía mata en ausencia, y hoy mata demasiado (§8.13).
+- `OLD_AGE` debería ser el desenlace mayoritario. Ese es el objetivo del balance y todavía no
+  se cumple.
+
+**El juego debe tratar las cuatro distinto y hoy no lo hace** (§8.4): mismo memorial, misma
+tipografía y mismo botón para "murió de vieja a los dos días" que para "la dejaste morir".
+
+### 2.13 Qué se ve en cuánto tiempo
+
+| Si el jugador juega... | Ve | Se pierde |
+|---|---|---|
+| **45 minutos** (una sesión) | eclosión, la etapa bebé entera, **la primera evolución** | — |
+| **Una tarde (4 h)** | + la niñez completa y **el primer veredicto de rama** (Adolescente, 3:46) | nada esencial |
+| **Una tarde y una noche (12 h)** | + el salto a Adulto y **el veredicto definitivo**… si está despierto | el segundo `decideBranch()` ocurre a las 11:46 — casi seguro dormido |
+| **Dos días** | la vida entera: 6 etapas, ~24 días-mascota, memorial por vejez | — |
+| **Dos días con ausencias > 12 h** | lo mismo, pero estirado: el tope de puesta al día "regala" tiempo | — |
 
 ---
 
@@ -212,31 +293,32 @@ Lo que debe pasar en los dos casos: el jugador ve **qué vida fue**, no **qué p
 |---|---|
 | `coins` | `level` y `xp` (vuelven a 1 / 0) |
 | `album` completo | `highScores` de los minijuegos |
-| `chronicle` completo | `personality` (se vuelve a sortear) |
+| **`chronicle` completo** (nuevo) | `personality` (se vuelve a sortear) |
 | `unlockedAchievements` | `weightGrams`, todos los contadores de cuidado |
 | Inventario **cosmético** (sombreros, cuartos) | Consumibles (se reponen 3 bayas, 2 platos, 1 pastilla) |
 | `generation + 1` | El nombre |
 
 ### 3.2 Por qué la segunda generación debe sentirse distinta
 
-La primera generación es sobre **aprender el reloj**. La segunda tiene que ser sobre
-**saber el reloj**, y esa diferencia de conocimiento es el material dramático:
+Con una vida de dos días, llegar a la generación 2 es un compromiso de fin de semana, no de una
+tarde. El peso de esa decisión sube muchísimo, y el juego tiene que estar a la altura:
 
-1. **Ya no hay excusa.** En la gen 1 el jugador no sabía que un adolescente aguanta 25 minutos
+1. **Ya no hay excusa.** En la gen 1 el jugador no sabía que un adulto aguanta cuatro horas
    solo. En la gen 2 lo sabe. Las mismas acciones significan otra cosa cuando son informadas.
 2. **La casa ya no está vacía.** Hereda monedas, sombreros y cuartos: la nueva criatura nace en
-   el mundo que construyó la anterior. Eso hoy es sólo economía; debería ser escenografía —
-   el sombrero de la mascota muerta debería estar colgado en el cuarto, no sólo en el inventario.
-3. **El álbum ya tiene páginas.** Es la primera vez que el jugador ve dos criaturas en la misma
-   pantalla, y ahí nace el sentido de linaje.
+   el mundo que construyó la anterior. Eso hoy es sólo economía; debería ser escenografía — el
+   sombrero de la mascota muerta debería estar colgado en el cuarto, no sólo en el inventario.
+3. **El cuaderno ya tiene voz.** Es la novedad más grande respecto de la revisión anterior:
+   la generación 2 nace con las palabras de la generación 1 en el bolsillo. Eso es exactamente
+   el sentido de linaje que queríamos, y todavía no está presentado como tal (§8.6).
 4. **La progresión se reinicia y eso es correcto.** Perder el nivel de cuidador dice: la
    experiencia no se transfiere, el vínculo sí. Es exactamente la tesis. Lo que **no** es
-   correcto es perder los récords de los minijuegos sin decírselo a nadie (§8.6).
+   correcto es perder los récords de los minijuegos sin decírselo a nadie.
 
 ### 3.3 El juego largo (generación 3+)
 
 A partir de la tercera, la unidad narrativa deja de ser la vida y pasa a ser **la casa**. El
-jugador ya no pregunta "¿cómo hago para que llegue a anciano?" sino "¿qué clase de cuidador
+jugador ya no pregunta "¿cómo hago para que llegue a anciana?" sino "¿qué clase de cuidador
 soy?". El juego debe poder contestarlo:
 
 - **El linaje visible.** Un árbol de generaciones: nombre, especie, rama, días vividos, causa
@@ -246,10 +328,10 @@ soy?". El juego debe poder contestarlo:
   retratos posibles. El coleccionismo aquí es legítimo *si* el juego no lo convierte en una
   checklist con casillas vacías gritando.
 - **El eco.** La generación N debería poder heredar **una** cosa concreta e irracional de la
-  N−1: un juguete favorito, una manía, una frase que aparece en el cuaderno. Nada que altere
+  N−1: un juguete favorito, una manía, una frase que reaparece en el cuaderno. Nada que altere
   estadísticas. Sólo memoria.
 - **El final honesto.** El juego no tiene un final y no debe fingir uno. Lo más cerca de un
-  cierre es la carta que escribe un anciano antes de morir (§9, R12). Después de eso, seguir es
+  cierre es la carta que escribe una anciana antes de morir (§9 R5). Después de eso, seguir es
   elección, no obligación.
 
 ---
@@ -262,11 +344,11 @@ falla, no hay contenido que lo compense.
 ### 4.1 La primera eclosión (minuto 1:30)
 
 - **Qué debe sentir:** que algo cruzó desde el otro lado del vidrio.
-- **Qué debe hacer la app:** el cascarón se agrieta en tres pasos visibles antes del final —
-  el jugador debe *ver venir* el momento y quedarse mirando. Explosión de partículas, sonido de
-  eclosión, y después **dos segundos de silencio absoluto** con la criatura sola en pantalla,
-  sin HUD, sin barras, sin toast. La primera línea del cuaderno ya existe y es la correcta:
-  *"Abrí los ojos. Lo primero que vi fuiste vos."* Las barras aparecen recién después.
+- **Qué debe hacer la app:** el cascarón se agrieta en tres pasos visibles — el jugador debe
+  *ver venir* el momento y quedarse mirando. Explosión de partículas, sonido de eclosión, y
+  después **dos segundos de silencio absoluto** con la criatura sola en pantalla, sin HUD, sin
+  barras, sin toast. La primera línea del cuaderno ya existe y es la correcta: *"Abrí los ojos.
+  Lo primero que vi fuiste vos."* Las barras aparecen recién después.
 - **Error a evitar:** mostrar el logro "It moved!" encima de la eclosión. El banner tapa el
   momento. Que espere cinco segundos.
 
@@ -278,61 +360,82 @@ falla, no hay contenido que lo compense.
   es la primera vez que el jugador piensa en la criatura como sujeto y no como barra.
 - **Qué debe hacer la app:** el rechazo por enfurruñe necesita animación propia — se da vuelta,
   no una negación genérica — y una línea que **no explique la mecánica**: "se da vuelta" es
-  mejor que "necesita más felicidad para comer". El jugador tiene que deducirlo. Y la solución
-  (mimar, jugar, y recién después dar de comer) tiene que funcionar en menos de un minuto, o
-  el descubrimiento se vuelve frustración.
-- **Diferenciar:** "está llena" es una broma. "No quiere comer" es un aviso. Tonos opuestos.
+  mejor que "necesita más felicidad para comer". Y la solución (mimar, jugar, y recién después
+  dar de comer) tiene que funcionar en menos de un minuto, o el descubrimiento se vuelve
+  frustración.
+- **Nuevo con el ritmo de dos días:** este momento ahora ocurre casi siempre **al volver de una
+  ausencia larga**, con la felicidad raspando el piso. Es el primer gesto del reencuentro y hay
+  que tratarlo como tal: la criatura no te castiga, está mal. Mimarla primero es la lección.
 
 ### 4.3 La primera enfermedad
 
 - **Cuándo:** `handleSickness()` chequea cada 30 s; con la sala limpia el riesgo base es 0,4 %
-  por chequeo (≈ 38 % por hora), así que casi todas las partidas la ven una vez.
-- **Qué debe sentir:** alarma proporcionada. No pánico: la enfermedad no mata rápido
-  (`−0,055 × 0,6 = 0,033/s` de salud, ≈ 50 min desde salud llena).
-- **Qué debe hacer la app:** cambiar el ambiente, no poner un icono. El aura verde pulsante ya
-  existe; hay que sumarle que la criatura **deje de hacer cosas** — sin idle animado, sin
-  reaccionar a los mimos con la misma alegría. Y que el cuaderno escriba, en ese instante,
-  *"No me siento bien. Ojalá lo notes pronto."* — que ya existe, y es exactamente el registro
-  correcto: dice su experiencia, no tu obligación.
+  por chequeo, o sea **≈ 38 % por hora**. En una vida de 48 horas eso significa **más de una
+  docena de enfermedades por partida**. Ya no es "la primera enfermedad": es una rutina.
+- **Qué debe sentir:** alarma proporcionada. En vivo, la enfermedad baja la salud a
+  `0,055 × 0,6 = 0,033/s` → ~50 minutos desde salud llena. En ausencia, `×0,30` → **2 h 48 min,
+  y sin piso de protección**. Ahí está la única muerte que todavía te agarra durmiendo.
+- **Qué debe hacer la app:** cambiar el ambiente, no poner un icono. El aura verde ya existe;
+  hay que sumarle que la criatura **deje de hacer cosas** — sin idle animado, sin reaccionar a
+  los mimos con la misma alegría. Y el cuaderno escribe, en ese instante, *"No me siento bien.
+  Ojalá lo notes pronto."* — que ya existe, y es exactamente el registro correcto: dice su
+  experiencia, no tu obligación.
 - **La curación tiene que ser un evento.** `medicine` cura con `happiness = −6`: se toma la
-  pastilla con cara de asco. Eso es oro; hay que animarlo. `medicine_super` cura con `+6`. Dos
-  animaciones distintas.
+  pastilla con cara de asco. Eso es oro; hay que animarlo. `medicine_super` cura con `+6`.
+  Dos animaciones distintas.
+- **Y hay que recalibrar el riesgo.** Una tasa pensada para una vida de cinco horas, aplicada a
+  una de cuarenta y ocho, convierte el evento raro en ruido de fondo (§8.13).
 
-### 4.4 La primera evolución revelada (minuto 61,5)
+### 4.4 La primera evolución revelada (minuto 46:30)
 
 - **Qué debe sentir:** que el resultado es suyo. No sorpresa aleatoria: **reconocimiento**.
+- **Cuándo:** la primera (Bebé → Niño) cae dentro de la primera sesión, garantizada. Ese es el
+  gran acierto del rebalanceo y hay que apoyarse en él: **la promesa del juego se cumple antes
+  de que el jugador tenga que decidir si vuelve mañana.**
 - **Qué debe hacer la app:** el estirón + fogonazo + forma nueva ya está. Falta lo que lo
   convierte en un latido: después del flash, una **tarjeta de retrato** con la forma nueva, su
   nombre, y una sola frase que ligue la forma a la crianza. Se guarda sola en el álbum
   (`handleEvolution` ya lo hace) y la app debe *mostrar que se guardó* — la miniatura vuela
   hacia el icono del álbum. Ahí es donde el jugador aprende que el álbum existe.
-- **Error grave que hay hoy:** la pantalla de estadísticas muestra `Next form` con
-  `Simulation.decideBranch(pet)` en vivo, desde el minuto 2. El clímax está spoileado por un
-  campo de una tabla (§8.3).
+- **El spoiler ya se arregló.** La pantalla de estadísticas dejó de decir `Next form: Feral` y
+  ahora dice `Leaning toward: wary, left to itself`. Es una pista cualitativa sin nombre de
+  rama: exactamente lo que este documento pedía.
+- **Lo que sigue roto:** las evoluciones 3, 4 y 5 caen a las 3:46, 11:46 y 35:46, y con etapas
+  de 8 y 24 horas **la mayoría ocurre mientras la app está cerrada**. Hoy los eventos se
+  disparan igual, en un lote, y `showToast()` cancela el anterior: el jugador abre la app y ve
+  un solo toast superviviente de una noche entera de historia (§8.14).
 
 ### 4.5 Dejar la luz encendida
 
 - **La mecánica:** si duerme con `lightsOff = false`, pierde `0,045 × 1,5 = 0,0675` de
   felicidad por segundo (≈ 4 puntos por minuto) y `handleCareMistakes()` registra un error de
-  cuidado **cada 60 segundos**.
+  cuidado por minuto.
 - **Qué debe sentir:** una punzada pequeña y específica. Es el mejor gesto del juego porque
   cuesta cero esfuerzo y cero recursos: sólo hay que **acordarse**. Es la tesis en un botón.
-- **Qué debe hacer la app:** hacerlo legible sin regañar. Cuando se duerme con la luz prendida,
-  la criatura se tapa la cara, se da vuelta, se mueve incómoda. Nada de texto rojo. Nada de
-  "¡Estás lastimando a tu mascota!". La imagen alcanza.
-- **Ajuste necesario:** hoy una siesta por agotamiento a mediodía con la luz encendida acumula
-  ~5 errores de cuidado y empuja a `FERAL` sin que el jugador se entere de nada (§8.2). El
-  castigo tiene que ser proporcional y visible o no es un latido, es una trampa.
+- **Qué debe hacer la app:** hacerlo legible sin regañar. La criatura se tapa la cara, se da
+  vuelta, se mueve incómoda. Nada de texto rojo. Nada de "¡Estás lastimando a tu mascota!".
+- **Nuevo peso con el ritmo de dos días:** apagar la luz antes de irse a dormir es ahora un
+  **ritual real de fin de sesión**, alineado con el sueño del jugador. Es lo más cerca que
+  NeoPal va a estar de tener un gesto de despedida, y merece su propia animación.
+- **Ajuste que sigue pendiente:** una siesta por agotamiento a mediodía con la luz encendida
+  acumula errores de cuidado invisibles que empujan a `FERAL` (§8.2, §8.12).
 
 ### 4.6 Volver después de estar afuera
 
+**Con el ritmo nuevo este dejó de ser un latido más y pasó a ser el latido principal.** En una
+vida de 48 horas el jugador va a hacer este gesto entre diez y veinte veces; la eclosión la
+hace una sola.
+
 - **Qué debe sentir:** alivio, o el peso de lo que pasó. Nunca una auditoría.
-- **Qué debe hacer la app:** al volver, `onResumed()` corre la simulación de golpe. Hoy eso
-  produce una avalancha de eventos y toasts. En lugar de eso: **una tarjeta de reencuentro**.
-  "Estuviste fuera 3 h 20 min. Mientras tanto: comió lo que quedaba, durmió dos veces, se
-  ensució." Hechos, en pasado, sin adjetivos. Y si la pasó mal, se dice sin acusar: "estuvo con
-  hambre unas dos horas."
-- **Y lo que la criatura hace al verte:** si el vínculo es alto, corre hacia el vidrio. Si el
+- **Qué debe hacer la app:** hoy `onResumed()` corre la simulación de golpe y descarga una
+  avalancha de eventos, de los que sobrevive el último toast. En lugar de eso: **una tarjeta de
+  reencuentro** que ordene la noche en tres o cuatro hechos. "Estuviste fuera 8 h 20 min.
+  Durmió, se ensució dos veces, y **creció**." Hechos, en pasado, sin adjetivos. Si la pasó mal,
+  se dice sin acusar: "estuvo con hambre unas cinco horas."
+- **Y las revelaciones se sirven de a una.** Si evolucionó mientras no estabas, la escena de
+  evolución se **guarda en cola** y se reproduce ahí, con el jugador mirando. Un momento que
+  ocurrió sin público no ocurrió.
+- **Lo que la criatura hace al verte:** si el vínculo es alto, corre hacia el vidrio. Si el
   vínculo cayó, tarda en acercarse. Eso es toda la información que el jugador necesita.
 - **Nunca:** una cuenta de todo lo que hiciste mal. Nunca un "¡te extrañó!" con signos de
   exclamación cuando en realidad estuvo sola.
@@ -340,19 +443,20 @@ falla, no hay contenido que lo compense.
 ### 4.7 La pantalla de muerte
 
 - **Qué debe sentir:** duelo real, en escala de juguete. No hay que exagerarlo ni escaparle.
+  Y con dos días de vida invertidos, el duelo ahora tiene con qué sostenerse.
 - **Qué debe hacer la app:**
   - **Silencio primero.** Sin música, sin toast, sin logro. La criatura se apaga y la pantalla
     se queda quieta unos segundos antes de que aparezca nada.
-  - **Dos memoriales distintos.** Vejez: cálido, dorado, "vivió 15 días". Hambre / negligencia /
-    enfermedad: frío, corto, honesto, sin sermón. La línea del cuaderno ya está escrita y es
-    dura y correcta (*"Esperé una comida que no llegó"*). Eso es lo máximo que el juego puede
-    decir; una palabra más y es manipulación.
+  - **Cuatro memoriales, no uno.** Vejez: cálido, dorado, "vivió veinticuatro días". Hambre /
+    negligencia / enfermedad: frío, corto, honesto, sin sermón. Las líneas del cuaderno ya están
+    escritas y son duras y correctas (*"Esperé una comida que no llegó"*). Eso es lo máximo que
+    el juego puede decir; una palabra más y es manipulación.
   - **El botón de continuar no puede ser el primer botón.** Hoy "Raise generation N+1" es
-    primario y "Stay a moment" es secundario. Hay que invertirlos. Quedarse debe ser lo fácil.
-  - **Nada de estadísticas de rendimiento.** El memorial actual imprime "N care mistakes". Eso
-    es una boleta al pie de una lápida. Fuera.
-- **La notificación de muerte tiene que desaparecer.** "Tu mascota murió, abrí la app para
-  empezar una nueva generación" es un anzuelo de reenganche disfrazado de aviso (§8.5).
+    primario y "Stay a moment" es secundario. Hay que invertirlos.
+  - **Nada de estadísticas de rendimiento.** El memorial actual sigue imprimiendo "N care
+    mistakes". Es una boleta al pie de una lápida. Fuera.
+- **La notificación de muerte ya se arregló** y es el modelo a seguir: *"X is gone. Whenever
+  you are ready."* Sin llamada a la acción, sin embudo.
 
 ### 4.8 La primera foto del álbum
 
@@ -363,10 +467,10 @@ falla, no hay contenido que lo compense.
   sugerido, no impuesto.
 - **La regla de oro:** el álbum no se ordena por calidad, no tiene rareza, no tiene estrellas y
   no se puede "completar". Es un álbum, no una colección.
-- **Bug de experiencia a arreglar ya:** `snapshot()` hace `(state.album + entry).takeLast(60)`.
-  Sacar la foto número 61 **borra la primera** — que muy probablemente sea la eclosión. El
-  juego destruye silenciosamente el recuerdo más antiguo justo cuando el jugador está haciendo
-  el gesto de recordar. Es el peor bug posible en este juego (§8.7).
+- **El bug de memoria ya se arregló.** `CareActions.trimAlbum()` ahora descarta selfies antes
+  que evoluciones, y `Chronicle.trim()` descarta días rutinarios antes que hitos. Lo que falta
+  es la partición por generación: hoy las dos memorias son un pozo único y la generación 3 le
+  come el archivo a la 1 (§8.6).
 
 ---
 
@@ -376,10 +480,10 @@ falla, no hay contenido que lo compense.
 
 NeoPal tiene exactamente dos sesiones y hay que diseñar las dos, no una:
 
-| | **El vistazo (30–60 s)** | **La visita (5–15 min)** |
+| | **El vistazo (30–60 s)** | **La visita (10–45 min)** |
 |---|---|---|
 | Frecuencia | 4–8 veces al día | 1–2 veces al día |
-| Disparador | notificación, o costumbre | tiempo libre, aburrimiento |
+| Disparador | notificación, o costumbre | tiempo libre, o una evolución en cola |
 | Qué hace el jugador | mira, corrige lo urgente, sale | juega, compra, decora, saca fotos, lee el cuaderno |
 | Qué necesita | leer el estado en **menos de dos segundos** | tener algo que hacer que no sea mantenimiento |
 | Éxito | salir sin culpa | salir con algo nuevo (una foto, una línea, una forma) |
@@ -389,40 +493,54 @@ NeoPal tiene exactamente dos sesiones y hay que diseñar las dos, no una:
 
 1. **El estado se lee de la pantalla, no de las barras.** Si el jugador tiene que mirar números
    para saber cómo está, el arte falló. Postura, cara, sala, luz: eso primero.
-2. **Ninguna acción esencial está a más de un toque de la pantalla principal.** Comer, limpiar,
-   luz y mimo viven en el dock; nada más es urgente.
-3. **Salir nunca es un error.** El juego no tiene "cerrá bien la app". No hay una acción de
-   despedida obligatoria. Apagar la luz es una gentileza, no un checklist.
-4. **El juego nunca inventa urgencia.** Si no pasa nada, no dice nada. `Notifications.careMessage()`
-   ya devuelve `null` cuando la mascota está bien y eso es una decisión de diseño excelente que
-   hay que defender contra cualquier intento de "engagement".
-5. **Cada visita deja rastro.** Una línea de cuaderno, una foto, una moneda. Que abrir la app
-   nunca sea neutro.
+2. **Ninguna acción esencial está a más de un toque de la pantalla principal.**
+3. **Salir nunca es un error.** El juego no tiene "cerrá bien la app". Apagar la luz es una
+   gentileza, no un checklist.
+4. **El juego nunca inventa urgencia.** `Notifications.careMessage()` devuelve `null` cuando la
+   mascota está bien, y el worker corre cada 15 minutos como máximo. Con el desgaste offline al
+   30 %, eso ahora significa **una notificación cada varias horas**, no cada rato. Es la cadencia
+   correcta y hay que defenderla.
+5. **Cada visita deja rastro.** Una línea de cuaderno, una foto, una moneda.
 
-### 5.2 Un día en la vida (jugador real, ritmo por defecto)
+### 5.2 La regla nueva: una noche es un capítulo
 
-| Hora | Qué pasa | Sesión | Estado de la criatura |
+Antes del rebalanceo, ocho horas de sueño humano mataban a cualquier mascota sana: el juego era
+literalmente incompatible con dormir. Ahora una noche es **la unidad narrativa natural del
+producto**:
+
+- La criatura **sobrevive** (piso de salud 12, y `BalanceTest` lo fija).
+- La criatura **no está bien** (saciedad en 0, ánimo por el piso, sucia). Hay algo que reparar
+  y repararlo se siente como un reencuentro.
+- La criatura **creció**. La edad no se ralentiza: en ocho horas puede haber cambiado de etapa.
+- La criatura **puede haberse enfermado y muerto** si la dejaste enferma, o si se enfermó
+  temprano en la noche. Eso último todavía pasa demasiado (§8.13) y es lo próximo a arreglar.
+
+De ahí sale la forma correcta del producto: **dos sesiones ancla por día** (mañana y noche),
+con vistazos en el medio, y una vida que dura de una noche a la siguiente por dos veces.
+
+### 5.3 Un día y medio en la vida (ritmo Normal, empezando un lunes 19:00)
+
+| Hora real | Edad | Qué pasa | Sesión |
 |---|---|---|---|
-| 07:40 | Suena el despertador, abre NeoPal en la cama. Tarjeta de reencuentro: durmió, se ensució una vez. Le da un plato, limpia, prende la luz. | 50 s | Bebé, día-mascota 1 |
-| 08:15 | En el colectivo. Vistazo. Está bien. Le hace cosquillas y saca una foto. | 40 s | — |
-| 09:30 | Notificación: tiene hambre. Come. | 25 s | Pasó a Niño ~09:00 |
-| 12:30 | Almuerzo. Sesión larga: dos partidas de Snack Catch, compra el Gorro de Hoja, prueba el cuarto de playa. | 11 min | Niño, jugando |
-| 15:00 | Reunión. No abre. La criatura duerme una siesta con la luz prendida. **3 errores de cuidado.** | — | ⚠ |
-| 16:20 | Vistazo culposo. Apaga la luz, la despierta, le da de comer, la mima. | 90 s | Evoluciona a Adolescente ~16:40 |
-| 19:00 | Ve la evolución en vivo: **Balanced**. Retrato, foto al álbum. | 3 min | Adolescente |
-| 21:30 | Antes de dormir: come, baño con jabón, luz apagada. Lee el cuaderno del día. | 4 min | Adulto ~22:00 |
-| 23:00–07:00 | **Ocho horas sin abrir.** Con las reglas actuales: muerta a las 23:50 por inanición. | — | ✕ **Este es el problema** |
+| Lun 19:00 | 0:00 | Elige especie y nombre. El huevo late. | inicio |
+| 19:01:30 | 0:01:30 | **Eclosiona.** Silencio, partículas, primera línea del cuaderno. | — |
+| 19:02–19:46 | | Etapa bebé completa: tres comidas, una siesta, un popó, dos partidas. Aprende todo el juego. | **44 min** |
+| 19:46:30 | 0:46:30 | **Primera evolución → Niño.** Retrato, foto al álbum. La primera sesión cerró un ciclo entero. | — |
+| 20:30 | | Vistazo. Come, limpia. | 40 s |
+| 22:00 | | Sesión de sillón: compra el Gorro de Hoja, prueba el cuarto de playa, lee el cuaderno. | 12 min |
+| 22:46:30 | 3:46:30 | **→ Adolescente.** Primer veredicto de rama: *Balanced*. Lo ve en vivo, de casualidad. | 3 min |
+| 23:15 | | Le da de comer, la baña, **apaga la luz**. Cierra la app. | 90 s |
+| 23:15–07:30 | | **8 h 15 min afuera.** Necesidades al 30 %: la saciedad llega a 0 alrededor de las 00:30 y se queda ahí. La salud baja hasta el piso de 12 y no más. **A las 07:01 evoluciona a Adulto** — el veredicto definitivo, sin público. | — |
+| Mar 07:30 | 12:30 | Abre. Encuentra una adulta famélica, sucia y viva. Come, baño, mimos: dos minutos y está entera. **La evolución que se perdió debería reproducirse acá** (§9 R3). | 3 min |
+| Mar 08:00–22:00 | | Etapa adulto: catorce horas de vistazos, dos visitas largas, siete días-mascota pasando por el reloj interno sin que nada los marque. **Este es el hueco.** | 5 × 40 s + 2 × 15 min |
+| Mar 23:00 | | Apaga la luz. Segunda noche. | 60 s |
+| Mié 07:01 | 1 d 12:00 | **→ Anciana.** Doce horas. Se enferma más, se recupera peor. Cada cuidado ya no construye nada. | 4 min |
+| Mié 19:01 | 1 d 23:47 | **Muere de vejez.** Vivió 24 días-mascota. Memorial, última línea del cuaderno. | — |
 
-Ese renglón final no es un detalle de balance: **rompe el juego**. Un producto cuya criatura no
-sobrevive una noche de sueño humano no es un juego sobre la atención, es un juego sobre la
-imposibilidad de dormir. Ver §8.1 y §9 R1.
+Dos noches, dos días, dos sesiones ancla diarias y unos diez vistazos. Ese es el producto.
 
-Cómo debería terminar la tabla, con la ventana de gracia propuesta:
-
-| Hora | Qué pasa |
-|---|---|
-| 23:00 | Luz apagada. La criatura duerme; el mundo entra en **reposo**: las necesidades siguen bajando pero la salud no se toca mientras duerme y está en la noche de su reloj. |
-| 07:40 | El jugador abre. La criatura está famélica, sucia y de mal humor — pero **viva**. La reparación lleva dos minutos y se siente como un reencuentro, no como una autopsia. |
+Los dos problemas que la tabla deja a la vista, y que el §9 ataca en ese orden: **las
+evoluciones que ocurren sin público** y **las catorce horas de martes sin ninguna estructura**.
 
 ---
 
@@ -442,13 +560,18 @@ Eso justifica todo el estilo visual: las scanlines, los blips, las barras. **La 
 real; la interfaz es del aparato.** El jugador nunca mira a la criatura directamente — la mira
 a través de una pantalla que la traduce a barras. Esa distancia es tema, no limitación.
 
+También justifica la mecánica de ausencia: el Vivario **sigue funcionando con la tapa cerrada**,
+sólo que más despacio y con un regulador que no deja que la cosa se vaya al fondo. Eso es
+literalmente `offlineDecayMultiplier` y `offlineHealthFloor`, y conviene que el juego lo diga
+una vez, en voz de aparato, la primera vez que el jugador vuelve: *"el vivario la sostuvo."*
+
 ### 6.2 De dónde salen los huevos
 
 Los huevos vienen del **Vivero**, un lugar del que el juego habla poco y nunca muestra. Nadie
 sabe bien qué son estas criaturas ni de dónde salieron; se sabe que llegan en cápsulas, que
 crecen si se las cuida y que no crecen dos veces igual. La ciencia del asunto es aburrida y no
-importa. Lo que importa es la parte que sí se dice: **el Vivero manda un huevo sólo cuando hay
-alguien dispuesto a mirarlo.**
+importa. Lo que sí se dice: **el Vivero manda un huevo sólo cuando hay alguien dispuesto a
+mirarlo.**
 
 En la generación 2 en adelante el huevo no debería salir de un menú: debería **llegar**. Una
 cápsula que aparece en el cuarto vacío al día siguiente. El jugador la abre o no la abre.
@@ -478,15 +601,15 @@ Aletas, branquias, movimiento ondulado. La elección "fácil" y la que menos cas
 
 **Ember** — `hambre ×1,2 · energía ×1,15 · juego ×1,0`
 Combustión. Comen un 20 % más rápido que nadie y se agotan antes. Son la familia intensa: dan
-mucho y piden mucho, y una tarde de descuido se les nota en el cuerpo. Cuernitos, brasa en el
+mucho y piden mucho, y una noche de descuido se les nota en el cuerpo. Cuernitos, brasa en el
 pecho, andar impaciente. La familia que enseña disciplina a la fuerza.
 *Su gesto característico:* la brasa del pecho se apaga a oscuras cuando tiene hambre.
 
 **Leaf** — `hambre ×0,85 · energía ×0,85 · juego ×0,9`
 Lentitud vegetal. Es la familia más resistente y la menos demostrativa: gasta poco, se entusiasma
 poco, dura. Brote en la cabeza, movimientos de balanceo. Es la elección para el jugador que
-quiere que el juego lo acompañe en vez de reclamarle, y la que mejor sostiene una generación
-larga.
+quiere que el juego lo acompañe en vez de reclamarle, y la que mejor sostiene el preset "Slow"
+de cuatro días.
 *Su gesto característico:* el brote de la cabeza crece con la edad y florece de anciana.
 
 **Volt** — `hambre ×1,1 · energía ×1,3 · juego ×1,25`
@@ -500,14 +623,16 @@ Orejas grandes, chispas, parpadeo rápido. La familia de las siestas y los estal
 Son las dos memorias del aparato y son **distintas a propósito**:
 
 - **El álbum** es lo que *vos* elegiste guardar (fotos, `snapshot()`) más lo que el aparato
-  archivó solo (cada evolución). Es visual y es de afuera: cómo se veía.
-- **El cuaderno** (`Chronicle`) es lo que *ella* escribió. Primera persona, sin fechas de
-  calendario, sólo días-mascota. Es de adentro: cómo lo vivió.
+  archivó solo (cada evolución, con id `evo_`). Es visual y es de afuera: cómo se veía.
+- **El cuaderno** (`Chronicle`, ya implementado, con su propia pantalla) es lo que *ella*
+  escribió. Primera persona, sin fechas de calendario, sólo días-mascota. Es de adentro: cómo lo
+  vivió. Se escribe desde los mismos eventos a los que reacciona la UI, así que **no puede
+  contradecir lo que pasó de verdad** — esa restricción es lo que lo hace creíble.
 
 La distancia entre los dos es donde vive el juego. El álbum puede tener una foto preciosa del
 día 4; el cuaderno puede decir que el día 4 estuvo sola. Ninguno de los dos miente. Los dos
-sobreviven a la criatura y pasan a la siguiente generación, y por eso los dos necesitan estar
-**particionados por generación** y no recortarse en silencio (§8.7, §9 R2).
+sobreviven a la criatura y pasan a la generación siguiente, y por eso los dos necesitan estar
+**particionados por generación** (§8.6, §9 R5).
 
 ---
 
@@ -530,22 +655,22 @@ números.
 
 **3. El narrador (memorial, hitos, primera vez).**
 Aparece cinco o seis veces por partida y punto. Tercera persona, calmo, casi documental. Es la
-voz que dice "vivió quince días". No es poético. Su fuerza está en decir poco.
+voz que dice "vivió veinticuatro días". No es poético. Su fuerza está en decir poco.
 
 ### 7.2 Reglas duras
 
-- **La criatura no se refiere al jugador por rol.** Siempre "vos". Nunca "papá/mamá/amo/dueño".
+- **La criatura no se refiere al jugador por rol.** Siempre "vos".
 - **Nunca hay una barra de "te queda poco".** No hay cuentas regresivas hacia el castigo.
-- **Nunca se usa el miedo a perder progreso.** Nada de "vas a perder tu racha", "no dejes que
-  se rompa", "última oportunidad".
-- **Nunca hay urgencia falsa.** Si el estado no cambió, no hay notificación. Una notificación
-  por ciclo del worker, como máximo, y sólo si hay algo real.
+- **Nunca se usa el miedo a perder progreso.** Nada de "vas a perder tu racha", "última
+  oportunidad".
+- **Nunca hay urgencia falsa.** Si el estado no cambió, no hay notificación.
 - **Nunca se cuantifica el afecto en la cara del jugador.** El vínculo puede ser un número
   interno; en pantalla es una postura.
 - **El error se nombra, no se juzga.** "Estuvo con hambre" ✓. "La dejaste con hambre" ✗.
+- **La ausencia se narra en pasado y sin adjetivos.** Es la superficie de texto más usada del
+  juego ahora; una sola palabra de reproche ahí envenena el producto entero.
 - **Nada de humor que rompa la ficción.** Sin memes, sin guiños al jugador, sin cuarta pared.
-- **Todo texto es traducible.** Nada de concatenar frases con fragmentos; una cadena, un
-  significado (hoy esto no se cumple, §8.8).
+- **Todo texto es traducible.** Una cadena, un significado (hoy no se cumple, §8.8).
 
 ### 7.3 Diez líneas correctas
 
@@ -559,8 +684,8 @@ voz que dice "vivió quince días". No es poético. Su fuerza está en decir poc
 | 6 | *"Está llena."* | Rechazo cómico. Un hecho neutro dicho por la máquina; ni chiste ni reproche. |
 | 7 | *"Se da vuelta."* | Rechazo por tristeza. No explica la mecánica. Obliga a mirar. |
 | 8 | *"Me crujen las rodillas. Me gané cada crujido."* | Vejez con dignidad y humor propio. La criatura no le tiene miedo a su edad. |
-| 9 | *"Estuviste fuera 3 h 20 min. Durmió dos veces y se ensució una."* | Tarjeta de reencuentro. Hechos en pasado, sin adjetivos ni signos. |
-| 10 | *"Viví quince días y todos fueron tuyos."* | Narrador/cuaderno en la muerte por vejez. Es un agradecimiento, no un reclamo. Cierra el juego. |
+| 9 | *"Estuviste fuera 8 h 20 min. Durmió, se ensució dos veces y creció."* | Tarjeta de reencuentro. Hechos en pasado, sin adjetivos ni signos. El "y creció" es el gancho honesto. |
+| 10 | *"Se fue. Cuando estés listo."* (`X is gone. Whenever you are ready.`) | Notificación de muerte, ya en el código. Informa sin convocar. Es el estándar de todo lo demás. |
 
 ### 7.4 Cinco líneas prohibidas
 
@@ -568,9 +693,9 @@ voz que dice "vivió quince días". No es poético. Su fuerza está en decir poc
 |---|---|---|
 | 1 | *"¡Tu mascota se está muriendo! ¡Entrá ya!"* | Urgencia manufacturada + imperativo. Convierte el cuidado en pánico y el pánico en desinstalación. |
 | 2 | *"¿Por qué me dejaste sola?"* | La criatura acusa. En el momento en que reprocha, deja de ser un ser vivo y se vuelve una palanca de retención. |
-| 3 | *"¡Racha de 6 días! No la pierdas."* | Mecánica de pérdida disfrazada de logro. Premia la ansiedad, no el cariño, y castiga vivir. |
-| 4 | *"Cuidado deficiente: 14 errores. Calificación: D."* | Le pone nota a la relación. El juego no es un examen y el jugador no rindió nada. |
-| 5 | *"Tu mascota murió. Abrí la app para empezar una nueva generación."* | Un duelo usado como llamada a la acción. Es la línea más dañina posible y **hoy existe en el código** (`Notifications.careMessage`). |
+| 3 | *"¡Racha de 6 días! No la pierdas."* | Mecánica de pérdida disfrazada de logro. Premia la ansiedad, no el cariño. |
+| 4 | *"Cuidado deficiente: 14 errores. Calificación: D."* | Le pone nota a la relación. El juego no es un examen. |
+| 5 | *"Tu mascota murió. Abrí la app para empezar una nueva generación."* | Un duelo usado como llamada a la acción. **Ya se eliminó del código**, y queda acá como recordatorio de lo que no vuelve. |
 
 ### 7.5 Longitudes
 
@@ -580,6 +705,7 @@ voz que dice "vivió quince días". No es poético. Su fuerza está en decir poc
 | Burbuja de necesidad | 1 palabra | aparato |
 | Notificación | 60 caracteres, sin signos de exclamación | aparato |
 | Línea de cuaderno | 90 caracteres, una o dos oraciones | criatura |
+| Tarjeta de reencuentro | 3 hechos, máx. 120 caracteres | aparato |
 | Tarjeta de hito | 140 caracteres | narrador |
 | Memorial | 3 líneas | narrador |
 
@@ -587,197 +713,285 @@ voz que dice "vivió quince días". No es poético. Su fuerza está en decir poc
 
 ## 8. Qué se opone a la tesis
 
-Lista honesta de lo que hoy trabaja en contra, verificado contra el código. Ordenada por daño.
+Registro completo, con estado. Los hallazgos resueltos se quedan escritos: saber qué estaba mal
+y por qué se arregló vale tanto como la lista de pendientes.
 
-### 8.1 La criatura no sobrevive una noche · **CRÍTICO**
+### 8.1 La criatura no sobrevivía una noche · ✅ **RESUELTO**
 
-**Qué pasa.** Saciedad llena a 0 en 13–26 minutos según etapa y especie. Con la saciedad en 0,
-la salud baja `0,055/s` → 30 minutos más. **Muerte entre 43 y 56 minutos de ausencia**, con
-todas las barras llenas al empezar. Dormida el desgaste de saciedad es ×0,4, lo que estira el
-total a ~1 h 20 min. `maxOfflineSeconds = 12 h` no protege nada: simula las 12 horas completas.
+**Qué pasaba.** Saciedad llena a 0 en 13–26 minutos; con la saciedad en 0 la salud caía
+`0,055/s`. **Muerte entre 43 y 56 minutos de ausencia**, con todas las barras llenas. Ocho horas
+de sueño humano mataban cualquier mascota sana, y el texto de Ajustes afirmaba lo contrario.
 
-**Por qué es fatal.** El texto de Ajustes dice literalmente *"Offline progress is capped at 12
-hours so a long break never wipes a healthy pet"*. Es falso. Ocho horas de sueño humano matan
-cualquier mascota sana. La única forma de llegar a `OLD_AGE` es no dormir cinco horas seguidas.
+**Cómo se arregló.** `offlineDecayMultiplier = 0,30` y `offlineHealthFloor = 12`, aplicados
+cuando el hueco supera 180 s; la protección se decide con el estado con que la dejaste, así que
+la enfermedad sin curar sigue siendo mortal. `BalanceTest` fija las siete condiciones, incluida
+la que importa: *"coming back after a night still finds a pet in trouble"*. La solución no
+suavizó el juego, movió la culpa del lugar equivocado al correcto.
 
-**Recomendación.** Introducir **reposo**: mientras la criatura duerme *y* es de noche en su
-reloj *y* la luz está apagada, la salud no baja aunque la saciedad esté en 0 (las necesidades sí
-siguen cayendo). Además, un tope de daño offline: una ausencia no puede llevarse más del 60 %
-de la salud, sin importar cuánto dure. Resultado: volver después de ocho horas produce una
-criatura arruinada pero viva, que es exactamente el sentimiento que el juego quiere.
-La muerte debe requerir **negligencia repetida**, no una noche.
-
-### 8.2 `Feral` es el resultado por defecto, y es un insulto · **ALTO**
+### 8.2 `Feral` es el resultado por defecto, y es un insulto · ⚠️ **PARCIAL — y agravado**
 
 **Qué pasa.** `decideBranch()` evalúa `FERAL` primero: `neglect >= 6/hora || discipline < 15`.
-La disciplina arranca en 20 y cae `0,004/s` despierta = **14,4 puntos por hora**. Un jugador
-que nunca toca "Felicitar" ni "Regañar" cruza el umbral de 15 en ~21 minutos de vigilia, mucho
-antes del veredicto del minuto 61,5. Además, cada minuto de siesta con la luz encendida suma un
-`careMistake`: dos siestas por hora ≈ 10 errores/hora ≥ 6 → `FERAL` otra vez.
 
-**Por qué está mal.** El resultado más común del juego se llama "Salvaje", es el único que suena
-a fracaso, y se obtiene por omisión de dos botones que el juego nunca explica. La rama que
-debería significar "aprendió a arreglárselas" significa en la práctica "no encontraste el menú".
+**Lo que mejoró.** `DISCIPLINE_DRAIN` bajó de `0,004` a `0,0015` (de 14,4 a **5,4 puntos por
+hora** despierta) y `praise()` subió de +2 a **+6**. `BalanceTest` fija que diez elogios bastan
+para llegar a 60 de disciplina sin regañar nunca. Es un arreglo real.
 
-**Recomendación.** Tres cosas: (a) que la disciplina no decaiga sola, o que decaiga la décima
-parte; (b) sacar `FERAL` del primer lugar del `when` y hacerlo requerir negligencia *sostenida*
-y verificable, no un umbral pasivo; (c) renombrar y redibujar la rama para que sea deseable —
-independiente, montaraz, autosuficiente. Que alguien la quiera a propósito.
+**Lo que sigue mal.** La disciplina arranca en 20 y sigue decayendo sola: cruza el umbral de 15
+en **≈ 55 minutos de vigilia**, y el primer `decideBranch()` recién ocurre a las **3 h 46 min**.
+Un jugador que nunca descubre el botón "Felicitar" sigue obteniendo `FERAL` por omisión. Y el
+§8.12 lo empeora muchísimo.
 
-### 8.3 El regaño es la vía óptima, y la predicción es un spoiler · **ALTO**
+**Recomendación.** (a) Que la disciplina no decaiga sola, o que decaiga sólo por debajo de un
+piso; (b) sacar `FERAL` del primer lugar del `when` y hacerlo requerir negligencia *sostenida y
+observada*; (c) renombrar y redibujar la rama para que sea deseable — independiente, montaraz,
+autosuficiente. Que alguien la quiera a propósito.
 
-**Qué pasa.** `scold()` da **+10 de disciplina** por −6 de felicidad y −1 de vínculo, y su
-condición de permiso (`discipline < 60`) está casi siempre activa. `praise()` da **+2**. Para
-llegar a `SCHOLAR` (disciplina ≥ 60 y 8 elogios) la ruta eficiente es regañar cinco o seis veces
-seguidas. En paralelo, la pantalla de estadísticas muestra `Next form = Simulation.decideBranch(pet)`
-en vivo desde el minuto 2, o sea que el jugador ve "Feral" como pronóstico y tiene un botón que
-lo arregla: retar a la criatura.
+### 8.3 El regaño era la vía óptima, y la predicción era un spoiler · ✅ **RESUELTO en lo grueso**
 
-**Por qué está mal.** El juego enseña que la manera de criar bien es castigar seguido, y le
-spoilea el clímax al jugador para empujarlo a hacerlo.
+**Qué pasaba.** `scold()` daba **+10** de disciplina contra los **+2** de `praise()`: la ruta
+eficiente a `SCHOLAR` era retar seis veces seguidas. Y la pantalla de estadísticas mostraba
+`Next form: Feral` en vivo desde el minuto 2, spoileando el clímax y empujando al regaño.
 
-**Recomendación.** La disciplina debe medir **constancia**, no represión: alimentar antes de que
-llegue a hambre crítica, apagar la luz de noche, curar dentro de los tres minutos. `scold()`
-pasa a ser un gesto raro y de bajo efecto. Y `Next form` se saca de la pantalla de estadísticas
-o se reemplaza por una pista cualitativa sin nombre de rama ("últimamente duerme mucho").
+**Cómo se arregló.** `praise` +6 / `scold` +7, y `scold` ahora cuesta **2 de vínculo** (era 1).
+El elogio pasó a ser la vía principal y el regaño un atajo caro. El spoiler se reemplazó por
+`branchHint()`: la pantalla dice *"Leaning toward: wary, left to itself"* en vez de nombrar la
+rama. Exactamente lo pedido.
 
-### 8.4 El memorial le pone nota a un duelo · **ALTO**
+**Lo que queda.** La disciplina sigue midiendo represión y elogio, no constancia. Un jugador que
+alimenta puntualmente, apaga la luz de noche y cura en tres minutos no gana un solo punto de
+disciplina por hacerlo bien. Eso es lo que falta (§9 R6).
 
-**Qué pasa.** `MemorialScreen` imprime `"${pet.mealsEaten} meals · ${pet.gamesWon} wins ·
-${pet.careMistakes} care mistakes"` y pone **"Raise generation N+1"** como botón primario, con
-"Stay a moment" abajo como secundario. La lápida es idéntica para vejez y para inanición.
+### 8.4 El memorial le pone nota a un duelo · ❌ **ABIERTO**
 
-**Recomendación.** Sacar `careMistakes` de esta pantalla (que viva en el cuaderno, donde tiene
-voz y contexto). Invertir la jerarquía de botones: quedarse es lo primario, y el botón de
-siguiente generación aparece recién a los diez segundos. Dos tratamientos visuales según
-`DeathReason`. Y agregar la última línea del cuaderno, que es lo único que el jugador va a
-recordar.
+**Qué pasa.** `MemorialScreen` sigue imprimiendo `"${pet.mealsEaten} meals · ${pet.gamesWon}
+wins · ${pet.careMistakes} care mistakes"` y sigue poniendo **"Raise generation N+1"** como
+botón primario con "Stay a moment" abajo. La lápida es idéntica para vejez y para inanición.
 
-### 8.5 La notificación de muerte es un anzuelo · **ALTO**
+**Por qué ahora importa más.** Con dos días de inversión emocional en vez de cinco horas, el
+memorial es la escena de mayor carga del producto y es la que menos trabajo tiene encima.
 
-**Qué pasa.** `Notifications.careMessage()` devuelve, si la mascota está muerta:
-*"Your pet has passed away. Open the app to start a new generation."*
+**Recomendación.** Sacar `careMistakes` de esta pantalla. Invertir la jerarquía de botones.
+Cuatro tratamientos visuales según `DeathReason`. Agregar la última línea del cuaderno, que es
+lo único que el jugador va a recordar.
 
-**Recomendación.** Borrarla. Si hay que avisar algo, se avisa una sola vez y sin llamada a la
-acción. El reenganche jamás se construye sobre una muerte.
+### 8.5 La notificación de muerte era un anzuelo · ✅ **RESUELTO**
 
-### 8.6 El paso de generación pierde y recorta memoria · **MEDIO**
+**Qué pasaba.** *"Your pet has passed away. Open the app to start a new generation."*
+**Ahora dice:** *"X is gone. Whenever you are ready."* Informa sin convocar. Es el modelo.
 
-**Qué pasa.** `nextGeneration()` **no** hereda `highScores`, y el `chronicle` heredado está
-capado a 120 entradas con `takeLast()`. O sea que las primeras líneas de la generación 1 —la
-eclosión, el "lo primero que vi fuiste vos"— se borran solas cuando la generación 2 escribe
-suficiente. El álbum tiene el mismo problema en `snapshot()` (§8.7).
+### 8.6 El paso de generación pierde y mezcla memoria · ⚠️ **PARCIAL**
 
-**Recomendación.** Particionar cuaderno y álbum **por generación**, con un tope por generación
-en vez de un tope global, y marcar como no-borrables las entradas de tipo `MILESTONE` y `LOSS`.
-Los récords de minijuegos se heredan como "récord de la casa" con el nombre de quién lo hizo.
+**Lo que mejoró.** `nextGeneration()` ahora hereda el `chronicle`. `Chronicle.trim()` descarta
+días rutinarios antes que `MILESTONE` y `LOSS`; `CareActions.trimAlbum()` descarta selfies antes
+que entradas `evo_`. `BalanceTest` fija las dos cosas. La eclosión de la generación 1 ya no se
+puede borrar por escribir mucho.
 
-### 8.7 El álbum borra el recuerdo más viejo en silencio · **MEDIO**
+**Lo que sigue mal.** Los topes (`MAX_ENTRIES = 120`, `ALBUM_LIMIT = 60`) son **globales, no por
+generación**: en la generación 4 los hitos de las cuatro compiten por el mismo espacio, y como
+los hitos son inmunes al recorte, el cuaderno termina siendo puros hitos sin ningún día común
+entre ellos — una lista de partidas de nacimiento. Y `highScores` sigue sin heredarse.
 
-**Qué pasa.** `CareActions.snapshot()` guarda `(state.album + entry).takeLast(60)`. Las entradas
-de evolución que agrega `handleEvolution()` no tienen tope, pero **sí caen dentro del recorte**
-de las fotos manuales.
+**Recomendación.** Particionar cuaderno y álbum por generación, con tope por generación. Los
+récords de minijuegos se heredan como "récord de la casa" con el nombre de quién lo hizo.
 
-**Recomendación.** Nunca borrar automáticamente. Si hay límite técnico, subirlo mucho y avisar
-antes; y si hay que sacrificar algo, que el jugador elija. Un juego sobre la memoria no puede
-tener un `takeLast()` sobre la memoria.
+### 8.7 El álbum borraba el recuerdo más viejo en silencio · ✅ **RESUELTO**
 
-### 8.8 El juego habla en inglés desde el código · **MEDIO**
+`trimAlbum()` protege las entradas `evo_`. Queda pendiente sólo la partición (§8.6).
 
-**Qué pasa.** `strings.xml` tiene 13 cadenas (nombres de botones). Todo el resto —toasts,
-rechazos, cuaderno, memorial, tutorial, tienda, pantalla de estadísticas— está escrito a mano
-en inglés dentro de los `.kt`, concatenado con `${state.name}`. `FEATURES.md` 10.4 afirma que el
-contenido textual está centralizado y traducido; no lo está.
+### 8.8 El juego habla en inglés desde el código · ❌ **ABIERTO**
 
-**Recomendación.** Es prerequisito de todo §7: mover cada cadena a recursos con plurales y
-placeholders nombrados antes de contratar a nadie para escribir. Ninguna regla de voz se puede
-aplicar a texto que vive esparcido en la lógica.
+`strings.xml` sigue teniendo 13 cadenas (nombres de botones). Todo el resto —toasts, rechazos,
+cuaderno, memorial, tutorial, tienda, estadísticas— está escrito a mano en inglés dentro de los
+`.kt`, concatenado con `${state.name}`. `FEATURES.md` 10.4 sigue afirmando que el contenido está
+centralizado y traducido; no lo está. **Es prerequisito de todo el §7**: ninguna regla de voz se
+puede aplicar a texto que vive esparcido en la lógica.
 
-### 8.9 La calificación de cuidado insulta a un recién nacido · **MEDIO**
+### 8.9 La calificación de cuidado insultaba a un recién nacido · ✅ **RESUELTO**
 
-**Qué pasa.** `careScore` promedia seis stats incluyendo disciplina (arranca en 20) y vínculo
-(arranca en 10). Una criatura recién nacida y perfectamente cuidada da `0,60` → **grado "C"**.
+`careScore` ahora promedia sólo las cinco necesidades (saciedad, ánimo, energía, higiene, salud);
+disciplina y vínculo quedaron fuera. Un recién nacido bien cuidado da **≈ 0,82 → grado "A"** en
+vez de "C". El comentario en `Pet.kt` explica el porqué mejor que este documento.
+*Queda una objeción menor:* seguir mostrando una nota con letra sobre una relación sigue siendo
+un juicio de valor. Considerar reemplazarla por una palabra.
 
-**Recomendación.** O se saca la calificación con letra (recomendado: es un juicio de valor sobre
-una relación) o se calcula sólo sobre las necesidades atendibles (saciedad, felicidad, higiene,
-salud) y se muestra como una palabra, no como una nota escolar.
+### 8.10 La personalidad se decide antes de que el jugador exista · ❌ **ABIERTO**
 
-### 8.10 La personalidad se decide antes de que el jugador exista · **BAJO**
+El comentario de `Personality` dice *"rolled from the first hours of care"*, pero `newGame()` la
+sortea con `Random(seed)` en el instante de crear la partida. **Recomendación:** decidirla al
+eclosionar, a partir de lo que hizo el jugador en los 90 segundos del huevo. Es barato, hace que
+el huevo tenga sentido (§4.1) y convierte el primer minuto y medio en la primera decisión.
 
-**Qué pasa.** El comentario de `Personality` en `Pet.kt` dice *"rolled from the first hours of
-care"*, pero `newGame()` la sortea con `Random(seed)` en el instante de crear la partida, con
-`seed = nowMillis`.
+### 8.11 Los objetos prometen cosas que no hacen · ❌ **ABIERTO**
 
-**Recomendación.** Cumplir lo que el comentario promete: decidir la personalidad al eclosionar,
-a partir de lo que hizo el jugador en los 90 segundos del huevo (¿lo tocó?, ¿apagó la luz?,
-¿se quedó mirando?). Es barato, hace que el huevo tenga sentido (§4.1) y convierte el primer
-minuto y medio en la primera decisión.
+`toy_drum` dice "Unlocks Rhythm Tap" y `toy_cards` "Unlocks Memory Match", pero `GamesScreen`
+sólo consulta `CareActions.canPlay()` y nunca mira el inventario. `toy_ball` promete "Ball
+Rally", que no existe. **Recomendación:** o los juguetes desbloquean de verdad —y entonces son
+un arco de progresión para la niñez de 3 horas, que buena falta le hace— o se reescriben las
+descripciones.
 
-### 8.11 Los objetos prometen cosas que no hacen · **BAJO**
+### 8.12 Los errores de cuidado no distinguen ausencia de negligencia · 🔴 **NUEVO — CRÍTICO**
 
-**Qué pasa.** `toy_drum` dice "Unlocks Rhythm Tap" y `toy_cards` "Unlocks Memory Match", pero
-`GamesScreen` sólo consulta `CareActions.canPlay()` y nunca mira el inventario. `toy_ball` dice
-que desbloquea "Ball Rally", que no existe.
+**Qué pasa.** `handleCareMistakes()` registra un error por cada minuto simulado en que la
+saciedad está en ≤ 2, y **no está escalado por `decayScale`**. Durante una puesta al día de
+8 horas, la saciedad llega a 0 alrededor de la primera hora y se queda ahí: el contador suma
+**alrededor de 400 errores de cuidado por noche**.
 
-**Recomendación.** Elegir: o los juguetes desbloquean de verdad (y entonces son un arco de
-progresión temprana, bueno para la etapa Niño), o se reescriben las descripciones. Un objeto que
-miente sobre lo que hace erosiona la confianza en todo el resto del texto.
+`decideBranch()` calcula `neglect = careMistakes / horas`. Después de una sola noche, ese
+cociente ronda **35 por hora** contra un umbral de 6. El segundo `decideBranch()` —el
+definitivo, a las 11 h 46 min— cae justo después de esa noche.
+
+**Por qué es crítico.** El arreglo del §8.1 le salvó el cuerpo a la mascota pero no la
+historia: **todo jugador que duerma obtiene una adulta `Feral`, sin excepción y sin
+explicación.** El juego ahora te deja dormir y después te dice que abandonaste a tu mascota.
+Es el mismo error que teníamos, movido de la barra de salud al veredicto narrativo.
+
+**Recomendación.** Multiplicar el registro por `decayScale`, o mejor: capar los errores de
+cuidado durante la puesta al día a **uno por hora simulada**, y guardar por separado
+"negligencia observada" (app abierta) de "deterioro por ausencia". El veredicto de rama sólo
+debería mirar la primera. Un test de `BalanceTest` en la línea de los existentes:
+*"una noche de sueño no puede convertir a nadie en Feral."*
+
+### 8.13 La enfermedad sigue matando de noche, y ahora hay ocho veces más noches · 🔴 **NUEVO — CRÍTICO**
+
+**Qué pasa.** El riesgo base de enfermarse es 0,4 % por chequeo cada 30 s ≈ **38 % por hora**.
+La tasa fue afinada para una vida de 5 horas; ahora se aplica a una de 48. La mascota se enferma
+más de una docena de veces por partida, y en la vejez (+2 % por chequeo) muchísimo más.
+
+Y la protección offline **no aplica a la enfermedad**: `protectHealth` exige `!state.isSick`, y
+además se evalúa con el estado inicial, así que si se enferma *durante* la ausencia la salud cae
+sin piso a `0,055 × 0,6 × 0,30 = 0,0099/s` → **2 h 48 min desde salud llena**.
+
+Cuenta redonda: en una ausencia de 8 horas, la probabilidad de enfermarse dentro de las primeras
+5 h 12 min (o sea, con tiempo de sobra para morirse) es de **más del 80 %**.
+
+**Por qué es crítico.** `BalanceTest.a healthy pet survives a full night away` pasa, pero pasa
+con **una sola semilla determinista** (`rngSeed` fijo desde `newGame`). El test verifica un
+camino, no la distribución. En manos de jugadores reales, la muerte nocturna volvió por la
+puerta de al lado.
+
+**Recomendación.** Tres cosas: (a) bajar el riesgo base para que escale con la longitud de la
+vida, o ligarlo a `lifeSpeed`; (b) darle a la enfermedad contraída **durante** una ausencia el
+mismo piso de salud que a todo lo demás — que te espere enferma, no muerta; (c) agregar tests
+que corran muchas semillas y afirmen sobre la tasa, no sobre un caso.
+
+*Matiz que hay que preservar:* dejarla enferma **a propósito** y desaparecer **sí** debe matar.
+Esa es la única muerte por ausencia que el juego se ha ganado el derecho a tener.
+
+### 8.14 Las evoluciones ocurren sin público y se sirven en un lote ilegible · 🟠 **NUEVO — ALTO**
+
+**Qué pasa.** El envejecimiento **no** se ralentiza durante la ausencia (sólo las necesidades).
+Con etapas de 8 y 24 horas, **la mayoría de las evoluciones de una partida ocurren con la app
+cerrada**, incluido el `decideBranch()` definitivo del salto a Adulto (11 h 46 min).
+
+Al reabrir, `handleEvents(offline = true)` dispara toda la noche de golpe: la animación de
+evolución, el splash, los avisos de enfermedad, el de recuperación, los logros. Y
+`showToast()` hace `toastJob?.cancel()` — **cada mensaje mata al anterior**. El jugador ve un
+splash y un único toast superviviente, casi siempre el menos importante.
+
+**Recomendación.** Una **cola de revelaciones**: durante la puesta al día, los eventos de tipo
+hito no se reproducen, se encolan. Al abrir, la tarjeta de reencuentro los presenta en orden y
+de a uno, con la escena de evolución reproducida entera y con el jugador mirando. Es el ítem
+que más experiencia agrega por línea de código del roadmap entero.
+
+### 8.15 El metabolismo no escala con `lifeSpeed` · 🟡 **NUEVO — MEDIO**
+
+**Qué pasa.** `lifeSpeed` divide las duraciones de etapa pero las tasas de desgaste son
+constantes absolutas. En "Demo" (4 h de vida) hacen falta ~12 comidas para criar a alguien; en
+"Slow" (4 días) hacen falta ~250. La densidad de cuidado por vida varía en un factor de 20 entre
+presets, y con ella cambia todo: el peso final (`GOURMAND` es casi imposible en Demo), la
+cantidad de partidas jugadas (`ATHLETIC` pide 12), la exposición a enfermedad.
+
+**Recomendación.** O bien escalar las tasas de desgaste por `lifeSpeed` (una vida rápida es una
+vida acelerada, no una vida corta con metabolismo lento), o bien convertir los umbrales de
+`decideBranch()` en fracciones de la vida esperada en vez de valores absolutos. La segunda es
+más barata y más correcta.
+
+### 8.16 Los guardias de intervalo disparan dos veces por ventana · 🟡 **NUEVO — MEDIO (bug)**
+
+**Qué pasa.** `handleSickness()` usa `if (state.ageSeconds % SICK_CHECK_INTERVAL > dt) return`
+y `handleCareMistakes()` usa `if (state.ageSeconds % 60L > dt) return`. Con `dt = 1` (el bucle
+de primer plano corre un tick por segundo), la condición es falsa tanto para el resto `0` como
+para el resto `1`: **el chequeo corre dos segundos consecutivos de cada ventana**.
+
+En la práctica, el riesgo de enfermedad y la acumulación de errores de cuidado en primer plano
+corren al **doble** de la tasa que las constantes declaran. Durante la puesta al día el paso es
+más grueso y el error varía con el tamaño del hueco, así que la tasa efectiva además **cambia
+según cuánto tiempo estuviste afuera** — lo que hace el balance imposible de razonar.
+
+**Recomendación.** Cambiar la condición a `>= dt`, o mejor, llevar un acumulador explícito
+(`secondsSinceLastSickCheck`) en el estado. Y rehacer los números de §2.4 después, porque hoy
+la mitad de ellos describe la intención y no el comportamiento.
 
 ---
 
 ## 9. Roadmap narrativo
 
-Priorizado por cuánto acerca el producto a la tesis por unidad de esfuerzo. **S** = días,
-**M** = una a dos semanas, **L** = más.
+Priorizado por cuánto acerca el producto a la tesis por unidad de esfuerzo, **reordenado para el
+ritmo de dos días**. **S** = días, **M** = una a dos semanas, **L** = más.
 
 | # | Feature | Qué es | Por qué sirve a la tesis | Esf. |
 |---|---|---|---|---|
-| **R1** | **Reposo nocturno y tope de daño offline** | Mientras duerme de noche con la luz apagada, la salud no baja; una ausencia nunca se lleva más del 60 % de la salud. | Sin esto el juego no es sobre la atención: es sobre no poder dormir. Es el arreglo que hace posible todo lo demás. | **S** |
-| **R2** | **Cuaderno completo** (ya en curso) | `Chronicle` con pantalla propia, particionado por generación, hitos no borrables, lectura tipo diario. | Es la única memoria en voz de la criatura. Convierte cinco horas de barras en un relato que sobrevive al desinstalado. | **M** |
-| **R3** | **Disciplina por constancia** | La disciplina deja de decaer sola y sube por cuidar a tiempo (comer antes de hambre crítica, luz apagada de noche, curar en < 3 min). `scold()` pasa a gesto menor. | Elimina el regaño como estrategia óptima y hace que la rama premie presencia en vez de represión. | **M** |
-| **R4** | **Rediseño del memorial** | Dos tratamientos según causa de muerte, sin contador de errores, "quedarse" como acción primaria, última línea del cuaderno en pantalla. | El latido más importante del juego hoy termina en una boleta. | **S** |
-| **R5** | **El huevo interactivo** | 90 segundos donde se puede tocar, abrigar y apagar la luz; esas acciones deciden la personalidad al eclosionar. | Hace que el primer minuto y medio sea una relación en vez de una sala de espera, y cumple lo que el código ya promete. | **S** |
-| **R6** | **Tarjeta de reencuentro** | Al volver de una ausencia larga, una tarjeta con hechos en pasado en vez de una avalancha de toasts. | Es el momento donde el juego decide si es honesto o culpógeno. Ahora mismo es ruido. | **S** |
-| **R7** | **Carta de hito** | En cada evolución y en la vejez, la criatura escribe media página al cuidador, distinta según cómo se la crió. | Convierte el veredicto mecánico de `decideBranch()` en reconocimiento. Es el pago emocional de todo el arco medio. | **M** |
-| **R8** | **Memoria activa** | La criatura recuerda cómo la criaron y lo demuestra: se acerca al vidrio si el vínculo fue alto, duda si estuvo mucho sola, busca su juguete favorito. | "Recordar" en conducta pesa diez veces más que recordar en texto. Es la tesis hecha animación. | **M** |
-| **R9** | **Álbum sin recorte + postal** | Sacar el `takeLast(60)`, particionar por generación, exportar la postal como imagen. | Un juego sobre la memoria no puede borrar recuerdos en silencio; y una postal que se puede compartir es la única viralidad honesta que este juego admite. | **S** |
-| **R10** | **Linaje** | Pantalla de árbol de generaciones: nombre, especie, rama, días vividos, causa, foto. Sin puntajes. | Es el metajuego de la generación 3+. Sin esto, morir y volver a empezar es repetición; con esto, es historia. | **M** |
-| **R11** | **Ritual de despedida** | Al morir: silencio, luz que baja, la posibilidad de quedarse en la sala vacía. El huevo siguiente **llega** al día siguiente en vez de salir de un menú. | Le da al duelo la duración que necesita y quita el embudo de "siguiente generación" del momento del duelo. | **S** |
-| **R12** | **Vejez con mecánicas propias** | Menos monedas y XP, más presencia: la anciana pide compañía en vez de comida, cuenta cosas, se cansa. Reloj honesto de cuánto le queda. | El cuidado sin recompensa es el gesto más limpio del juego. Hoy la vejez es sólo "adulto con más riesgo de enfermarse". | **M** |
-| **R13** | **Estaciones** | Cuatro estaciones ligadas a los días-mascota que repintan la sala, la ventana y el ánimo. | Da textura al vacío del arco adulto y hace que volver tenga novedad sin inventar tareas. | **M** |
+| **R1** | **Errores de cuidado sensibles a la ausencia** | El registro de `careMistakes` se escala o se capa durante la puesta al día, y se separa "negligencia observada" de "deterioro por ausencia". Sólo la primera pesa en `decideBranch()`. | Hoy dormir una noche garantiza una adulta `Feral`. El juego te deja dormir y después te acusa de abandono: es la contradicción más grave que queda. | **S** |
+| **R2** | **Enfermedad recalibrada + gracia offline** | Bajar el riesgo base a la escala de una vida de 48 h; darle a la enfermedad contraída *durante* una ausencia el mismo piso de salud que a todo lo demás. Tests sobre muchas semillas. | La muerte nocturna volvió por la puerta de al lado. Perder una mascota tiene que ser algo que hiciste. | **S** |
+| **R3** | **Reencuentro con revelaciones en cola** | Tarjeta de reencuentro con 3–4 hechos en pasado, y los hitos ocurridos durante la ausencia (evolución, enfermedad, curación) reproducidos de a uno, con el jugador mirando. | Con etapas de 8 y 24 h la mayoría de las evoluciones pasan sin público, y el lote de eventos actual las pisa entre sí. Un momento que ocurrió sin nadie no ocurrió. | **M** |
+| **R4** | **Memorial y despedida** | Cuatro tratamientos según causa de muerte, sin contador de errores, "quedarse" como acción primaria, última línea del cuaderno en pantalla, y el huevo siguiente **llega** al día siguiente en vez de salir de un menú. | Es la escena de mayor carga emocional del producto y la que menos trabajo tiene. Y quita el embudo del momento del duelo. | **S** |
+| **R5** | **Cuaderno particionado + cartas de hito** | Topes por generación en `Chronicle` y en el álbum; y en cada evolución y en la vejez, la criatura escribe media página al cuidador, distinta según cómo se la crió. | El cuaderno ya existe y es lo mejor del repo. Falta que sobreviva al linaje y que tenga un momento largo, no sólo líneas sueltas. | **M** |
+| **R6** | **Disciplina por constancia** | La disciplina deja de decaer sola y sube por cuidar a tiempo: comer antes de hambre crítica, luz apagada de noche, curar en < 3 min. `FERAL` sale del primer lugar del `when` y se rediseña como rama deseable. | Cierra lo que el rebalanceo dejó a medias: hoy la disciplina mide elogio y regaño, no presencia. | **M** |
+| **R7** | **El día-mascota como unidad** | Con el reloj de 2 h, una vida tiene ~24 días-mascota. Cada uno recibe una forma: un amanecer, algo que la criatura hace ese día, una línea de cuaderno de cierre. | La etapa Adulto son 24 horas sin ninguna estructura: el hueco más grande del producto, y el rebalanceo lo multiplicó por cinco. Los doce días-mascota que caben adentro son doce capítulos esperando. | **M** |
+| **R8** | **El huevo interactivo** | 90 segundos donde se puede tocar, abrigar y apagar la luz; esas acciones deciden la personalidad al eclosionar. Piso de duración para el preset Demo. | Hace que el primer minuto y medio sea una relación en vez de una sala de espera, y cumple lo que el código ya promete. | **S** |
+| **R9** | **Vejez con mecánicas propias** | Doce horas donde el cuidado ya no construye: menos monedas y XP, la anciana pide compañía en vez de comida, cuenta cosas, se cansa. Reloj honesto de cuánto le queda. | El cuidado sin recompensa es el gesto más limpio del juego, y ahora dura media jornada. Hoy la vejez es "adulto con más riesgo de enfermarse". | **M** |
+| **R10** | **Metabolismo ligado al ritmo** | Los umbrales de `decideBranch()` pasan a ser fracciones de `expectedLifetimeSeconds`, y/o las tasas de desgaste escalan con `lifeSpeed`. | Sin esto, Slow y Demo son juegos distintos con las mismas reglas, y las ramas son inalcanzables en uno e inevitables en el otro. | **S** |
+| **R11** | **Memoria activa** | La criatura recuerda cómo la criaron y lo demuestra: se acerca al vidrio si el vínculo fue alto, duda si estuvo mucho sola, busca su juguete favorito. | "Recordar" en conducta pesa diez veces más que recordar en texto. Es la tesis hecha animación, y es lo que hace que valga la pena volver a un adulto sano. | **M** |
+| **R12** | **Estaciones** | Cuatro estaciones ligadas a los días-mascota que repintan la sala, la ventana y el ánimo. Con 24 días por vida, cada estación dura ~6. | Da textura a las 36 horas de adultez y vejez, y hace que volver tenga novedad sin inventar tareas. Antes no cabía; ahora sí. | **M** |
+| **R13** | **Carta de aniversario** | Cada 24 horas reales de vida, la criatura deja una nota corta sobre lo que va del camino. Dos por partida a ritmo Normal. | El rebalanceo creó una unidad nueva —el día real— y nada la marca. Es el gancho más barato para que el jugador vuelva al día siguiente sin que nadie le pida nada. | **S** |
 | **R14** | **El objeto favorito** | En algún momento la criatura elige un objeto del inventario y lo adopta. Aparece en el cuarto, en las fotos, y se hereda a la generación siguiente. | Un detalle irracional y no optimizable es lo que hace que una criatura se sienta particular en vez de configurada. | **S** |
-| **R15** | **Rechazos con carácter** | Cada personalidad rechaza distinto: Shy se esconde, Brave planta cara, Greedy come igual y se arrepiente. | El primer "no" es un latido (§4.2) y hoy es un toast genérico. Es la forma más barata de dar interioridad. | **S** |
-| **R16** | **Internacionalización real** | Todas las cadenas a recursos, con plurales y placeholders nombrados; español como idioma de primera clase. | Prerequisito duro de §7. No se puede dirigir la voz de un juego cuyo texto vive dentro de la lógica. | **M** |
-| **R17** | **Modo sin barras** | Un ajuste que oculta todo el HUD numérico: sólo la criatura y la sala. | Prueba de fuego del arte y regalo para el jugador que ya entendió el juego. Si funciona, confirmamos la tesis; si no funciona, sabemos qué arreglar. | **S** |
-| **R18** | **Rutina aprendida** | La criatura aprende a qué hora sueles aparecer y empieza a esperarte a esa hora (se despierta, mira hacia afuera). Nunca reclama si no vas. | Convierte la costumbre del jugador en algo que la criatura reconoce. Es lo más cerca que el juego puede estar de ser correspondido. | **L** |
-| **R19** | **Visita** | Otro Vivario (partida exportada) visita la sala un rato: las dos criaturas se miran, sale una foto para los dos álbumes. Sin servidor, sin ranking, sin combate. | Socialidad sin competencia. Cualquier ranking rompería la tesis en el acto; una foto compartida la refuerza. | **L** |
-| **R20** | **Cápsula del tiempo** | Al morir de vejez, el cuidador puede guardar una cosa (una foto, una línea, el objeto favorito) que la próxima criatura encuentra en el cuarto y no entiende. | Cierra el círculo entre generaciones con un gesto de memoria, no de progresión. Es el mejor final que este juego puede tener. | **S** |
+| **R15** | **Rechazos con carácter** | Cada personalidad rechaza distinto: Shy se esconde, Brave planta cara, Greedy come igual y se arrepiente. | El primer "no" es un latido (§4.2) y hoy es un toast genérico. Es la forma más barata de dar interioridad, y ahora ocurre en cada reencuentro. | **S** |
+| **R16** | **Linaje** | Pantalla de árbol de generaciones: nombre, especie, rama, días vividos, causa, foto. Sin puntajes. Récords heredados como "récord de la casa". | Es el metajuego de la generación 3+. Sin esto, morir y volver a empezar es repetición; con esto, es historia. | **M** |
+| **R17** | **Internacionalización real** | Todas las cadenas a recursos, con plurales y placeholders nombrados; español como idioma de primera clase. | Prerequisito duro del §7. No se puede dirigir la voz de un juego cuyo texto vive dentro de la lógica. | **M** |
+| **R18** | **Modo sin barras** | Un ajuste que oculta todo el HUD numérico: sólo la criatura y la sala. | Prueba de fuego del arte y regalo para el jugador que ya entendió el juego. Si funciona, confirmamos la tesis; si no, sabemos qué arreglar. | **S** |
+| **R19** | **Cápsula del tiempo** | Al morir de vejez, el cuidador guarda una cosa (una foto, una línea, el objeto favorito) que la próxima criatura encuentra en el cuarto y no entiende. | Cierra el círculo entre generaciones con un gesto de memoria, no de progresión. Es el mejor final que este juego puede tener. | **S** |
+| **R20** | **Rutina aprendida** | La criatura aprende a qué hora sueles aparecer y empieza a esperarte a esa hora. Nunca reclama si no vas. | Con dos sesiones ancla por día durante dos días, hay patrón suficiente para detectar. Es lo más cerca que el juego puede estar de ser correspondido. | **L** |
+
+**Explícitamente diferido:** las visitas entre mascotas (`FEATURES.md` 6.9, 7.7). Cualquier
+ranking o comparación rompe la tesis en el acto; una foto compartida la reforzaría, pero no
+antes de que R1–R7 estén hechos.
 
 ### Orden sugerido de ejecución
 
-1. **Bloque de salvamento** (R1, R4, R5, R6, R9): arregla lo que hoy contradice activamente la
-   tesis. Todo S salvo nada. Sin esto, cualquier contenido nuevo se construye sobre arena.
-2. **Bloque de voz** (R2, R16, R7, R15): le da al juego una boca. R16 antes que cualquier
-   contratación de escritura.
-3. **Bloque de presencia** (R8, R12, R13, R14, R17): llena el hueco del arco adulto y de la vejez.
-4. **Bloque de linaje** (R10, R11, R20): construye el metajuego de la generación 3+.
-5. **Bloque largo** (R18, R19): sólo cuando todo lo anterior esté firme.
+1. **Bloque de reparación del rebalanceo** (R1, R2, R3): el cambio de ritmo arregló la muerte
+   por hambre y destapó tres cosas nuevas. Sin esto, la vida de dos días promete algo que no
+   cumple.
+2. **Bloque de cierre** (R4, R5): las dos escenas de mayor carga, memorial y cuaderno largo.
+3. **Bloque de estructura** (R6, R7, R9, R10): le da forma a las 36 horas de adultez y vejez,
+   que hoy son un desierto.
+4. **Bloque de voz y carácter** (R17 primero, después R13, R14, R15, R8): R17 antes de contratar
+   a nadie para escribir.
+5. **Bloque de presencia y linaje** (R11, R12, R16, R18, R19).
+6. **Bloque largo** (R20). Sólo cuando todo lo anterior esté firme.
 
 ---
 
 ## Apéndice — Números de referencia rápida
 
-Para artistas y escritores que necesiten saber "cuánto dura esto".
+Para artistas y escritores que necesiten saber "cuánto dura esto". Todo a `lifeSpeed = 1.0`.
 
 | Pregunta | Respuesta |
 |---|---|
-| ¿Cuánto vive una mascota? | 5 h 01 min de reloj real · 15 días-mascota (ritmo por defecto) |
-| ¿Cuánto dura un día-mascota? | 20 min reales (ajustable 2–60) |
-| ¿Cada cuánto hay que darle de comer? | cada 13–26 min según especie y etapa |
-| ¿Cada cuánto duerme? | siestas de ~4,7 min, cada 15–25 min |
-| ¿Cada cuánto hace popó? | ~1 cada 14 min bien alimentada · máximo 6 acumulados |
-| ¿Cuándo se decide la forma adulta? | minuto 61,5 (Adolescente) y de nuevo en el minuto 121,5 (Adulto) |
-| ¿Cuánto aguanta sola? | **43–56 min hasta morir** hoy · debería ser una noche entera (R1) |
-| ¿Cada cuánto revisa el juego en segundo plano? | 15 min (mínimo de WorkManager), 1 notificación como máximo |
-| ¿Cuánto progreso offline se simula? | 12 h como máximo |
+| ¿Cuánto vive una mascota? | **47 h 47 min de reloj real ≈ 2 días · ≈ 24 días-mascota** |
+| ¿Y en los otros ritmos? | Slow 95 h 33 min (4 d) · Fast 15 h 55 min · Demo 3 h 59 min |
+| ¿Cuánto dura un día-mascota? | 2 h reales (slider 5 min – 4 h). Sólo controla día/noche y el contador |
+| ¿Cuándo es de noche? | de 21:30 a 6:30 del reloj interno = 45 min de cada 2 h |
+| ¿Cuándo eclosiona? | 1 min 30 s |
+| ¿Cuándo es la primera evolución? | **46 min 30 s** — dentro de la primera sesión |
+| ¿Cuándo se decide la rama? | 3 h 46 min 30 s (Adolescente) y **de nuevo a las 11 h 46 min 30 s** (Adulto, definitivo) |
+| ¿Cuándo llega la vejez? | 1 d 11 h 46 min · dura 12 h |
+| ¿Cada cuánto hay que darle de comer? | **11–26 min con la app abierta · 35 min – 1 h 27 min en ausencia** |
+| ¿Cada cuánto duerme? | siestas de ~4,7 min, cada 15–25 min en vivo |
+| ¿Cada cuánto hace popó? | ~1 cada 14 min bien alimentada · tope 6 acumulados |
+| ¿Cuánto aguanta sola? | **indefinidamente si está sana**: piso de salud 12. Vuelve famélica, sucia y de mal humor, pero viva |
+| ¿Qué sí la mata en ausencia? | la enfermedad que dejaste sin curar (≈ 2 h 48 min desde salud llena) — y hoy demasiado (§8.13) |
+| ¿A qué velocidad corre el tiempo estando afuera? | necesidades al **30 %** · edad, sueño y evolución al **100 %** |
+| ¿Cuánto progreso offline se simula? | 12 h como máximo. Una semana afuera envejece 12 h |
+| ¿Cada cuánto revisa el juego en segundo plano? | 15 min (mínimo de WorkManager) · 1 notificación como máximo · ninguna si está bien |
 | ¿Cuántos objetos, logros y minijuegos hay? | 24 objetos · 24 logros · 3 minijuegos · 5 cuartos · 5 sombreros |
+| ¿Cuánto guarda la memoria? | cuaderno 120 entradas · álbum 60 · **globales, no por generación** (§8.6) |

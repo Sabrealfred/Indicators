@@ -212,7 +212,7 @@ data class GameConfig(
      * Real seconds that make up one pet day. This drives the day/night clock and the day
      * counter only — how fast the pet grows up is [lifeSpeed].
      */
-    val secondsPerPetDay: Long = 7_200L,
+    val secondsPerPetDay: Long = 21_600L,
     /**
      * Multiplies how fast life stages advance. At 1.0 a pet lives about two real days, which
      * is the point: a life you can sleep through is not a life you can care for.
@@ -224,7 +224,7 @@ data class GameConfig(
      * Time away drains needs at this fraction of the live rate. Without it a full pet starves
      * to death in under an hour, which means a night's sleep kills it every single time.
      */
-    val offlineDecayMultiplier: Float = 0.30f,
+    val offlineDecayMultiplier: Float = 0.60f,
     /** Absence alone can never take health below this; only illness left untreated can. */
     val offlineHealthFloor: Float = 12f,
     val soundEnabled: Boolean = true,

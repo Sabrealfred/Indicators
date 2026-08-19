@@ -31,20 +31,33 @@ data class SimResult(val state: PetState, val events: List<GameEvent>)
 object Simulation {
 
     // ---- Tunables, expressed per real second at the default speed ----
-    private const val SATIETY_DRAIN = 0.085f
-    private const val HAPPINESS_DRAIN = 0.045f
-    private const val ENERGY_DRAIN = 0.050f
-    private const val ENERGY_RECOVERY = 0.320f
-    private const val HYGIENE_DRAIN = 0.028f
-    private const val BOND_DRAIN = 0.005f
-    private const val DISCIPLINE_DRAIN = 0.0015f
-    private const val HEALTH_DRAIN_CRITICAL = 0.055f
-    private const val HEALTH_REGEN = 0.020f
+    //
+    // These were originally tuned against a five-hour lifetime. Once a life became two days
+    // long, the same numbers demanded a meal every fifteen minutes for forty-eight hours
+    // straight — an attentive keeper still starved their pet. The rates below are set from the
+    // experience instead: a need takes hours to empty, so checking in a few times a day is
+    // enough, and a night away leaves the pet genuinely wanting rather than dead.
+    //
+    //   satiety   100 -> 0 in about 5 h of neglect
+    //   happiness 100 -> 0 in about 9 h
+    //   energy    100 -> 0 in about 8 h awake, refilled in about 1 h of sleep
+    //   hygiene   100 -> 0 in about 8 h
+    //   health    100 -> 0 in about 2.8 h of continuous starvation
+    private const val SATIETY_DRAIN = 0.0056f
+    private const val HAPPINESS_DRAIN = 0.0030f
+    private const val ENERGY_DRAIN = 0.0035f
+    private const val ENERGY_RECOVERY = 0.0280f
+    private const val HYGIENE_DRAIN = 0.0035f
+    private const val BOND_DRAIN = 0.00040f
+    private const val DISCIPLINE_DRAIN = 0.00020f
+    private const val DISCIPLINE_FLOOR = 12f
+    private const val HEALTH_DRAIN_CRITICAL = 0.0100f
+    private const val HEALTH_REGEN = 0.0040f
 
     private const val EGG_HATCH_SECONDS = 90L
     /** Gap that means the app was closed rather than merely idle. */
     private const val CATCH_UP_THRESHOLD_SECONDS = 180L
-    private const val POOP_CHANCE_PER_SECOND = 0.0009f
+    private const val POOP_CHANCE_PER_SECOND = 0.00025f
     private const val SICK_CHECK_INTERVAL = 30L
 
     /**
@@ -73,6 +86,14 @@ object Simulation {
     /** Total lifespan in real seconds, for the settings screen to explain the pace honestly. */
     fun expectedLifetimeSeconds(config: GameConfig): Long =
         LifeStage.entries.sumOf { stageDuration(it, config) }
+
+    /**
+     * True exactly once per [window] of pet time. The old `age % window > dt` test fired on two
+     * consecutive seconds at dt=1 and could skip a window entirely at large dt, so the real rate
+     * depended on how the elapsed time happened to be sliced.
+     */
+    private fun crossedWindow(ageSeconds: Long, dt: Long, window: Long): Boolean =
+        window > 0 && (ageSeconds / window) != ((ageSeconds - dt) / window)
 
     fun stageProgress(state: PetState, config: GameConfig): Float {
         val total = stageDuration(state.stage, config).toFloat()
@@ -138,7 +159,11 @@ object Simulation {
         // that happened while you slept.
         val isCatchUp = rawElapsed > CATCH_UP_THRESHOLD_SECONDS
         val decayScale = if (isCatchUp) config.offlineDecayMultiplier.coerceIn(0.05f, 1f) else 1f
-        val protectHealth = isCatchUp && !state.isSick && state.stats.health > config.offlineHealthFloor
+        // Illness is the only thing absence is allowed to be fatal through. Tying this to the
+        // current health level instead meant a pet that came back from one long gap sitting
+        // exactly on the floor lost its protection on the next one, so two absences in a row
+        // killed it — the very thing the floor exists to prevent.
+        val protectHealth = isCatchUp && !state.isSick
 
         // Bound the loop: long absences use coarser steps instead of more iterations.
         val maxSteps = 2_000
@@ -223,7 +248,8 @@ object Simulation {
                 happiness = stats.happiness - HAPPINESS_DRAIN * d * stageMult * personalityHappy,
                 hygiene = stats.hygiene - HYGIENE_DRAIN * d * stageMult - s.poops * 0.02f * d,
                 bond = stats.bond - BOND_DRAIN * d,
-                discipline = stats.discipline - DISCIPLINE_DRAIN * d,
+                // Manners fade, but a pet does not forget everything it was ever taught.
+                discipline = max(DISCIPLINE_FLOOR, stats.discipline - DISCIPLINE_DRAIN * d),
             )
         }
 
@@ -251,8 +277,8 @@ object Simulation {
 
         s = handleSleepCycle(s, config, events)
         s = handlePoop(s, dt, random, events)
-        s = handleSickness(s, dt, random, events)
-        s = handleCareMistakes(s, dt, events)
+        s = handleSickness(s, dt, random, events, decayScale)
+        s = handleCareMistakes(s, dt, events, awayFromKeyboard = decayScale < 1f)
         s = handleEvolution(s, config, events)
         s = handleDeath(s, config, events)
         return s
@@ -283,8 +309,14 @@ object Simulation {
         } else state
     }
 
-    private fun handleSickness(state: PetState, dt: Long, random: Random, events: MutableList<GameEvent>): PetState {
-        if (state.ageSeconds % SICK_CHECK_INTERVAL > dt) return state
+    private fun handleSickness(
+        state: PetState,
+        dt: Long,
+        random: Random,
+        events: MutableList<GameEvent>,
+        decayScale: Float,
+    ): PetState {
+        if (!crossedWindow(state.ageSeconds, dt, SICK_CHECK_INTERVAL)) return state
         if (state.isSick) {
             // Illness can break on its own only if health is holding up.
             if (state.stats.health > 70f && random.nextFloat() < 0.05f) {
@@ -293,33 +325,58 @@ object Simulation {
             }
             return state
         }
-        var risk = 0.004f
-        if (state.poops >= 3) risk += 0.030f
-        if (state.stats.hygiene < 25f) risk += 0.035f
-        if (state.stats.satiety < 15f) risk += 0.030f
-        if (state.weightGrams > 70f) risk += 0.020f
-        if (state.stage == LifeStage.ELDER) risk += 0.020f
-        if (state.stats.health < 50f) risk += 0.025f
-        return if (random.nextFloat() < risk) {
+        // Expressed per hour and then converted, so the rate does not silently change when the
+        // step size or the length of a life does. Tuned so a night of neglect makes illness a
+        // real possibility rather than a certainty.
+        var riskPerHour = 0.01f
+        if (state.poops >= 3) riskPerHour += 0.05f
+        if (state.stats.hygiene < 25f) riskPerHour += 0.05f
+        if (state.stats.satiety < 15f) riskPerHour += 0.04f
+        if (state.weightGrams > 70f) riskPerHour += 0.02f
+        if (state.stage == LifeStage.ELDER) riskPerHour += 0.03f
+        if (state.stats.health < 50f) riskPerHour += 0.03f
+        val chance = (riskPerHour.coerceAtMost(0.18f) * decayScale) * (SICK_CHECK_INTERVAL / 3600f)
+        return if (random.nextFloat() < chance) {
             events += GameEvent.GotSick
             state.copy(isSick = true, sickSinceSeconds = state.ageSeconds)
         } else state
     }
 
     /**
-     * A care mistake is logged at most once per minute of sustained neglect. The counter is the
-     * main input to the evolution branch, so it deliberately forgives short lapses.
+     * A care mistake is neglect the player could have prevented. While the app is open that is
+     * once a minute; while it is closed it is once an hour, because eight hours of sleep is not
+     * four hundred and eighty separate failures. Getting this wrong made every pet that was ever
+     * slept through come back Feral.
      */
-    private fun handleCareMistakes(state: PetState, dt: Long, events: MutableList<GameEvent>): PetState {
-        if (state.ageSeconds % 60L > dt) return state
+    private fun handleCareMistakes(
+        state: PetState,
+        dt: Long,
+        events: MutableList<GameEvent>,
+        awayFromKeyboard: Boolean,
+    ): PetState {
         val reason = when {
             state.stats.satiety <= 2f -> "starving"
             state.isSick && state.ageSeconds - state.sickSinceSeconds > 180 -> "untreated illness"
             state.poops >= 4 -> "filthy room"
-            state.isSleeping && !state.lightsOff -> "lights left on"
             state.stats.happiness <= 5f -> "left alone"
+            state.isSleeping && !state.lightsOff -> "lights left on"
             else -> null
         } ?: return state
+
+        // Each failure has its own patience. Sleeping with the light on is a nuisance; letting a
+        // pet starve is not, and charging both once a minute made an attentive keeper look
+        // exactly as bad as an absent one.
+        val window = when {
+            awayFromKeyboard -> 3_600L
+            reason == "starving" -> 60L
+            reason == "untreated illness" -> 120L
+            reason == "left alone" -> 180L
+            reason == "filthy room" -> 300L
+            // Sleeping with the light on is a nuisance, not neglect: once an hour at most.
+            else -> 3_600L
+        }
+        if (!crossedWindow(state.ageSeconds, dt, window)) return state
+
         events += GameEvent.CareMistake(reason)
         return state.copy(careMistakes = state.careMistakes + 1)
     }
@@ -367,7 +424,10 @@ object Simulation {
         val neglect = state.careMistakes / hours
         val winRate = if (state.gamesPlayed == 0) 0f else state.gamesWon.toFloat() / state.gamesPlayed
         return when {
-            neglect >= 6f || state.stats.discipline < 15f -> EvolutionBranch.FERAL
+            // Feral is the pet raised by absence: someone who checks in twice in two days
+            // logs roughly one mistake per hour away. An attentive keeper logs none, and
+            // someone who simply sleeps at night lands nowhere near this.
+            state.careMistakes >= 15 && neglect >= 0.5f -> EvolutionBranch.FERAL
             state.gamesPlayed >= 12 && winRate >= 0.6f && state.stats.energy >= 55f -> EvolutionBranch.ATHLETIC
             state.weightGrams >= 45f || state.mealsEaten >= 35 -> EvolutionBranch.GOURMAND
             state.stats.discipline >= 60f && state.praises >= 8 -> EvolutionBranch.SCHOLAR

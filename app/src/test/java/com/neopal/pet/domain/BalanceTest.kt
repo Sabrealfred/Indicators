@@ -2,6 +2,7 @@ package com.neopal.pet.domain
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -74,6 +75,59 @@ class BalanceTest {
         val after = Simulation.advance(elder, elder.lastTickMillis + 3_600_000L, config).state
         assertTrue(after.isDead)
         assertEquals(DeathReason.OLD_AGE, after.deathReason)
+    }
+
+    @Test
+    fun `care on a human schedule keeps the pet alive and well`() {
+        // The rates were once tuned for a five-hour life; at a two-day life they demanded a meal
+        // every fifteen minutes. A meal every couple of hours has to be enough.
+        var pet = healthyPet().copy(inventory = mapOf("meal_bowl" to 999, "medicine" to 99))
+        // Six check-ins, two hours apart: feed, tidy up, treat anything wrong, say something kind.
+        repeat(6) {
+            repeat(120) { pet = Simulation.advance(pet, pet.lastTickMillis + 60_000L, config).state }
+            var attempts = 0
+            while (attempts < 120 && (pet.stats.satiety < 70f || pet.isSick || pet.poops > 0)) {
+                val before = pet
+                if (pet.isSick) pet = CareActions.useMedicine(pet, "medicine").state
+                if (pet.poops > 0) pet = CareActions.cleanRoom(pet).state
+                if (pet.stats.satiety < 70f) pet = CareActions.feed(pet, "meal_bowl").state
+                pet = CareActions.pet(pet).state
+                // Asleep? Nothing lands; let a minute pass and try again.
+                if (pet == before) pet = Simulation.advance(pet, pet.lastTickMillis + 60_000L, config).state
+                attempts += 1
+            }
+        }
+        assertFalse("a pet checked on every two hours must not die", pet.isDead)
+        assertTrue("and must not be in crisis either", pet.stats.health > 50f)
+        assertTrue("nor miserable", pet.stats.happiness > 30f)
+    }
+
+    @Test
+    fun `an absent keeper raises a feral pet and an attentive one does not`() {
+        // Absence: the app is opened twice a day. The keeper does the bare minimum — cures
+        // illness so the pet survives — and nothing else.
+        var absent = healthyPet().copy(inventory = mapOf("medicine_super" to 99))
+        repeat(4) {
+            absent = Simulation.advance(absent, absent.lastTickMillis + 11L * 3600_000L, config).state
+            if (absent.isSick) absent = CareActions.useMedicine(absent, "medicine_super").state
+        }
+        assertFalse("the bare minimum should still keep it alive", absent.isDead)
+        assertTrue("time away must register as neglect", absent.careMistakes >= 15)
+        assertEquals(EvolutionBranch.FERAL, Simulation.decideBranch(absent))
+
+        // Attention: fed, cleaned and praised through the same span.
+        var kept = healthyPet().copy(inventory = mapOf("meal_bowl" to 999))
+        repeat(44) {
+            repeat(60) { kept = Simulation.advance(kept, kept.lastTickMillis + 60_000L, config).state }
+            kept = CareActions.feed(kept, "meal_bowl").state
+            kept = CareActions.cleanRoom(kept).state
+            kept = CareActions.praise(kept).state
+            kept = CareActions.pet(kept).state
+            // An attentive keeper puts the light out when the pet is sleeping.
+            if (kept.isSleeping && !kept.lightsOff) kept = CareActions.toggleLights(kept).state
+            if (!kept.isSleeping && kept.lightsOff) kept = CareActions.toggleLights(kept).state
+        }
+        assertNotEquals(EvolutionBranch.FERAL, Simulation.decideBranch(kept))
     }
 
     @Test

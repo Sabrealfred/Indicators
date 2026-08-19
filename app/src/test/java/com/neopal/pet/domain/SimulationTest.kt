@@ -39,10 +39,12 @@ class SimulationTest {
 
     @Test
     fun `neglect eventually kills the pet`() {
-        val pet = hatched().copy(stats = Stats(satiety = 1f, happiness = 1f, energy = 50f, hygiene = 1f, health = 5f))
-        val result = Simulation.advance(pet, pet.lastTickMillis + 3600_000, config)
-        assertTrue(result.state.isDead)
-        assertNotNull(result.state.deathReason)
+        // Minute-by-minute ticks are the app being open. Neglect you can see is still fatal;
+        // the same hour passed as a single jump would count as an absence and be forgiven.
+        var pet = hatched().copy(stats = Stats(satiety = 1f, happiness = 1f, energy = 50f, hygiene = 1f, health = 5f))
+        repeat(60) { pet = Simulation.advance(pet, pet.lastTickMillis + 60_000, config).state }
+        assertTrue(pet.isDead)
+        assertNotNull(pet.deathReason)
     }
 
     @Test

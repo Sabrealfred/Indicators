@@ -57,7 +57,10 @@ object CareActions {
         if (item.kind != ItemKind.MEDICINE && state.stats.satiety >= 96f) {
             return blocked(state, "${state.name} is completely full.")
         }
-        if (state.isSulking) return blocked(state, "${state.name} turns away, sulking.")
+        // Sulking only refuses food it does not need; hunger always wins over mood.
+        if (state.isSulking && state.stats.satiety > 40f) {
+            return blocked(state, "${state.name} is too miserable for treats. Try petting or playing first.")
+        }
 
         val events = mutableListOf<GameEvent>()
         var s = consume(state, itemId)
@@ -111,7 +114,7 @@ object CareActions {
             cleanups = state.cleanups + 1,
             stats = state.stats.copy(
                 hygiene = state.stats.hygiene + 40f + state.poops * 8f,
-                happiness = state.stats.happiness + 4f,
+                happiness = state.stats.happiness + 6f,
             ).coerced(),
         )
         s = Simulation.applyXp(s, 5, events)
@@ -220,7 +223,7 @@ object CareActions {
         val events = mutableListOf<GameEvent>()
         var s = state.copy(
             stats = state.stats.copy(
-                happiness = state.stats.happiness + 5f,
+                happiness = state.stats.happiness + 7f,
                 bond = state.stats.bond + 2.5f,
             ).coerced(),
         )
@@ -234,7 +237,7 @@ object CareActions {
         var s = state.copy(
             praises = state.praises + 1,
             stats = state.stats.copy(
-                happiness = state.stats.happiness + 8f,
+                happiness = state.stats.happiness + 10f,
                 bond = state.stats.bond + 4f,
                 // Consistent encouragement teaches as well as telling off does, and costs nothing.
                 discipline = state.stats.discipline + 6f,
