@@ -83,7 +83,12 @@ class ParticleSystem(private val random: Random = Random(1)) {
     fun draw(scope: DrawScope) = with(scope) {
         particles.forEach { p ->
             val alpha = (p.life / p.maxLife).coerceIn(0f, 1f)
-            val center = Offset(p.x * size.width, p.y * size.height)
+            // Snapped to the same grid as everything else: sub-pixel particles smear into
+            // half-lit blocks that flicker instead of reading as sparks.
+            val center = Offset(
+                x = kotlin.math.round(p.x * size.width),
+                y = kotlin.math.round(p.y * size.height),
+            )
             val r = p.size * size.minDimension
             rotate(p.spin, center) {
                 when (p.kind) {

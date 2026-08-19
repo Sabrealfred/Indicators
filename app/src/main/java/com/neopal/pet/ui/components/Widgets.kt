@@ -62,6 +62,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.R
 import com.neopal.pet.ui.theme.NeoColors
@@ -427,17 +428,22 @@ fun LevelPill(level: Int, xp: Int, xpNeeded: Int, modifier: Modifier = Modifier)
 
 /** Decorative scanline overlay that sells the "screen inside a console" look. */
 @Composable
-fun ScanlineOverlay(modifier: Modifier = Modifier, alpha: Float = 0.05f) {
+fun ScanlineOverlay(modifier: Modifier = Modifier, alpha: Float = 0.05f, spacing: Dp = 2.dp) {
     // Pure decoration: kept out of the accessibility tree entirely.
     Canvas(modifier = modifier.clearAndSetSemantics { }) {
+        // Spacing has to be in dp, not raw pixels. At three raw pixels it was one dark line per
+        // density-independent pixel on a modern phone — not a CRT, just a dirty tint that beat
+        // against the pixel-art grid and produced moiré.
+        val step = spacing.toPx().coerceAtLeast(2f)
+        val thickness = (step / 4f).coerceIn(1f, 2f)
         var y = 0f
         while (y < size.height) {
             drawRect(
                 color = Color.Black.copy(alpha = alpha),
                 topLeft = Offset(0f, y),
-                size = Size(size.width, 1f),
+                size = Size(size.width, thickness),
             )
-            y += 3f
+            y += step
         }
     }
 }

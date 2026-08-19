@@ -238,8 +238,13 @@ data class GameConfig(
      * sampling, so the art reads as chunky pixel art instead of smooth vectors.
      */
     val pixelMode: Boolean = true,
-    /** Vertical resolution of that buffer. 144 matches a classic handheld screen. */
-    val pixelHeight: Int = 144,
+    /**
+     * Vertical resolution of that buffer. The real number used is derived from the screen so
+     * the upscale stays a whole number, and this is the target it rounds to. 144 turned out to
+     * be too coarse for this art — the eyes came out three pixels across and the eyebrows
+     * disappeared entirely — so the default sits higher.
+     */
+    val pixelHeight: Int = 200,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
 ) {

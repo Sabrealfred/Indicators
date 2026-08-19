@@ -110,15 +110,23 @@ fun DrawScope.drawScene(
     }
 
     // 11. Lights-out overlay, warm and soft rather than a flat black.
-    if (lightsOff) {
-        drawRect(
-            brush = Brush.radialGradient(
-                colors = listOf(Color(0x33FFE9B0), Color(0xE60A0C1E)),
-                center = Offset(w * 0.5f, h * 0.55f),
-                radius = w * 0.85f,
-            ),
-        )
-    }
+    if (lightsOff) drawLightsOutOverlay()
+}
+
+/**
+ * The dark wash for a room with the light off. Kept as its own function because in pixel mode
+ * it is drawn at full resolution *after* the blit: a smooth gradient squeezed into a 200-pixel
+ * buffer and then magnified twelve times turns into a staircase of hard bands, which looks like
+ * a rendering bug rather than like lamplight.
+ */
+fun DrawScope.drawLightsOutOverlay() {
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color(0x33FFE9B0), Color(0xE60A0C1E)),
+            center = Offset(size.width * 0.5f, size.height * 0.55f),
+            radius = size.width * 0.85f,
+        ),
+    )
 }
 
 // ------------------------------------------------------------------ sky & light

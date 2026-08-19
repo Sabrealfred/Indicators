@@ -49,12 +49,16 @@ import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-/** Buffer heights that land on whole-pixel scales for the common phone screens. */
+/**
+ * Target buffer heights. The renderer derives the real size from the screen so the upscale is
+ * always a whole number; these are the sizes it rounds toward. Below about 130 the creature's
+ * face stops surviving the downsample, which is why the coarse end starts where it does.
+ */
 private val PixelPresets = listOf(
-    96 to "Chunky",
-    144 to "Classic",
-    216 to "Fine",
-    288 to "Sharp",
+    130 to "Chunky",
+    200 to "Classic",
+    280 to "Fine",
+    380 to "Crisp",
 )
 
 /** Look, sound, reminders, pace, tips, save import/export and reset — grouped by what they change. */

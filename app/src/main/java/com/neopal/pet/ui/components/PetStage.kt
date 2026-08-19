@@ -58,6 +58,7 @@ import com.neopal.pet.ui.art.drawCreature
 import com.neopal.pet.ui.art.drawPoops
 import com.neopal.pet.ui.art.drawScene
 import com.neopal.pet.ui.art.drawItem
+import com.neopal.pet.ui.art.drawLightsOutOverlay
 import com.neopal.pet.ui.art.drawSickAura
 import com.neopal.pet.ui.art.drawSleepVignette
 import com.neopal.pet.ui.art.drawWeather
@@ -66,6 +67,7 @@ import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** How long each reaction animation runs, in seconds. */
@@ -278,8 +280,9 @@ fun PetStage(
             themeId = state.roomTheme,
             night = night,
             timeSeconds = time,
-            lightsOff = state.lightsOff,
-            parallax = sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f,
+            // In pixel mode the light wash is drawn after the blit, at full resolution.
+            lightsOff = state.lightsOff && !config.pixelMode,
+            parallax = quantise(sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f, steps = 12f),
         )
         drawPoops(state.poops, time)
         // Every third pet day turns wet, and the space and arcade rooms are indoors.
@@ -292,7 +295,12 @@ fun PetStage(
         }
         if (weather != "none") drawWeather(weather, time, intensity = 0.7f)
 
-        val center = Offset(size.width * wanderX, size.height * 0.60f)
+        // Snapped to whole pixels: a creature drifting across the grid in fractions of a pixel
+        // makes its own outline shimmer as it walks.
+        val center = Offset(
+            x = (size.width * wanderX).roundToInt().toFloat(),
+            y = (size.height * 0.60f).roundToInt().toFloat(),
+        )
         val unit = size.minDimension
         if (state.isSick) drawSickAura(center, unit * 0.34f, time)
         drawCreature(
@@ -326,7 +334,7 @@ fun PetStage(
             }
         }
         particles.draw(this)
-        if (state.isSleeping) drawSleepVignette(0.8f)
+        if (state.isSleeping && !config.pixelMode) drawSleepVignette(0.8f)
     }
 
     Box(modifier = modifier.clip(RoundedCornerShape(18.dp))) {
@@ -380,10 +388,23 @@ fun PetStage(
                 },
         ) {
             val amplitude = if (config.reducedMotion) 0f else shake * size.minDimension * 0.02f
-            val dx = sin(time * 62f) * amplitude
-            val dy = sin(time * 47f) * amplitude
+            var dx = sin(time * 62f) * amplitude
+            var dy = sin(time * 47f) * amplitude
+            if (config.pixelMode) {
+                // Shake in whole art pixels. A fractional offset re-samples every pixel in the
+                // image on every frame, which reads as buzzing rather than as a kick.
+                val block = PixelRenderer.scaleFor(size.height, config.pixelHeight).toFloat()
+                dx = (dx / block).roundToInt() * block
+                dy = (dy / block).roundToInt() * block
+            }
             translate(dx, dy) {
                 if (config.pixelMode) pixelRenderer.render(this) { world() } else world()
+            }
+            // Atmosphere on top of the blit: gradients belong at screen resolution, where they
+            // stay smooth, while the art underneath stays chunky.
+            if (config.pixelMode) {
+                if (state.lightsOff) drawLightsOutOverlay()
+                if (state.isSleeping) drawSleepVignette(0.8f)
             }
         }
 
@@ -391,6 +412,9 @@ fun PetStage(
         MoodBubble(state = state, action = activeAction)
     }
 }
+
+/** Rounds a continuous value to [steps] discrete positions, to keep motion off sub-pixel drift. */
+private fun quantise(value: Float, steps: Float): Float = (value * steps).roundToInt() / steps
 
 /** True when a tap landed on one of the piles drawn along the floor. */
 private fun hitsPoop(position: Offset, width: Float, height: Float, poops: Int): Boolean {
