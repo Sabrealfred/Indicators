@@ -2,25 +2,31 @@ package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CleaningServices
@@ -54,28 +60,56 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.CareActions
+import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.Routes
 import com.neopal.pet.ui.art.ItemIcon
+import com.neopal.pet.ui.components.ActionButton
 import com.neopal.pet.ui.components.CoinPill
 import com.neopal.pet.ui.components.ConsoleFrame
 import com.neopal.pet.ui.components.FaceButton
 import com.neopal.pet.ui.components.LevelPill
-import com.neopal.pet.ui.components.ActionButton
+import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.PetStage
 import com.neopal.pet.ui.components.StatBar
 import com.neopal.pet.ui.components.ToastBanner
+import com.neopal.pet.ui.components.WindowSize
+import com.neopal.pet.ui.components.rememberWindowSize
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.roundToInt
+
+/** The pet is the point of this screen; chrome never gets more than this share of the height. */
+private const val CHROME_MAX_FRACTION = 0.42f
+
+/** In a two-pane layout the scene keeps at least this much of the window height. */
+private const val PET_MIN_HEIGHT_FRACTION = 0.45f
+
+/** One dock entry. Holding them as data lets the same set render as a row or as a grid. */
+private data class HomeAction(
+    val label: String,
+    val icon: ImageVector,
+    val accent: Color,
+    val enabled: Boolean = true,
+    val badge: Int? = null,
+    val onClick: () -> Unit,
+)
 
 /**
  * The main screen: the console chassis, the live pet, its meters, and the action dock.
  * Everything the player needs minute to minute is one tap away from here.
+ *
+ * The screen has two shapes. Portrait on a phone stacks bar / scene / meters / dock. Landscape and
+ * tablet widths put the scene on the left and move all the chrome into a standing right panel, so
+ * the pet never gets letterboxed and a tablet is not just a stretched phone.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,17 +118,52 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
     val pet = ui.pet ?: return
     var showFeedSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
+    val window = rememberWindowSize()
 
     LaunchedEffect(pet.isDead) {
         if (pet.isDead) onOpen(Routes.MEMORIAL)
     }
 
+    // The scene is passed down as a slot so each layout can size it without re-plumbing PetStage.
+    val stage: @Composable (Modifier) -> Unit = { stageModifier ->
+        PetStage(
+            state = pet,
+            config = ui.config,
+            action = ui.animation,
+            actionId = ui.animationId,
+            deltas = ui.deltas,
+            servedItemId = ui.servedItemId,
+            modifier = stageModifier,
+            onTapPet = { viewModel.petPet() },
+            onDoubleTapPet = { viewModel.tickle() },
+            onLongPressPet = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
+            onScoopPoop = { viewModel.scoopPoop() },
+            onSwipeUp = { viewModel.toss() },
+        )
+    }
+
+    val actions = listOf(
+        HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead) { showFeedSheet = true },
+        HomeAction("Clean", Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
+        HomeAction("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null) { onOpen(Routes.GAMES) },
+        HomeAction("Medicine", Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
+        HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead) { viewModel.toggleLights() },
+        HomeAction("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
+        HomeAction("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
+        HomeAction("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },
+        HomeAction("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow) { onOpen(Routes.ALBUM) },
+        HomeAction("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene) { onOpen(Routes.CHRONICLE) },
+        HomeAction("Awards", Icons.Filled.EmojiEvents, NeoColors.NeonGreen) { onOpen(Routes.ACHIEVEMENTS) },
+        HomeAction("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted) { onOpen(Routes.SETTINGS) },
+    )
+
     Box(modifier = Modifier.fillMaxSize()) {
         ConsoleFrame(
             modifier = Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .windowInsetsPadding(WindowInsets.navigationBars),
+                // safeDrawing, not just the status bar: in landscape the cutout and the gesture
+                // bar are on the sides, exactly where the rails live.
+                .windowInsetsPadding(WindowInsets.safeDrawing),
             onFace = { button ->
                 when (button) {
                     FaceButton.A -> viewModel.petPet()
@@ -106,44 +175,10 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             onMenu = { onOpen(Routes.SETTINGS) },
             onHome = { onOpen(Routes.STATS) },
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopBar(pet = pet, config = ui.config)
-
-                // The live scene fills most of the screen.
-                PetStage(
-                    state = pet,
-                    config = ui.config,
-                    action = ui.animation,
-                    actionId = ui.animationId,
-                    deltas = ui.deltas,
-                    servedItemId = ui.servedItemId,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                    onTapPet = { viewModel.petPet() },
-                    onDoubleTapPet = { viewModel.tickle() },
-                    onLongPressPet = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
-                    onScoopPoop = { viewModel.scoopPoop() },
-                    onSwipeUp = { viewModel.toss() },
-                )
-
-                StatsStrip(pet)
-                ActionDock(
-                    pet = pet,
-                    onFeed = { showFeedSheet = true },
-                    onClean = viewModel::cleanRoom,
-                    onPlay = { onOpen(Routes.GAMES) },
-                    onMedicine = { viewModel.useMedicine() },
-                    onLights = viewModel::toggleLights,
-                    onPraise = viewModel::praise,
-                    onScold = viewModel::scold,
-                    onShop = { onOpen(Routes.SHOP) },
-                    onAlbum = { onOpen(Routes.ALBUM) },
-                    onDiary = { onOpen(Routes.CHRONICLE) },
-                    onAchievements = { onOpen(Routes.ACHIEVEMENTS) },
-                    onSettings = { onOpen(Routes.SETTINGS) },
-                )
+            if (window.isTwoPane) {
+                TwoPaneHome(pet = pet, config = ui.config, window = window, actions = actions, stage = stage)
+            } else {
+                StackedHome(pet = pet, config = ui.config, actions = actions, stage = stage)
             }
         }
 
@@ -152,7 +187,7 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(top = 70.dp),
+                .padding(top = if (window.isShort) 40.dp else 70.dp),
         )
 
         ui.offlineReport?.let { report ->
@@ -180,7 +215,7 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 70.dp),
+                    .padding(top = if (window.isShort) 40.dp else 70.dp),
             )
         }
     }
@@ -206,110 +241,238 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
     }
 }
 
+/**
+ * Portrait phone: bar, scene, meters, dock. The meters and dock are capped and scroll internally,
+ * so a small phone — or a 1.3x font scale — eats into the chrome rather than into the pet.
+ */
 @Composable
-private fun TopBar(pet: PetState, config: com.neopal.pet.domain.GameConfig) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(pet.name, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark)
-            Text(
-                text = "${pet.stage.displayName} · ${pet.branch.displayName} · day ${pet.ageInPetDays(config)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = NeoColors.OnDarkMuted,
+private fun StackedHome(
+    pet: PetState,
+    config: GameConfig,
+    actions: List<HomeAction>,
+    stage: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val chromeMax = maxHeight * CHROME_MAX_FRACTION
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopBar(pet = pet, config = config)
+
+            stage(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
             )
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = chromeMax)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                StatsStrip(pet)
+                ActionRow(actions)
+            }
         }
-        LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
-        Spacer(Modifier.width(8.dp))
-        CoinPill(pet.coins)
+    }
+}
+
+/**
+ * Landscape and tablet: the scene keeps the left and most of the width, everything else stands in
+ * a persistent right panel. The panel scrolls, so large fonts push it into a scroll, never a clip.
+ */
+@Composable
+private fun TwoPaneHome(
+    pet: PetState,
+    config: GameConfig,
+    window: WindowSize,
+    actions: List<HomeAction>,
+    stage: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val panelFraction = if (window.isExpandedWidth) 0.34f else 0.32f
+        // The panel is sized for its content, but the scene always keeps the larger half.
+        val panelWidth = (maxWidth * panelFraction)
+            .coerceIn(200.dp, 360.dp)
+            .coerceAtMost(maxWidth * 0.45f)
+        val petMinHeight = maxHeight * PET_MIN_HEIGHT_FRACTION
+
+        Row(modifier = Modifier.fillMaxSize()) {
+            stage(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .heightIn(min = petMinHeight)
+                    .padding(horizontal = 6.dp, vertical = 4.dp),
+            )
+            Column(
+                modifier = Modifier
+                    .width(panelWidth)
+                    .fillMaxHeight()
+                    .verticalScroll(rememberScrollState())
+                    .padding(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                TopBar(pet = pet, config = config, dense = true)
+                // A tablet has room for the whole read-out; a landscape phone panel gets the core five.
+                StatsPanel(pet = pet, showAll = window.isExpandedWidth)
+                ActionGrid(actions)
+            }
+        }
     }
 }
 
 @Composable
-private fun StatsStrip(pet: PetState) {
+private fun TopBar(
+    pet: PetState,
+    config: GameConfig,
+    modifier: Modifier = Modifier,
+    dense: Boolean = false,
+) {
+    val name = pet.name
+    val subtitle = "${pet.stage.displayName} · ${pet.branch.displayName} · day ${pet.ageInPetDays(config)}"
+    if (dense) {
+        // In a ~200-360dp panel the pills and a name cannot share a line without the name vanishing.
+        Column(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+            Text(name, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.labelSmall, color = NeoColors.OnDarkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
+                Spacer(Modifier.width(8.dp))
+                CoinPill(pet.coins)
+            }
+        }
+    } else {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(name, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.OnDarkMuted,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
+            Spacer(Modifier.width(8.dp))
+            CoinPill(pet.coins)
+        }
+    }
+}
+
+/**
+ * The five-across strip for portrait. The bars run in compact mode with the label drawn above:
+ * a labelled StatBar puts label and value on one 60dp-wide line, which a large font scale clips.
+ */
+@Composable
+private fun StatsStrip(pet: PetState, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatBar("FOOD", pet.stats.satiety, NeoColors.StatSatiety, Modifier.weight(1f))
-        StatBar("MOOD", pet.stats.happiness, NeoColors.StatHappiness, Modifier.weight(1f))
-        StatBar("ENERGY", pet.stats.energy, NeoColors.StatEnergy, Modifier.weight(1f))
-        StatBar("CLEAN", pet.stats.hygiene, NeoColors.StatHygiene, Modifier.weight(1f))
-        StatBar("HP", pet.stats.health, NeoColors.StatHealth, Modifier.weight(1f))
+        StatCell("FOOD", pet.stats.satiety, NeoColors.StatSatiety, Modifier.weight(1f))
+        StatCell("MOOD", pet.stats.happiness, NeoColors.StatHappiness, Modifier.weight(1f))
+        StatCell("ENERGY", pet.stats.energy, NeoColors.StatEnergy, Modifier.weight(1f))
+        StatCell("CLEAN", pet.stats.hygiene, NeoColors.StatHygiene, Modifier.weight(1f))
+        StatCell("HP", pet.stats.health, NeoColors.StatHealth, Modifier.weight(1f))
     }
 }
 
 @Composable
-private fun ActionDock(
-    pet: PetState,
-    onFeed: () -> Unit,
-    onClean: () -> Unit,
-    onPlay: () -> Unit,
-    onMedicine: () -> Unit,
-    onLights: () -> Unit,
-    onPraise: () -> Unit,
-    onScold: () -> Unit,
-    onShop: () -> Unit,
-    onAlbum: () -> Unit,
-    onDiary: () -> Unit,
-    onAchievements: () -> Unit,
-    onSettings: () -> Unit,
-) {
-    LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp),
-        contentPadding = PaddingValues(horizontal = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        item {
-            ActionButton("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, onFeed, enabled = !pet.isDead)
-        }
-        item {
-            ActionButton(
-                label = "Clean",
-                icon = Icons.Filled.CleaningServices,
-                accent = NeoColors.StatHygiene,
-                onClick = onClean,
-                enabled = !pet.isDead,
-                badge = pet.poops,
-            )
-        }
-        item {
-            ActionButton("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, onPlay, enabled = CareActions.canPlay(pet) == null)
-        }
-        item {
-            ActionButton(
-                label = "Medicine",
-                icon = Icons.Filled.Medication,
-                accent = NeoColors.StatHealth,
-                onClick = onMedicine,
-                enabled = !pet.isDead,
-                badge = if (pet.isSick) 1 else 0,
-            )
-        }
-        item {
-            ActionButton(
-                label = if (pet.lightsOff) "Lights on" else "Lights off",
-                icon = Icons.Filled.Lightbulb,
-                accent = NeoColors.StatEnergy,
-                onClick = onLights,
-                enabled = !pet.isDead,
-            )
-        }
-        item { ActionButton("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, onPraise, enabled = !pet.isDead) }
-        item { ActionButton("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, onScold, enabled = !pet.isDead) }
-        item { ActionButton("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple, onShop) }
-        item { ActionButton("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow, onAlbum) }
-        item { ActionButton("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene, onDiary) }
-        item { ActionButton("Awards", Icons.Filled.EmojiEvents, NeoColors.NeonGreen, onAchievements) }
-        item { ActionButton("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted, onSettings) }
+private fun StatCell(label: String, value: Float, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            // StatBar already reads out "LABEL n of 100"; this copy would just repeat it.
+            modifier = Modifier.clearAndSetSemantics { },
+        )
+        Spacer(Modifier.height(3.dp))
+        StatBar(label = label, value = value, color = color, compact = true)
     }
+}
+
+/** The standing panel's meters: full-width bars with room for label and value on one line. */
+@Composable
+private fun StatsPanel(pet: PetState, showAll: Boolean, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        StatBar("Satiety", pet.stats.satiety, NeoColors.StatSatiety)
+        StatBar("Happiness", pet.stats.happiness, NeoColors.StatHappiness)
+        StatBar("Energy", pet.stats.energy, NeoColors.StatEnergy)
+        StatBar("Hygiene", pet.stats.hygiene, NeoColors.StatHygiene)
+        StatBar("Health", pet.stats.health, NeoColors.StatHealth)
+        if (showAll) {
+            StatBar("Discipline", pet.stats.discipline, NeoColors.StatDiscipline)
+            StatBar("Bond", pet.stats.bond, NeoColors.StatBond)
+        }
+    }
+}
+
+/** Compact widths: one scrolling row, because there is no room for a second line of buttons. */
+@Composable
+private fun ActionRow(actions: List<HomeAction>, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        actions.forEach { action ->
+            DockButton(action, Modifier.widthIn(min = 64.dp))
+        }
+    }
+}
+
+/** Wide windows: a wrapping grid. A horizontal scroller in a standing panel wastes the space. */
+@Composable
+private fun ActionGrid(actions: List<HomeAction>, modifier: Modifier = Modifier) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+        val columns = (maxWidth / 78.dp).toInt().coerceIn(2, 5)
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            actions.chunked(columns).forEach { rowActions ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    rowActions.forEach { action -> DockButton(action, Modifier.weight(1f)) }
+                    // Keep the last row's cells the same width as every other row's.
+                    repeat(columns - rowActions.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DockButton(action: HomeAction, modifier: Modifier = Modifier) {
+    ActionButton(
+        label = action.label,
+        icon = action.icon,
+        accent = action.accent,
+        onClick = action.onClick,
+        modifier = modifier.heightIn(min = MinTouchTarget + 24.dp),
+        enabled = action.enabled,
+        badge = action.badge,
+    )
 }
 
 @Composable
