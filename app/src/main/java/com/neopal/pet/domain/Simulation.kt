@@ -88,6 +88,7 @@ object Simulation {
             generation = previous.generation + 1,
             coins = previous.coins,
             album = previous.album,
+            chronicle = previous.chronicle,
             unlockedAchievements = previous.unlockedAchievements,
             inventory = previous.inventory.filterKeys { id ->
                 ItemCatalog[id]?.isCosmetic == true
@@ -125,7 +126,8 @@ object Simulation {
         current = current.copy(lastTickMillis = nowMillis, rngSeed = random.nextLong())
         val (withAchievements, unlocked) = Achievements.evaluate(current)
         unlocked.forEach { events += GameEvent.Unlocked(it) }
-        return SimResult(withAchievements, events)
+        // The diary is written from the same events the UI reacts to, so the two can never disagree.
+        return SimResult(Chronicle.record(withAchievements, events, config), events)
     }
 
     // ------------------------------------------------------------------ internals

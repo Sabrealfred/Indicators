@@ -162,8 +162,12 @@ data class PetState(
     val deathAtSeconds: Long = 0L,
 
     val generation: Int = 1,
+    /** Best score per minigame id, so a good run is remembered. */
+    val highScores: Map<String, Int> = emptyMap(),
     val unlockedAchievements: Set<String> = emptySet(),
     val album: List<AlbumEntry> = emptyList(),
+    /** The pet's own diary, written by the simulation as things happen to it. */
+    val chronicle: List<ChronicleEntry> = emptyList(),
     val rngSeed: Long = 0L,
 ) {
     val isEgg: Boolean get() = stage == LifeStage.EGG
@@ -205,9 +209,20 @@ data class GameConfig(
     /** Offline progress is simulated at most this far back, so a week away is survivable. */
     val maxOfflineSeconds: Long = 12L * 3600L,
     val soundEnabled: Boolean = true,
+    /** 0..1 master volume for the synthesised effects. */
+    val sfxVolume: Float = 0.8f,
     val hapticsEnabled: Boolean = true,
     val notificationsEnabled: Boolean = true,
     val reducedMotion: Boolean = false,
+    /**
+     * Renders the whole scene into a low-resolution buffer and upscales it with nearest-neighbour
+     * sampling, so the art reads as chunky pixel art instead of smooth vectors.
+     */
+    val pixelMode: Boolean = true,
+    /** Vertical resolution of that buffer. 144 matches a classic handheld screen. */
+    val pixelHeight: Int = 144,
+    /** Cleared once the player has seen the first-run coach marks. */
+    val tutorialSeen: Boolean = false,
 ) {
     companion object {
         val Default = GameConfig()

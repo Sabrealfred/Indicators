@@ -3,7 +3,12 @@
 package com.neopal.pet.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +19,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,9 +40,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -123,17 +132,48 @@ fun ActionButton(
     badge: Int? = null,
 ) {
     val alpha = if (enabled) 1f else 0.38f
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    // Buttons that shrink under the thumb feel physical; the spring gives them a bounce back.
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.88f else 1f,
+        animationSpec = spring(dampingRatio = 0.45f, stiffness = 900f),
+        label = "press-$label",
+    )
+    // An urgent badge breathes, so the eye lands on it without a colour change.
+    val urgent = (badge ?: 0) > 0
+    val pulse by rememberInfiniteTransition(label = "pulse-$label").animateFloat(
+        initialValue = 0.85f,
+        targetValue = if (urgent) 1.12f else 0.85f,
+        animationSpec = infiniteRepeatable(tween(760), RepeatMode.Reverse),
+        label = "pulse-value-$label",
+    )
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                onClick = onClick,
+                interactionSource = interactionSource,
+                indication = null,
+            )
             .padding(vertical = 6.dp, horizontal = 4.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
+            if (urgent) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .graphicsLayer { scaleX = pulse; scaleY = pulse }
+                        .clip(CircleShape)
+                        .background(accent.copy(alpha = 0.22f)),
+                )
+            }
             Box(
                 modifier = Modifier
                     .size(52.dp)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
                     .clip(CircleShape)
                     .background(
                         Brush.verticalGradient(

@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import com.neopal.pet.ui.screens.AchievementsScreen
 import com.neopal.pet.ui.screens.AlbumScreen
 import com.neopal.pet.ui.screens.BootScreen
+import com.neopal.pet.ui.screens.ChronicleScreen
 import com.neopal.pet.ui.screens.GamesScreen
 import com.neopal.pet.ui.screens.HomeScreen
 import com.neopal.pet.ui.screens.MemorialScreen
@@ -42,6 +43,7 @@ object Routes {
     const val GAME_MEMORY = "game_memory"
     const val GAME_CATCH = "game_catch"
     const val ALBUM = "album"
+    const val CHRONICLE = "chronicle"
     const val ACHIEVEMENTS = "achievements"
     const val SETTINGS = "settings"
     const val MEMORIAL = "memorial"
@@ -116,6 +118,7 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                 CatchGameScreen(viewModel) { navController.popBackStack() }
             }
             composable(Routes.ALBUM) { AlbumScreen(viewModel) { navController.popBackStack() } }
+            composable(Routes.CHRONICLE) { ChronicleScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.ACHIEVEMENTS) { AchievementsScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.SETTINGS) {
                 SettingsScreen(

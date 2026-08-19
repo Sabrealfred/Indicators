@@ -177,10 +177,17 @@ private fun DrawScope.drawBody(
     )
     drawPath(body, palette.outline, style = Stroke(width = outline))
 
-    if (spec.mood == Mood.SICK) {
-        // Green sickly wash plus a temperature bubble.
-        drawPath(body, Color(0xFF7FBF6A).copy(alpha = 0.30f), style = Fill)
+    // Mood reads first as colour, before any animation: a glance should be enough.
+    val wash = when (spec.mood) {
+        Mood.SICK -> Color(0xFF7FBF6A).copy(alpha = 0.30f)
+        Mood.HUNGRY -> Color(0xFFFFF4D6).copy(alpha = 0.22f)
+        Mood.TIRED -> Color(0xFF5C6BA8).copy(alpha = 0.20f)
+        Mood.SAD -> Color(0xFF6E7A99).copy(alpha = 0.18f)
+        Mood.DIRTY -> Color(0xFF7A6A4F).copy(alpha = 0.20f)
+        Mood.HAPPY -> Color(0xFFFFE7A8).copy(alpha = 0.10f)
+        else -> Color.Transparent
     }
+    if (wash.alpha > 0f) drawPath(body, wash, style = Fill)
 }
 
 private fun DrawScope.drawLimbs(

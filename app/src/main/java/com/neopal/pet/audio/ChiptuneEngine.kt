@@ -46,13 +46,21 @@ object ChiptuneEngine {
     @Volatile
     var enabled: Boolean = true
 
-    fun play(sfx: Sfx) {
-        if (!enabled) return
-        scope.launch { runCatching { render(sfx) } }
+    /** Master volume, 0..1. Set from settings. */
+    @Volatile
+    var volume: Float = 0.8f
+
+    /**
+     * @param pitch multiplies every note's frequency. Rising pitch on a combo is the cheapest
+     * way to make repeated feedback feel like it is building instead of repeating.
+     */
+    fun play(sfx: Sfx, pitch: Float = 1f) {
+        if (!enabled || volume <= 0.01f) return
+        scope.launch { runCatching { render(sfx, pitch) } }
     }
 
-    private fun render(sfx: Sfx) {
-        val samples = buildSamples(sfx)
+    private fun render(sfx: Sfx, pitch: Float) {
+        val samples = buildSamples(sfx, pitch)
         val track = buildTrack(samples.size * 2)
         track.write(samples, 0, samples.size)
         track.play()
@@ -65,11 +73,12 @@ object ChiptuneEngine {
         }
     }
 
-    private fun buildSamples(sfx: Sfx): ShortArray {
+    private fun buildSamples(sfx: Sfx, pitch: Float = 1f): ShortArray {
         val total = sfx.notes.sumOf { (_, ms) -> ms * SAMPLE_RATE / 1000 }
         val out = ShortArray(total)
         var offset = 0
-        for ((frequency, ms) in sfx.notes) {
+        for ((baseFrequency, ms) in sfx.notes) {
+            val frequency = baseFrequency * pitch.coerceIn(0.5f, 2.0f)
             val count = ms * SAMPLE_RATE / 1000
             for (i in 0 until count) {
                 val t = i.toDouble() / SAMPLE_RATE
@@ -87,7 +96,7 @@ object ChiptuneEngine {
                 }
                 // A touch of sine softens the harshest harmonics of the square wave.
                 val shaped = raw * 0.75 + sin(2 * PI * phase) * 0.25
-                out[offset + i] = (shaped * envelope * 0.28 * Short.MAX_VALUE).toInt().toShort()
+                out[offset + i] = (shaped * envelope * 0.28 * volume * Short.MAX_VALUE).toInt().toShort()
             }
             offset += count
         }

@@ -118,6 +118,59 @@ object CareActions {
         return finish(s, PetAnimation.CLEAN, "Room cleaned.", events)
     }
 
+    /**
+     * Removes one mess. Tapping a pile directly is more tactile than a menu button, and
+     * scooping each one keeps the reward proportional to the effort.
+     */
+    fun scoopPoop(state: PetState): ActionResult {
+        if (state.poops <= 0) return blocked(state, "Nothing to scoop.")
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            poops = state.poops - 1,
+            cleanups = state.cleanups + 1,
+            stats = state.stats.copy(
+                hygiene = state.stats.hygiene + 14f,
+                happiness = state.stats.happiness + 1.5f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 2, events)
+        val left = s.poops
+        val message = if (left == 0) "All clean!" else "$left left to scoop."
+        return finish(s, PetAnimation.CLEAN, message, events)
+    }
+
+    /** Swipe-up reaction: a little toss in the air. Costs a sliver of energy, pays in mood. */
+    fun toss(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        if (state.stats.energy < 6f) return blocked(state, "${state.name} is too tired for that.")
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + 6f,
+                energy = state.stats.energy - 2f,
+                bond = state.stats.bond + 1f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 2, events)
+        return finish(s, PetAnimation.PLAY, "Wheee!", events)
+    }
+
+    /** Double-tap reaction: pure delight, no stat cost, capped so it cannot be farmed. */
+    fun tickle(state: PetState): ActionResult {
+        guard(state)?.let { return blocked(state, it) }
+        if (state.stats.happiness >= 99f) return blocked(state, "${state.name} is already over the moon.")
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + 3.5f,
+                bond = state.stats.bond + 1.5f,
+                energy = state.stats.energy - 0.4f,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 1, events)
+        return finish(s, PetAnimation.HAPPY, null, events)
+    }
+
     fun bathe(state: PetState): ActionResult {
         guard(state)?.let { return blocked(state, it) }
         if ((state.inventory["soap"] ?: 0) <= 0) return blocked(state, "You need Bubble Soap.")
@@ -227,11 +280,21 @@ object CareActions {
      * Applies the outcome of a minigame. [score] is normalised 0..1 by each game so the
      * rewards stay comparable no matter which one was played.
      */
-    fun finishGame(state: PetState, won: Boolean, score: Float, gameName: String): ActionResult {
+    fun finishGame(
+        state: PetState,
+        won: Boolean,
+        score: Float,
+        gameName: String,
+        gameId: String = gameName,
+        points: Int = 0,
+    ): ActionResult {
         val normalized = score.coerceIn(0f, 1f)
         val events = mutableListOf<GameEvent>()
         val coins = (8 + normalized * 30f * state.species.playBias).roundToInt()
+        val previousBest = state.highScores[gameId] ?: 0
+        val isRecord = points > previousBest
         var s = state.copy(
+            highScores = if (isRecord) state.highScores + (gameId to points) else state.highScores,
             gamesPlayed = state.gamesPlayed + 1,
             gamesWon = state.gamesWon + if (won) 1 else 0,
             coins = state.coins + coins,
@@ -244,7 +307,11 @@ object CareActions {
             weightGrams = max(6f, state.weightGrams - 0.6f),
         )
         s = Simulation.applyXp(s, if (won) 22 else 10, events)
-        val toast = if (won) "$gameName cleared! +$coins coins" else "$gameName over. +$coins coins"
+        val toast = when {
+            isRecord && points > 0 -> "New record: $points! +$coins coins"
+            won -> "$gameName cleared! +$coins coins"
+            else -> "$gameName over. +$coins coins"
+        }
         return finish(s, PetAnimation.PLAY, toast, events)
     }
 

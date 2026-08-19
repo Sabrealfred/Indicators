@@ -1,6 +1,7 @@
 package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Lightbulb
@@ -45,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -112,12 +115,16 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                     config = ui.config,
                     action = ui.animation,
                     actionId = ui.animationId,
+                    deltas = ui.deltas,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
                         .padding(horizontal = 8.dp),
                     onTapPet = { viewModel.petPet() },
+                    onDoubleTapPet = { viewModel.tickle() },
                     onLongPressPet = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
+                    onScoopPoop = { viewModel.scoopPoop() },
+                    onSwipeUp = { viewModel.toss() },
                 )
 
                 StatsStrip(pet)
@@ -132,6 +139,7 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                     onScold = viewModel::scold,
                     onShop = { onOpen(Routes.SHOP) },
                     onAlbum = { onOpen(Routes.ALBUM) },
+                    onDiary = { onOpen(Routes.CHRONICLE) },
                     onAchievements = { onOpen(Routes.ACHIEVEMENTS) },
                     onSettings = { onOpen(Routes.SETTINGS) },
                 )
@@ -145,6 +153,22 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = 70.dp),
         )
+
+        ui.offlineReport?.let { report ->
+            OfflineReportCard(
+                report = report,
+                onDismiss = viewModel::dismissOfflineReport,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+
+        if (!ui.config.tutorialSeen) {
+            TutorialOverlay(
+                petName = pet.name,
+                onDone = viewModel::markTutorialSeen,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
 
         ui.achievementBanner?.let { achievement ->
             AchievementBanner(
@@ -231,6 +255,7 @@ private fun ActionDock(
     onScold: () -> Unit,
     onShop: () -> Unit,
     onAlbum: () -> Unit,
+    onDiary: () -> Unit,
     onAchievements: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -280,6 +305,7 @@ private fun ActionDock(
         item { ActionButton("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, onScold, enabled = !pet.isDead) }
         item { ActionButton("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple, onShop) }
         item { ActionButton("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow, onAlbum) }
+        item { ActionButton("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene, onDiary) }
         item { ActionButton("Awards", Icons.Filled.EmojiEvents, NeoColors.NeonGreen, onAchievements) }
         item { ActionButton("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted, onSettings) }
     }
@@ -321,7 +347,7 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
                                     .background(androidx.compose.ui.graphics.Color(item.tint).copy(alpha = 0.18f)),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                ItemIcon(item.iconKey, androidx.compose.ui.graphics.Color(item.tint), Modifier.size(44.dp))
+                                ItemIcon(item.iconKey, androidx.compose.ui.graphics.Color(item.tint), Modifier.size(44.dp), variant = item.id)
                             }
                             Spacer(Modifier.height(6.dp))
                             Text(item.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
@@ -365,6 +391,113 @@ private fun AchievementBanner(
             Column {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark)
                 Text("$description  ·  +$reward coins", style = MaterialTheme.typography.labelSmall, color = NeoColors.OnDarkMuted)
+            }
+        }
+    }
+}
+
+/**
+ * First-run coach marks. Three short cards, dismissible at any point, shown once — the
+ * gestures on the pet are invisible otherwise and nobody discovers them by accident.
+ */
+@Composable
+private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modifier = Modifier) {
+    var step by remember { mutableIntStateOf(0) }
+    val steps = listOf(
+        "Tap $petName to pet it. Double-tap to tickle, swipe up to toss it in the air." to "Say hello",
+        "Tap a mess on the floor to scoop it. Long-press $petName for a photo." to "Got it",
+        "Feed, play and clean to raise it well — how you care decides what it evolves into." to "Start",
+    )
+    Box(
+        modifier = modifier
+            .background(androidx.compose.ui.graphics.Color(0xCC08090F))
+            .clickable { if (step < steps.lastIndex) step += 1 else onDone() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = NeoColors.SurfaceCard),
+            modifier = Modifier.padding(28.dp),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(22.dp),
+            ) {
+                Text(
+                    text = "TIP ${step + 1}/${steps.size}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.NeonCyan,
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = steps[step].first,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NeoColors.OnDark,
+                )
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = { if (step < steps.lastIndex) step += 1 else onDone() }) {
+                    Text(steps[step].second)
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Skip",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.OnDarkMuted,
+                    modifier = Modifier.clickable { onDone() },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Shown once after a long absence. A virtual pet that quietly changes behind your back feels
+ * broken; being told what happened — good and bad — is what makes the offline simulation land.
+ */
+@Composable
+private fun OfflineReportCard(
+    report: PetViewModel.OfflineReport,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val away = when {
+        report.minutesAway >= 1440 -> "${report.minutesAway / 1440} day(s)"
+        report.minutesAway >= 60 -> "${report.minutesAway / 60} hour(s)"
+        else -> "${report.minutesAway} minutes"
+    }
+    Box(
+        modifier = modifier
+            .background(androidx.compose.ui.graphics.Color(0xCC08090F))
+            .clickable(onClick = onDismiss),
+        contentAlignment = Alignment.Center,
+    ) {
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = NeoColors.SurfaceCard),
+            modifier = Modifier.padding(26.dp),
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = "WHILE YOU WERE AWAY",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.NeonCyan,
+                )
+                Text(
+                    text = "$away without you",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = NeoColors.OnDark,
+                )
+                Spacer(Modifier.height(10.dp))
+                report.lines.forEach { line ->
+                    Row(modifier = Modifier.padding(vertical = 3.dp)) {
+                        Text("·  ", style = MaterialTheme.typography.bodyMedium, color = NeoColors.NeonCyan)
+                        Text(line, style = MaterialTheme.typography.bodyMedium, color = NeoColors.OnDark)
+                    }
+                }
+                Spacer(Modifier.height(14.dp))
+                Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                    Text("I'm back")
+                }
             }
         }
     }

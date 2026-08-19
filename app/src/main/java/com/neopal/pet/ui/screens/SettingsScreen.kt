@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,6 +21,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,8 +46,17 @@ import androidx.compose.ui.unit.dp
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
-/** Sound, haptics, notifications, accessibility, game speed, save import/export and reset. */
+/** Buffer heights that land on whole-pixel scales for the common phone screens. */
+private val PixelPresets = listOf(
+    96 to "Chunky",
+    144 to "Classic",
+    216 to "Fine",
+    288 to "Sharp",
+)
+
+/** Look, sound, reminders, pace, tips, save import/export and reset — grouped by what they change. */
 @Composable
 fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame: () -> Unit) {
     val ui by viewModel.ui.collectAsState()
@@ -53,6 +66,7 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
     var confirmReset by remember { mutableStateOf(false) }
     var importText by remember { mutableStateOf("") }
     var importResult by remember { mutableStateOf<String?>(null) }
+    var tipsReplayed by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -69,23 +83,85 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         }
         Spacer(Modifier.height(8.dp))
 
-        SettingsCard("Game") {
-            ToggleRow("Sound effects", config.soundEnabled) { on ->
-                viewModel.updateConfig { it.copy(soundEnabled = on) }
+        SettingsCard("Look", "How the pet and the room are drawn on screen.") {
+            ToggleRow("Pixel-art mode", config.pixelMode) { on ->
+                viewModel.updateConfig { it.copy(pixelMode = on) }
             }
-            ToggleRow("Haptics", config.hapticsEnabled) { on ->
-                viewModel.updateConfig { it.copy(hapticsEnabled = on) }
+            if (config.pixelMode) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Detail — lower is chunkier and more retro.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(6.dp))
+                // Flow, not a fixed row: four chips do not fit on one line on narrow phones.
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    PixelPresets.forEach { (height, label) ->
+                        FilterChip(
+                            selected = config.pixelHeight == height,
+                            onClick = { viewModel.updateConfig { it.copy(pixelHeight = height) } },
+                            label = {
+                                Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            },
+                        )
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "${config.pixelHeight}px tall buffer, upscaled with hard edges.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-            ToggleRow("Care reminders", config.notificationsEnabled) { on ->
-                viewModel.updateConfig { it.copy(notificationsEnabled = on) }
-            }
+            Spacer(Modifier.height(4.dp))
             ToggleRow("Reduced motion", config.reducedMotion) { on ->
                 viewModel.updateConfig { it.copy(reducedMotion = on) }
             }
         }
 
         Spacer(Modifier.height(10.dp))
-        SettingsCard("Pace") {
+        SettingsCard("Sound and feel", "Audio and vibration feedback for taps, meals and games.") {
+            ToggleRow("Sound effects", config.soundEnabled) { on ->
+                viewModel.updateConfig { it.copy(soundEnabled = on) }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Volume",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (config.soundEnabled) 1f else 0.38f),
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    "${(config.sfxVolume * 100f).roundToInt()}%",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (config.soundEnabled) NeoColors.NeonCyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Slider(
+                value = config.sfxVolume.coerceIn(0f, 1f),
+                onValueChange = { v -> viewModel.updateConfig { it.copy(sfxVolume = v.coerceIn(0f, 1f)) } },
+                valueRange = 0f..1f,
+                enabled = config.soundEnabled,
+            )
+            ToggleRow("Haptics", config.hapticsEnabled) { on ->
+                viewModel.updateConfig { it.copy(hapticsEnabled = on) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        SettingsCard("Reminders", "Whether NeoPal nudges you when a need runs low.") {
+            ToggleRow("Care reminders", config.notificationsEnabled) { on ->
+                viewModel.updateConfig { it.copy(notificationsEnabled = on) }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        SettingsCard("Pace", "How fast pet time runs against real time.") {
             Text(
                 "One pet day lasts ${config.secondsPerPetDay / 60} minutes.",
                 style = MaterialTheme.typography.bodyMedium,
@@ -108,7 +184,26 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         }
 
         Spacer(Modifier.height(10.dp))
-        SettingsCard("Save data") {
+        SettingsCard("Help", "The first-run coach marks that explain the room.") {
+            OutlinedButton(
+                onClick = {
+                    viewModel.updateConfig { it.copy(tutorialSeen = false) }
+                    tipsReplayed = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Replay the tips") }
+            if (tipsReplayed) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "The tips will show again next time you open the room.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.NeonCyan,
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        SettingsCard("Save data", "Move this pet between devices, or restore an older copy.") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = {
@@ -143,7 +238,7 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         }
 
         Spacer(Modifier.height(10.dp))
-        SettingsCard("Danger zone") {
+        SettingsCard("Danger zone", "Ends this pet's life and starts a fresh save.") {
             Button(
                 onClick = { confirmReset = true },
                 modifier = Modifier.fillMaxWidth(),
@@ -179,7 +274,7 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
 }
 
 @Composable
-private fun SettingsCard(title: String, content: @Composable () -> Unit) {
+private fun SettingsCard(title: String, blurb: String? = null, content: @Composable () -> Unit) {
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -187,6 +282,10 @@ private fun SettingsCard(title: String, content: @Composable () -> Unit) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(title.uppercase(), style = MaterialTheme.typography.labelMedium, color = NeoColors.NeonCyan)
+            if (blurb != null) {
+                Spacer(Modifier.height(2.dp))
+                Text(blurb, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             Spacer(Modifier.height(10.dp))
             content()
         }

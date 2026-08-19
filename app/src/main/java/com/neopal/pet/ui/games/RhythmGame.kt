@@ -28,6 +28,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -37,17 +38,29 @@ import com.neopal.pet.audio.Sfx
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.abs
+import kotlin.math.min
 import kotlin.random.Random
 
 private data class Note(val lane: Int, var y: Float, var hit: Boolean = false, var missed: Boolean = false)
 
+/** How close to the line a tap landed. Tight windows are what make a rhythm game feel fair. */
+private enum class Judgement(val label: String, val points: Int, val color: Color) {
+    PERFECT("PERFECT", 150, NeoColors.NeonYellow),
+    GOOD("GOOD", 80, NeoColors.NeonCyan),
+    MISS("MISS", 0, NeoColors.NeonRed),
+}
+
 /**
- * Four-lane rhythm game. Notes fall toward a hit line; tapping the matching lane within the
- * window scores. Accuracy maps straight onto the reward, so precision beats mashing.
+ * Four-lane rhythm game. Notes fall toward a hit line; how close the tap lands decides the
+ * verdict, the combo raises both the score multiplier and the pitch of the hit sound, and
+ * accuracy at the end maps onto the reward.
  */
 @Composable
 fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     val ui by viewModel.ui.collectAsState()
+    // Frozen at entry: finishGame writes the new record before the result card renders, so
+    // reading it live would make "NEW RECORD" impossible to ever show.
+    val best = remember { ui.pet?.highScores?.get(GAME_ID) ?: 0 }
     val lanes = 4
     val laneColors = listOf(NeoColors.NeonCyan, NeoColors.NeonRed, NeoColors.NeonYellow, NeoColors.NeonGreen)
 
@@ -57,17 +70,23 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     var score by remember { mutableIntStateOf(0) }
     var combo by remember { mutableIntStateOf(0) }
     var bestCombo by remember { mutableIntStateOf(0) }
+    var perfects by remember { mutableIntStateOf(0) }
     var hits by remember { mutableIntStateOf(0) }
     var total by remember { mutableIntStateOf(0) }
+    var started by remember { mutableStateOf(false) }
     var finished by remember { mutableStateOf(false) }
-    var flash by remember { mutableStateOf(-1) }
+    var judgement by remember { mutableStateOf<Judgement?>(null) }
+    var judgeTick by remember { mutableIntStateOf(0) }
+    var flashLane by remember { mutableIntStateOf(-1) }
 
     val duration = 32f
     val fallSpeed = 0.55f          // screen heights per second
     val hitLine = 0.82f            // normalised y of the hit line
     val window = 0.06f             // how far from the line still counts
+    val perfectWindow = window * 0.4f
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(started) {
+        if (!started) return@LaunchedEffect
         val random = Random(System.currentTimeMillis())
         var previous = 0L
         while (!finished) {
@@ -102,7 +121,13 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     LaunchedEffect(finished) {
         if (!finished) return@LaunchedEffect
         val accuracy = if (total == 0) 0f else hits.toFloat() / total
-        viewModel.finishGame(won = accuracy >= 0.6f, score = accuracy, gameName = "Rhythm Tap")
+        viewModel.finishGame(
+            won = accuracy >= 0.6f,
+            score = accuracy,
+            gameName = "Rhythm Tap",
+            gameId = GAME_ID,
+            points = score,
+        )
     }
 
     Column(
@@ -114,7 +139,7 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         GameHeader(
             title = "Rhythm Tap",
             left = "Score $score",
-            right = "Combo $combo",
+            right = if (combo > 1) "Combo x$combo" else "Best $best",
             progress = (time / duration).coerceIn(0f, 1f),
             onExit = onExit,
         )
@@ -126,34 +151,46 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                 .weight(1f)
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF12141B)),
+            contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val laneWidth = size.width / lanes
-                // Lane guides.
                 repeat(lanes) { i ->
                     drawRect(
-                        color = laneColors[i].copy(alpha = if (flash == i) 0.22f else 0.07f),
+                        color = laneColors[i].copy(alpha = if (flashLane == i) 0.22f else 0.07f),
                         topLeft = Offset(i * laneWidth, 0f),
                         size = Size(laneWidth - 3f, size.height),
                     )
                 }
-                // Hit line.
+                // Hit line, with a glow that pulses with the combo.
                 drawRect(
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = Color.White.copy(alpha = 0.35f + min(combo, 20) * 0.02f),
                     topLeft = Offset(0f, hitLine * size.height),
                     size = Size(size.width, 4f),
                 )
-                // Notes as rounded bars.
                 notes.forEach { note ->
                     if (note.hit) return@forEach
                     val x = note.lane * laneWidth
+                    // Notes brighten as they approach the line, so timing is readable at a glance.
+                    val closeness = (1f - (abs(note.y - hitLine) / 0.5f)).coerceIn(0f, 1f)
                     drawRoundRect(
-                        color = if (note.missed) Color(0xFF555A66) else laneColors[note.lane],
+                        color = if (note.missed) Color(0xFF555A66)
+                        else laneColors[note.lane].copy(alpha = 0.55f + closeness * 0.45f),
                         topLeft = Offset(x + laneWidth * 0.12f, note.y * size.height),
                         size = Size(laneWidth * 0.76f, size.height * 0.035f),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f),
+                        cornerRadius = CornerRadius(12f, 12f),
                     )
                 }
+            }
+
+            JudgementFlash(
+                text = judgement?.label,
+                color = judgement?.color ?: NeoColors.OnDark,
+                tick = judgeTick,
+            )
+
+            if (!started && !finished) {
+                CountdownGate(onReady = { started = true })
             }
         }
 
@@ -170,22 +207,34 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                         .weight(1f)
                         .fillMaxSize()
                         .clip(RoundedCornerShape(14.dp))
-                        .background(laneColors[lane].copy(alpha = 0.32f))
-                        .clickable(enabled = !finished) {
-                            flash = lane
+                        .background(laneColors[lane].copy(alpha = if (flashLane == lane) 0.55f else 0.32f))
+                        .clickable(enabled = started && !finished) {
+                            flashLane = lane
                             val target = notes
                                 .filter { it.lane == lane && !it.hit && !it.missed }
                                 .minByOrNull { abs(it.y - hitLine) }
-                            if (target != null && abs(target.y - hitLine) <= window) {
-                                target.hit = true
-                                hits += 1
-                                combo += 1
-                                bestCombo = maxOf(bestCombo, combo)
-                                score += 100 + combo * 10
-                                if (ui.config.soundEnabled) ChiptuneEngine.play(Sfx.GAME_HIT)
-                            } else {
+                            val distance = target?.let { abs(it.y - hitLine) } ?: Float.MAX_VALUE
+                            val verdict = when {
+                                distance <= perfectWindow -> Judgement.PERFECT
+                                distance <= window -> Judgement.GOOD
+                                else -> Judgement.MISS
+                            }
+                            judgement = verdict
+                            judgeTick += 1
+                            if (verdict == Judgement.MISS) {
                                 combo = 0
                                 if (ui.config.soundEnabled) ChiptuneEngine.play(Sfx.GAME_MISS)
+                            } else {
+                                target?.hit = true
+                                hits += 1
+                                combo += 1
+                                if (verdict == Judgement.PERFECT) perfects += 1
+                                bestCombo = maxOf(bestCombo, combo)
+                                score += verdict.points + combo * 10
+                                if (ui.config.soundEnabled) {
+                                    // Rising pitch turns a streak into something you can hear.
+                                    ChiptuneEngine.play(Sfx.GAME_HIT, pitch = 1f + min(combo, 12) * 0.04f)
+                                }
                             }
                         },
                     contentAlignment = Alignment.Center,
@@ -200,11 +249,12 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         }
 
         if (finished) {
+            val accuracy = if (total == 0) 0 else hits * 100 / total
             GameResult(
-                title = if (total > 0 && hits.toFloat() / total >= 0.6f) "CLEARED!" else "SONG OVER",
+                title = if (accuracy >= 60) "CLEARED!" else "SONG OVER",
                 lines = listOf(
-                    "Score $score",
-                    "Accuracy ${if (total == 0) 0 else (hits * 100 / total)}%",
+                    "Score $score" + if (score > best) "  ★ NEW RECORD" else "",
+                    "Accuracy $accuracy%  ·  $perfects perfect",
                     "Best combo $bestCombo",
                 ),
                 onExit = onExit,
@@ -212,3 +262,5 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         }
     }
 }
+
+private const val GAME_ID = "rhythm"

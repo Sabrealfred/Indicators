@@ -134,7 +134,7 @@ private fun ShopCard(item: Item, pet: PetState, onBuy: () -> Unit, onEquip: () -
                     .background(tint.copy(alpha = 0.16f)),
                 contentAlignment = Alignment.Center,
             ) {
-                ItemIcon(item.iconKey, tint, Modifier.size(56.dp))
+                ItemIcon(item.iconKey, tint, Modifier.size(56.dp), variant = item.id)
                 if (equipped) {
                     Text(
                         "EQUIPPED",
