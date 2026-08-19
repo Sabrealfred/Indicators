@@ -77,11 +77,20 @@ fun ChronicleScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         Spacer(Modifier.height(10.dp))
 
         if (entries.isEmpty()) {
-            Text(
-                "Nothing written yet. The diary fills itself as life happens.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(modifier = Modifier.padding(top = 40.dp)) {
+                Text(
+                    "The first page is blank",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "${pet.name} writes this itself — the good days and the ones where nobody came. " +
+                        "Give it a life worth writing about.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             return@Column
         }
 

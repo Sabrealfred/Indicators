@@ -69,11 +69,20 @@ fun AlbumScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         Spacer(Modifier.height(8.dp))
 
         if (pet.album.isEmpty()) {
-            Text(
-                "No pictures yet. Evolutions are filed here automatically.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            Column(modifier = Modifier.padding(top = 40.dp)) {
+                Text(
+                    "Nothing here yet",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Every evolution files itself here on its own. For everything in between, " +
+                        "hold your finger on ${pet.name} and the moment gets kept.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
