@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.ui.PetViewModel
@@ -42,7 +44,12 @@ import kotlin.math.sin
  * the next generation — which inherits coins, cosmetics, awards and the album.
  */
 @Composable
-fun MemorialScreen(viewModel: PetViewModel, onStartNextGeneration: () -> Unit, onBack: () -> Unit) {
+fun MemorialScreen(
+    viewModel: PetViewModel,
+    onStartNextGeneration: () -> Unit,
+    onOpenDiary: () -> Unit,
+    onBack: () -> Unit,
+) {
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
     val config = ui.config
@@ -117,10 +124,29 @@ fun MemorialScreen(viewModel: PetViewModel, onStartNextGeneration: () -> Unit, o
         )
         Spacer(Modifier.height(10.dp))
         Text(
-            text = "Lived ${pet.ageInPetDays(config)} pet days as a ${pet.stage.displayName} " +
-                "(${pet.branch.displayName}).\n" +
-                "${pet.mealsEaten} meals · ${pet.gamesWon} wins · ${pet.careMistakes} care mistakes.",
+            text = "Lived ${pet.ageInPetDays(config)} days as a ${pet.stage.displayName}, " +
+                "${pet.branch.displayName.lowercase()} to the end.",
             style = MaterialTheme.typography.bodyMedium,
+            color = NeoColors.OnDarkMuted,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(14.dp))
+        // The last thing it wrote, not a tally of what you got wrong. A memorial that prints a
+        // mistake counter turns a death into an invoice.
+        pet.chronicle.lastOrNull()?.let { last ->
+            Text(
+                text = "“${last.text}”",
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                color = NeoColors.OnDark,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            text = "${pet.mealsEaten} meals shared · ${pet.gamesWon} games won · ${pet.album.size} pictures kept",
+            style = MaterialTheme.typography.labelSmall,
             color = NeoColors.OnDarkMuted,
             textAlign = TextAlign.Center,
         )
@@ -131,21 +157,31 @@ fun MemorialScreen(viewModel: PetViewModel, onStartNextGeneration: () -> Unit, o
             modifier = Modifier.fillMaxWidth(),
         ) {
             Button(
-                onClick = onStartNextGeneration,
+                onClick = onOpenDiary,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text("Raise generation ${pet.generation + 1}")
+                Text("Read the diary")
             }
             OutlinedButton(
-                onClick = onBack,
+                onClick = onStartNextGeneration,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
             ) {
-                Text("Stay a moment")
+                Text("When you're ready: generation ${pet.generation + 1}")
             }
+            Text(
+                text = "Stay a moment",
+                style = MaterialTheme.typography.labelSmall,
+                color = NeoColors.OnDarkMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onBack)
+                    .padding(vertical = 6.dp),
+            )
         }
         Spacer(Modifier.height(16.dp))
     }

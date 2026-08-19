@@ -136,6 +136,7 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                     onStartNextGeneration = {
                         navController.navigate(Routes.NEW_GAME) { popUpTo(Routes.HOME) { inclusive = true } }
                     },
+                    onOpenDiary = { navController.navigate(Routes.CHRONICLE) },
                     onBack = { navController.popBackStack() },
                 )
             }
