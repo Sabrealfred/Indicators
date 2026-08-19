@@ -33,6 +33,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -44,6 +45,7 @@ import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
 import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.StatDelta
 import com.neopal.pet.ui.art.CreatureFrame
@@ -54,6 +56,7 @@ import com.neopal.pet.ui.art.PixelRenderer
 import com.neopal.pet.ui.art.drawCreature
 import com.neopal.pet.ui.art.drawPoops
 import com.neopal.pet.ui.art.drawScene
+import com.neopal.pet.ui.art.drawItem
 import com.neopal.pet.ui.art.drawSickAura
 import com.neopal.pet.ui.art.drawSleepVignette
 import com.neopal.pet.ui.art.drawWeather
@@ -118,6 +121,8 @@ fun PetStage(
     /** Bumped by the ViewModel on every reaction so a repeated animation restarts. */
     actionId: Long = 0L,
     deltas: List<StatDelta> = emptyList(),
+    /** Item id being eaten right now, drawn in front of the pet while the EAT animation runs. */
+    servedItemId: String? = null,
     modifier: Modifier = Modifier,
     onTapPet: () -> Unit = {},
     onDoubleTapPet: () -> Unit = {},
@@ -288,6 +293,23 @@ fun PetStage(
             ),
             frame = frame,
         )
+        // Food you can see beats crumbs you have to infer: it shrinks bite by bite.
+        if (activeAction == PetAnimation.EAT && servedItemId != null) {
+            ItemCatalog[servedItemId]?.let { item ->
+                val bite = (1f - progress).coerceIn(0f, 1f)
+                val plate = unit * 0.22f * (0.35f + bite * 0.65f)
+                val fx = center.x + unit * 0.30f
+                val fy = center.y + unit * 0.06f
+                inset(
+                    left = fx - plate / 2f,
+                    top = fy - plate / 2f,
+                    right = size.width - (fx + plate / 2f),
+                    bottom = size.height - (fy + plate / 2f),
+                ) {
+                    drawItem(item.iconKey, Color(item.tint), variant = item.id)
+                }
+            }
+        }
         particles.draw(this)
         if (state.isSleeping) drawSleepVignette(0.8f)
     }

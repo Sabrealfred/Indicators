@@ -45,6 +45,8 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val toast: String? = null,
         /** The "+12 MOOD" readouts for the most recent action. */
         val deltas: List<StatDelta> = emptyList(),
+        /** The item currently being eaten, so the scene can show it disappearing. */
+        val servedItemId: String? = null,
         val achievementBanner: Achievement? = null,
         /** Filled after a long absence so the player learns what they missed. */
         val offlineReport: OfflineReport? = null,
@@ -172,7 +174,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------------------------------------------------------------- actions
 
-    fun feed(itemId: String) = runAction(Sfx.EAT) { CareActions.feed(it, itemId) }
+    fun feed(itemId: String) {
+        _ui.update { it.copy(servedItemId = itemId) }
+        runAction(Sfx.EAT) { CareActions.feed(it, itemId) }
+    }
     fun useMedicine(itemId: String = "medicine") = runAction(Sfx.HEAL) { CareActions.useMedicine(it, itemId) }
     fun cleanRoom() = runAction(Sfx.CLEAN) { CareActions.cleanRoom(it) }
     fun scoopPoop() = runAction(Sfx.CLEAN) { CareActions.scoopPoop(it) }

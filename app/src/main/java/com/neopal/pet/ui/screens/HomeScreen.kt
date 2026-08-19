@@ -116,6 +116,7 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                     action = ui.animation,
                     actionId = ui.animationId,
                     deltas = ui.deltas,
+                    servedItemId = ui.servedItemId,
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
