@@ -176,9 +176,21 @@ private fun tonesFor(base: Color, shade: Color? = null): Tones {
     )
 }
 
-/** Moves a point [k] of the way toward [pivot]; the cheap stand-in for a clip path. */
+/**
+ * Moves a point [k] of the way toward [pivot]; the cheap stand-in for a clip path. Shrinking a
+ * convex shape toward a point inside it keeps every copy inside the silhouette, which is how the
+ * features get their tone bands without clipping.
+ */
 private fun Offset.toward(pivot: Offset, k: Float) =
     Offset(pivot.x + (x - pivot.x) * k, pivot.y + (y - pivot.y) * k)
+
+/**
+ * A weighted blend of three corners. Weights are positive and sum to one, so the result is
+ * always inside the triangle they span — that is the guarantee [toward] needs from its pivot.
+ * Leaning the weights toward the tip and the shaded corner is what puts the lit band up-left.
+ */
+private fun inside(a: Offset, b: Offset, c: Offset, wa: Float, wb: Float, wc: Float) =
+    Offset(a.x * wa + b.x * wb + c.x * wc, a.y * wa + b.y * wb + c.y * wc)
 
 /**
  * Draws the whole creature centred in [center], sized against [unit] (usually the smaller
@@ -244,13 +256,10 @@ private fun DrawScope.drawGroundShadow(x: Float, y: Float, radius: Float, palett
     )
 }
 
-/**
- * The silhouette, unchanged. [k] scales it about [c] so the shading bands can be built from
- * the real edge curve and inset just far enough to hide their seam under the outline stroke.
- */
-private fun bodyPath(c: Offset, w: Float, h: Float, k: Float = 1f): Path {
-    val bw = w * k
-    val bh = h * k
+/** The silhouette, unchanged: the same control points the old flat fill used. */
+private fun bodyPath(c: Offset, w: Float, h: Float): Path {
+    val bw = w
+    val bh = h
     return Path().apply {
         moveTo(c.x, c.y - bh)
         cubicTo(c.x + bw * 1.05f, c.y - bh * 0.92f, c.x + bw * 1.12f, c.y + bh * 0.35f, c.x + bw * 0.92f, c.y + bh * 0.80f)
@@ -476,11 +485,14 @@ private fun DrawScope.drawTail(
     when (spec.species) {
         Species.AQUA -> {
             // Fish fin: two arcs meeting at the base.
-            val pivot = Offset(tipX + bodyR * 0.02f, tipY - bodyR * 0.08f)
+            val fa = Offset(baseX, baseY)
+            val fb = Offset(tipX, tipY - bodyR * 0.18f)
+            val fc = Offset(tipX - bodyR * 0.05f, tipY + bodyR * 0.26f)
+            val pivot = inside(fa, fb, fc, 0.30f, 0.42f, 0.28f)
             fun fin(k: Float): Path {
-                val a = Offset(baseX, baseY).toward(pivot, k)
-                val b = Offset(tipX, tipY - bodyR * 0.18f).toward(pivot, k)
-                val c = Offset(tipX - bodyR * 0.05f, tipY + bodyR * 0.26f).toward(pivot, k)
+                val a = fa.toward(pivot, k)
+                val b = fb.toward(pivot, k)
+                val c = fc.toward(pivot, k)
                 return Path().apply {
                     moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); close()
                 }
@@ -521,38 +533,31 @@ private fun DrawScope.drawTail(
             )
             drawOval(
                 color = accent.mid,
-                topLeft = Offset(tipX - bodyR * 0.185f, tipY - bodyR * 0.115f),
-                size = Size(bodyR * 0.26f, bodyR * 0.175f),
+                topLeft = Offset(tipX - bodyR * 0.18f, tipY - bodyR * 0.105f),
+                size = Size(bodyR * 0.25f, bodyR * 0.16f),
             )
             drawOval(
                 color = accent.light,
-                topLeft = Offset(tipX - bodyR * 0.165f, tipY - bodyR * 0.105f),
-                size = Size(bodyR * 0.14f, bodyR * 0.085f),
+                topLeft = Offset(tipX - bodyR * 0.155f, tipY - bodyR * 0.09f),
+                size = Size(bodyR * 0.12f, bodyR * 0.07f),
             )
         }
         Species.VOLT -> {
             // Lightning bolt tail.
-            val pivot = Offset(baseX - bodyR * 0.16f, baseY - bodyR * 0.16f)
-            fun bolt(k: Float): Path {
-                val pts = listOf(
-                    Offset(baseX, baseY),
-                    Offset(baseX - bodyR * 0.18f, baseY - bodyR * 0.06f),
-                    Offset(baseX - bodyR * 0.10f, baseY - bodyR * 0.22f),
-                    Offset(tipX, tipY),
-                    Offset(baseX - bodyR * 0.22f, baseY - bodyR * 0.16f),
-                    Offset(baseX - bodyR * 0.14f, baseY + bodyR * 0.02f),
-                ).map { it.toward(pivot, k) }
-                return Path().apply {
-                    moveTo(pts[0].x, pts[0].y)
-                    pts.drop(1).forEach { lineTo(it.x, it.y) }
-                    close()
-                }
+            val bolt = Path().apply {
+                moveTo(baseX, baseY)
+                lineTo(baseX - bodyR * 0.18f, baseY - bodyR * 0.06f)
+                lineTo(baseX - bodyR * 0.10f, baseY - bodyR * 0.22f)
+                lineTo(tipX, tipY)
+                lineTo(baseX - bodyR * 0.22f, baseY - bodyR * 0.16f)
+                lineTo(baseX - bodyR * 0.14f, baseY + bodyR * 0.02f)
+                close()
             }
-            drawPath(bolt(1f), accent.shadow)
-            // A thin zigzag cannot take a third band without the middle tone vanishing, so it
-            // gets two: 0.78 leaves roughly 1.5 px of shadow along the lower-right of each arm.
-            drawPath(bolt(0.78f), accent.mid)
-            drawPath(bolt(1f), accent.line, style = Stroke(width = band(bodyR, 0.035f)))
+            // The only feature that stays flat. Its arms taper to a point and are barely three
+            // buffer pixels across, so an inner tone band would land under one pixel and vanish;
+            // it gets a hot fill and a soft line instead, which is honest at this size.
+            drawPath(bolt, lerp(accent.mid, accent.light, 0.4f))
+            drawPath(bolt, accent.line, style = Stroke(width = band(bodyR, 0.035f)))
         }
     }
 }
@@ -572,13 +577,18 @@ private fun DrawScope.drawSpeciesFeatures(
     val body = tonesFor(palette.body, palette.bodyShade)
     when (spec.species) {
         Species.AQUA -> {
-            // Head fin that grows with the stage. Shrinking each copy toward a pivot up and to
-            // the left of the shape's middle puts the lit plane where the key light is.
-            val pivot = Offset(center.x - w * 0.16f, topY - bodyR * (0.10f + p.crest * 0.4f))
+            // Head fin that grows with the stage. The pivot leans left of centre so the shrunk
+            // copies stack toward the light. It is built from the fin's own boundary points —
+            // note the quad tops out halfway to its control point, not at it.
+            val fa = Offset(center.x - w * 0.30f, topY + bodyR * 0.08f)
+            val fb = Offset(center.x + w * 0.30f, topY + bodyR * 0.08f)
+            val ctrl = Offset(center.x, topY - bodyR * (0.24f + p.crest))
+            val peak = Offset(center.x, topY - bodyR * (0.08f + p.crest * 0.5f))
+            val pivot = inside(fa, fb, peak, 0.40f, 0.20f, 0.40f)
             fun fin(k: Float): Path {
-                val a = Offset(center.x - w * 0.30f, topY + bodyR * 0.08f).toward(pivot, k)
-                val c = Offset(center.x, topY - bodyR * (0.24f + p.crest)).toward(pivot, k)
-                val b = Offset(center.x + w * 0.30f, topY + bodyR * 0.08f).toward(pivot, k)
+                val a = fa.toward(pivot, k)
+                val c = ctrl.toward(pivot, k)
+                val b = fb.toward(pivot, k)
                 return Path().apply {
                     moveTo(a.x, a.y); quadraticBezierTo(c.x, c.y, b.x, b.y); close()
                 }
@@ -606,17 +616,17 @@ private fun DrawScope.drawSpeciesFeatures(
         Species.EMBER -> {
             // Two horns and a flame crest.
             listOf(-1f, 1f).forEach { side ->
-                val pivot = Offset(
-                    center.x + side * w * (0.44f + p.crest * 0.3f) - w * 0.06f,
-                    topY - bodyR * (0.08f + p.crest * 0.5f),
+                val ha = Offset(center.x + side * w * 0.45f, topY + bodyR * 0.10f)
+                val hb = Offset(
+                    center.x + side * w * (0.62f + p.crest * 0.5f),
+                    topY - bodyR * (0.22f + p.crest),
                 )
+                val hc = Offset(center.x + side * w * 0.20f, topY + bodyR * 0.02f)
+                val pivot = inside(ha, hb, hc, 0.25f, 0.40f, 0.35f)
                 fun horn(k: Float): Path {
-                    val a = Offset(center.x + side * w * 0.45f, topY + bodyR * 0.10f).toward(pivot, k)
-                    val b = Offset(
-                        center.x + side * w * (0.62f + p.crest * 0.5f),
-                        topY - bodyR * (0.22f + p.crest),
-                    ).toward(pivot, k)
-                    val c = Offset(center.x + side * w * 0.20f, topY + bodyR * 0.02f).toward(pivot, k)
+                    val a = ha.toward(pivot, k)
+                    val b = hb.toward(pivot, k)
+                    val c = hc.toward(pivot, k)
                     return Path().apply {
                         moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); close()
                     }
@@ -667,17 +677,17 @@ private fun DrawScope.drawSpeciesFeatures(
         Species.VOLT -> {
             // Two pointed ears with inner shading.
             listOf(-1f, 1f).forEach { side ->
-                val pivot = Offset(
-                    center.x + side * w * (0.44f + p.crest * 0.2f) - w * 0.05f,
-                    topY - bodyR * (0.02f + p.crest * 0.4f),
+                val ea = Offset(center.x + side * w * 0.30f, topY + bodyR * 0.16f)
+                val eb = Offset(
+                    center.x + side * w * (0.55f + p.crest * 0.4f),
+                    topY - bodyR * (0.30f + p.crest),
                 )
+                val ec = Offset(center.x + side * w * 0.72f, topY + bodyR * 0.22f)
+                val pivot = inside(ea, eb, ec, 0.35f, 0.40f, 0.25f)
                 fun ear(k: Float): Path {
-                    val a = Offset(center.x + side * w * 0.30f, topY + bodyR * 0.16f).toward(pivot, k)
-                    val b = Offset(
-                        center.x + side * w * (0.55f + p.crest * 0.4f),
-                        topY - bodyR * (0.30f + p.crest),
-                    ).toward(pivot, k)
-                    val c = Offset(center.x + side * w * 0.72f, topY + bodyR * 0.22f).toward(pivot, k)
+                    val a = ea.toward(pivot, k)
+                    val b = eb.toward(pivot, k)
+                    val c = ec.toward(pivot, k)
                     return Path().apply {
                         moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); close()
                     }
@@ -686,14 +696,17 @@ private fun DrawScope.drawSpeciesFeatures(
                 drawPath(ear(0.84f), body.mid)
                 drawPath(ear(0.50f), body.light)
                 drawPath(ear(1f), body.line, style = Stroke(width = band(bodyR, 0.035f)))
-                val innerPivot = Offset(pivot.x, pivot.y + bodyR * 0.04f)
+                val ia = Offset(center.x + side * w * 0.38f, topY + bodyR * 0.14f)
+                val ib = Offset(
+                    center.x + side * w * (0.52f + p.crest * 0.3f),
+                    topY - bodyR * (0.18f + p.crest * 0.7f),
+                )
+                val ic = Offset(center.x + side * w * 0.60f, topY + bodyR * 0.16f)
+                val innerPivot = inside(ia, ib, ic, 0.35f, 0.40f, 0.25f)
                 fun inner(k: Float): Path {
-                    val a = Offset(center.x + side * w * 0.38f, topY + bodyR * 0.14f).toward(innerPivot, k)
-                    val b = Offset(
-                        center.x + side * w * (0.52f + p.crest * 0.3f),
-                        topY - bodyR * (0.18f + p.crest * 0.7f),
-                    ).toward(innerPivot, k)
-                    val c = Offset(center.x + side * w * 0.60f, topY + bodyR * 0.16f).toward(innerPivot, k)
+                    val a = ia.toward(innerPivot, k)
+                    val b = ib.toward(innerPivot, k)
+                    val c = ic.toward(innerPivot, k)
                     return Path().apply {
                         moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); close()
                     }
@@ -745,11 +758,16 @@ private fun DrawScope.drawFace(
                 topLeft = Offset(ex - r, eyeY - r * open),
                 size = Size(r * 2f, r * 2f * open),
             )
-            // Lid shadow across the top of the eye; ~3 px, so it survives the downscale.
-            drawOval(
-                color = lerp(sclera, tones.shadow, 0.30f),
-                topLeft = Offset(ex - r * 0.92f, eyeY - r * 0.94f * open),
-                size = Size(r * 1.84f, r * 0.80f * open),
+            // Lid shadow inside the top of the eye. An arc, not a filled oval: an oval wide
+            // enough to read would bulge past the sclera at its waist. Inset 0.86 leaves more
+            // room than the stroke's half width, and the stroke thins with the blink so it
+            // never spills — [band] still holds it at a whole pixel.
+            drawArc(
+                color = lerp(sclera, tones.shadow, 0.35f),
+                startAngle = 195f, sweepAngle = 150f, useCenter = false,
+                topLeft = Offset(ex - r * 0.86f, eyeY - r * 0.86f * open),
+                size = Size(r * 1.72f, r * 1.72f * open),
+                style = Stroke(width = band(bodyR, 0.05f * (0.5f + 0.5f * open)), cap = StrokeCap.Round),
             )
             // Iris in two tones: dark top, lighter lower half, which is what makes an eye read
             // as glass rather than as a hole.
@@ -807,7 +825,7 @@ private fun DrawScope.drawFace(
             for (i in 0..2) {
                 val k = 1f - i * 0.28f
                 drawOval(
-                    color = palette.blush.copy(alpha = 0.14f + i * 0.10f),
+                    color = palette.blush.copy(alpha = 0.10f + i * 0.06f),
                     topLeft = Offset(bx - bodyR * 0.10f * k, by - bodyR * 0.06f * k),
                     size = Size(bodyR * 0.20f * k, bodyR * 0.12f * k),
                 )
@@ -815,7 +833,9 @@ private fun DrawScope.drawFace(
         }
     }
 
-    drawMouth(center, bodyR, eyeY + r * 1.5f, spec.mood, palette, frame, faceLine)
+    // The mouth carries expression, so it keeps most of the full-strength line; only the eye
+    // ring, which lies directly on the pale sclera, takes the fully lifted one.
+    drawMouth(center, bodyR, eyeY + r * 1.5f, spec.mood, frame, lerp(tones.line, faceLine, 0.4f))
 }
 
 private fun DrawScope.drawMouth(
@@ -823,7 +843,6 @@ private fun DrawScope.drawMouth(
     bodyR: Float,
     mouthY: Float,
     mood: Mood,
-    palette: CreaturePalette,
     frame: CreatureFrame,
     line: Color,
 ) {
@@ -933,11 +952,14 @@ private fun DrawScope.drawBranchMarks(
                 val t = i / 3f
                 val x = center.x - bodyR * p.bodyWidth * (0.9f - t * 0.5f)
                 val y = center.y - bodyR * (0.55f - t * 0.35f)
-                val pivot = Offset(x - bodyR * 0.06f, y - bodyR * 0.10f)
+                val sa = Offset(x, y)
+                val sb = Offset(x - bodyR * 0.14f, y - bodyR * 0.18f)
+                val sc = Offset(x + bodyR * 0.04f, y - bodyR * 0.06f)
+                val pivot = inside(sa, sb, sc, 0.30f, 0.45f, 0.25f)
                 fun spike(k: Float): Path {
-                    val a = Offset(x, y).toward(pivot, k)
-                    val b = Offset(x - bodyR * 0.14f, y - bodyR * 0.18f).toward(pivot, k)
-                    val c = Offset(x + bodyR * 0.04f, y - bodyR * 0.06f).toward(pivot, k)
+                    val a = sa.toward(pivot, k)
+                    val b = sb.toward(pivot, k)
+                    val c = sc.toward(pivot, k)
                     return Path().apply {
                         moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); close()
                     }
@@ -1007,7 +1029,7 @@ private fun DrawScope.drawEgg(center: Offset, unit: Float, palette: CreaturePale
         }
         drawPath(egg(1f), shellShadow)
         drawPath(egg(0.90f), shell)
-        drawPath(egg(0.46f), shellLight)
+        drawPath(egg(0.40f), shellLight)
         // Species-tinted spots.
         listOf(
             Offset(center.x - w * 0.35f, center.y + h * 0.10f) to w * 0.22f,
