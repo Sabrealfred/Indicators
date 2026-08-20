@@ -1,12 +1,11 @@
 package com.neopal.pet.ui.screens
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,8 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,15 +29,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.Routes
-import com.neopal.pet.ui.components.MenuTile
-import com.neopal.pet.ui.games.BestChip
+import com.neopal.pet.ui.components.MinTouchTarget
+import com.neopal.pet.ui.components.PixelBadge
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelDivider
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelSurface
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.theme.NeoColors
 
 /** Game-select grid, styled like a console home menu row of cartridges. */
@@ -53,7 +62,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(pixelUnits(4)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -64,15 +73,13 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
 
         if (blocker != null) {
             // The reason has to outrank the tiles, or players keep tapping a dead grid.
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(NeoColors.NeonRed.copy(alpha = 0.12f))
-                    .border(BorderStroke(1.dp, NeoColors.NeonRed.copy(alpha = 0.6f)), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            PixelPanel(
+                modifier = Modifier.fillMaxWidth(),
+                fill = lerp(MaterialTheme.colorScheme.surfaceVariant, NeoColors.NeonRed, 0.12f),
+                accent = NeoColors.NeonRed,
+                title = "No games right now",
+                contentPadding = PaddingValues(pixelUnits(3)),
             ) {
-                Text("No games right now", style = MaterialTheme.typography.titleSmall, color = NeoColors.NeonRed)
                 Text(blocker, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         } else {
@@ -82,15 +89,15 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(pixelUnits(4)))
 
         Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(pixelUnits(3)),
             modifier = Modifier
                 .fillMaxWidth()
                 .alpha(if (locked) 0.35f else 1f),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(pixelUnits(3)), modifier = Modifier.fillMaxWidth()) {
                 GameTile(
                     title = "Rhythm Tap",
                     subtitle = "4 lanes · 30 s\nTiming drill — big mood, small bond, ~10 energy",
@@ -155,7 +162,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(pixelUnits(5)))
         Text(
             "Record: ${pet.gamesWon} wins in ${pet.gamesPlayed} games",
             style = MaterialTheme.typography.labelMedium,
@@ -164,7 +171,11 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
     }
 }
 
-/** A [MenuTile] with the personal best pinned to the corner of the cartridge art. */
+/**
+ * A cartridge: a panel in the game's own colour, with the personal best sitting on the title
+ * strip. The strip is rebuilt by hand rather than passed to [PixelPanel] because the kit's strip
+ * takes a title and nothing else, and the best score belongs up there with the name.
+ */
 @Composable
 private fun GameTile(
     title: String,
@@ -176,20 +187,67 @@ private fun GameTile(
     modifier: Modifier = Modifier,
     art: @Composable () -> Unit,
 ) {
-    MenuTile(
-        title = title,
-        subtitle = subtitle,
+    val fill = MaterialTheme.colorScheme.surfaceVariant
+    PixelPanel(
+        modifier = modifier.sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget),
+        fill = fill,
         accent = accent,
+        contentPadding = PaddingValues(0.dp),
         onClick = { if (enabled) onClick() },
-        modifier = modifier,
     ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            art()
-            BestChip(
-                best = best,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(lerp(fill, accent, 0.20f))
+                .padding(horizontal = pixelUnits(2), vertical = pixelUnits(2)),
+        ) {
+            // Same accent block the kit's own strip uses, so a game tile reads as one of the family.
+            Box(Modifier.size(width = pixelUnits(1), height = pixelUnits(3)).background(accent))
+            Spacer(Modifier.width(pixelUnits(2)))
+            Text(
+                text = title.uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            if (best > 0) {
+                Spacer(Modifier.width(pixelUnits(1)))
+                // The chip is a bare number so it fits a half-width tile; the readout says what it is.
+                PixelBadge(
+                    text = "$best",
+                    color = NeoColors.NeonYellow,
+                    contentColor = NeoColors.OnLight,
+                    modifier = Modifier.semantics { contentDescription = "Best score $best" },
+                )
+            }
+        }
+        PixelDivider(color = lerp(fill, accent, 0.45f))
+        Column(modifier = Modifier.padding(pixelUnits(2))) {
+            Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp),
+                    .fillMaxWidth()
+                    .height(pixelUnits(18))
+                    // The art slot is pressed *into* the tile, so the cartridge reads as inset glass.
+                    .pixelSurface(
+                        fill = lerp(fill, accent, 0.24f),
+                        accent = accent,
+                        bevel = PixelBevel.PRESSED,
+                    )
+                    .padding(pixelUnits(2)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { art() }
+            }
+            Spacer(Modifier.height(pixelUnits(2)))
+            Text(
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

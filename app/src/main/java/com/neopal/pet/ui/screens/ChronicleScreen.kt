@@ -3,6 +3,7 @@ package com.neopal.pet.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,12 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,12 +25,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.ChronicleEntry
 import com.neopal.pet.domain.ChronicleKind
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelSurface
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.theme.NeoColors
 
 /**
@@ -51,7 +51,7 @@ fun ChronicleScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = pixelUnits(3)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -74,16 +74,16 @@ fun ChronicleScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 )
             }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(pixelUnits(3)))
 
         if (entries.isEmpty()) {
-            Column(modifier = Modifier.padding(top = 40.dp)) {
+            Column(modifier = Modifier.padding(top = pixelUnits(10))) {
                 Text(
                     "The first page is blank",
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(pixelUnits(2)))
                 Text(
                     "${pet.name} writes this itself — the good days and the ones where nobody came. " +
                         "Give it a life worth writing about.",
@@ -109,50 +109,55 @@ private fun ChronicleRow(entry: ChronicleEntry) {
         ChronicleKind.JOY -> NeoColors.NeonYellow
         ChronicleKind.LOSS -> NeoColors.OnDarkMuted
     }
+    val background = MaterialTheme.colorScheme.background
+    val fill = MaterialTheme.colorScheme.surfaceVariant
     Row(modifier = Modifier.fillMaxWidth()) {
         // A timeline rail, so a run reads as one continuous life rather than a list of rows.
+        // Squared node, whole-unit thread: the same grid the panel beside it is cut from.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.width(28.dp),
+            modifier = Modifier.width(pixelUnits(7)),
         ) {
+            Spacer(Modifier.height(pixelUnits(2)))
             Box(
                 modifier = Modifier
-                    .size(10.dp)
-                    .clip(CircleShape)
-                    .background(accent),
+                    .size(pixelUnits(3))
+                    .pixelSurface(
+                        fill = accent,
+                        accent = accent,
+                        bevel = PixelBevel.FLAT,
+                        borderUnits = 1,
+                        background = background,
+                    ),
             )
             Box(
                 modifier = Modifier
-                    .width(2.dp)
-                    .height(58.dp)
-                    .background(accent.copy(alpha = 0.25f)),
+                    .width(pixelUnits(1))
+                    .height(pixelUnits(14))
+                    .background(lerp(background, accent, 0.35f)),
             )
         }
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        PixelPanel(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 8.dp),
+                .padding(bottom = pixelUnits(2)),
+            fill = fill,
+            // The entry wears the colour of what happened, edge and title plate alike.
+            accent = accent,
+            background = background,
+            title = "Day ${entry.petDay}",
+            contentPadding = PaddingValues(pixelUnits(3)),
         ) {
-            Column(modifier = Modifier.padding(12.dp)) {
-                Text(
-                    text = "DAY ${entry.petDay}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = accent,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "“${entry.text}”",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontStyle = FontStyle.Italic,
-                    color = if (entry.kind == ChronicleKind.LOSS) {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    },
-                )
-            }
+            Text(
+                text = "“${entry.text}”",
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                color = if (entry.kind == ChronicleKind.LOSS) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+            )
         }
     }
 }

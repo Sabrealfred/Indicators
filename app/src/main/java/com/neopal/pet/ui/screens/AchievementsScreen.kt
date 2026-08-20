@@ -1,7 +1,9 @@
 package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,13 +14,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,17 +27,24 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import com.neopal.pet.R
 import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.Achievements
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.NeoAccents
+import com.neopal.pet.ui.components.PixelBadge
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelSurface
+import com.neopal.pet.ui.components.pixelUnits
+import com.neopal.pet.ui.theme.NeoColors
 
 /** Trophy list with unlocked entries pulled to the top. */
 @Composable
@@ -51,7 +57,7 @@ fun AchievementsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = pixelUnits(3)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
@@ -71,7 +77,7 @@ fun AchievementsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     .weight(1f)
                     .semantics { heading() },
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(pixelUnits(2)))
             val progressReadOut = stringResource(
                 R.string.cd_awards_progress,
                 pet.unlockedAchievements.size,
@@ -86,7 +92,7 @@ fun AchievementsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 modifier = Modifier.semantics { contentDescription = progressReadOut },
             )
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(pixelUnits(2)))
 
         LazyColumn {
             items(sorted) { achievement ->
@@ -108,25 +114,51 @@ private fun AchievementRow(achievement: Achievement, unlocked: Boolean) {
         achievement.description,
         achievement.rewardCoins,
     )
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    val background = MaterialTheme.colorScheme.background
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    // Locked rows are sunk into the page with a washed-out edge: the shape says "not yet"
+    // before the padlock does, which is the half of the message an icon alone cannot carry.
+    val accent = if (unlocked) NeoAccents.gold else lerp(NeoAccents.gold, background, 0.70f)
+    val fill = if (unlocked) surface else lerp(surface, background, 0.45f)
+    val badgeColor = if (unlocked) NeoAccents.green else lerp(surface, background, 0.20f)
+    val badgeInk = when {
+        !unlocked -> MaterialTheme.colorScheme.onSurfaceVariant
+        badgeColor.luminance() > 0.4f -> NeoColors.ChassisBlack
+        else -> NeoColors.OnDark
+    }
+
+    PixelPanel(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = pixelUnits(1))
             .semantics(mergeDescendants = true) { contentDescription = readOut },
+        fill = fill,
+        accent = accent,
+        background = background,
+        bevel = if (unlocked) PixelBevel.RAISED else PixelBevel.PRESSED,
+        contentPadding = PaddingValues(pixelUnits(2)),
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp),
-        ) {
-            Icon(
-                imageVector = if (unlocked) Icons.Filled.EmojiEvents else Icons.Filled.Lock,
-                contentDescription = null,
-                tint = if (unlocked) NeoAccents.gold else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(26.dp),
-            )
-            Spacer(Modifier.width(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier
+                    .size(pixelUnits(10))
+                    .pixelSurface(
+                        fill = lerp(fill, accent, if (unlocked) 0.24f else 0.10f),
+                        accent = accent,
+                        bevel = PixelBevel.PRESSED,
+                        borderUnits = 1,
+                        background = fill,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = if (unlocked) Icons.Filled.EmojiEvents else Icons.Filled.Lock,
+                    contentDescription = null,
+                    tint = if (unlocked) NeoAccents.gold else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(pixelUnits(6)),
+                )
+            }
+            Spacer(Modifier.width(pixelUnits(3)))
             // The row has no fixed height, so at a 1.3x font scale it grows instead of clipping;
             // the caps stop one long description from pushing the reward off the edge.
             Column(modifier = Modifier.weight(1f)) {
@@ -145,12 +177,12 @@ private fun AchievementRow(achievement: Achievement, unlocked: Boolean) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                stringResource(R.string.awards_reward, achievement.rewardCoins),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (unlocked) NeoAccents.green else MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+            Spacer(Modifier.width(pixelUnits(2)))
+            PixelBadge(
+                text = stringResource(R.string.awards_reward, achievement.rewardCoins),
+                color = badgeColor,
+                contentColor = badgeInk,
+                background = fill,
             )
         }
     }
