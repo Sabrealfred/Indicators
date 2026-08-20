@@ -14,29 +14,23 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,12 +39,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -60,7 +53,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -76,6 +68,9 @@ private const val DisabledGraphicAlpha = 0.38f
 
 /** …but its label keeps enough ink to clear 4.5:1 against the console screen. */
 private const val DisabledLabelAlpha = 0.80f
+
+/** The action dock's face buttons, in whole grid units (13 × 4dp). */
+private val FaceButtonSize: Dp = pixelUnits(13)
 
 /**
  * The neon accents are drawn for the near-black console shell. On a light surface the same
@@ -94,7 +89,7 @@ object NeoAccents {
     val green: Color @Composable get() = if (onLightSurface) GreenOnLight else NeoColors.NeonGreen
 }
 
-/** One labelled stat meter with a smooth animated fill and a value read out for screen readers. */
+/** One labelled stat meter with a segmented fill and a value read out for screen readers. */
 @Composable
 fun StatBar(
     label: String,
@@ -117,8 +112,6 @@ fun StatBar(
     } else {
         stringResource(R.string.cd_stat_value, label, rounded)
     }
-    val trackHeight = if (compact) 6.dp else 9.dp
-    val tick = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
     Column(
         modifier = modifier.semantics(mergeDescendants = true) { contentDescription = readOut },
     ) {
@@ -126,7 +119,7 @@ fun StatBar(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
                     Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
+                    Spacer(Modifier.width(pixelUnits(1)))
                 }
                 Text(
                     text = label,
@@ -137,7 +130,7 @@ fun StatBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(4.dp))
+                Spacer(Modifier.width(pixelUnits(1)))
                 Text(
                     text = "$rounded",
                     style = MaterialTheme.typography.labelSmall,
@@ -145,45 +138,21 @@ fun StatBar(
                     maxLines = 1,
                 )
             }
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(pixelUnits(1)))
         }
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(trackHeight)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(animated)
-                    .height(trackHeight)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(color.copy(alpha = 0.75f), if (warn) NeoColors.NeonRed else color),
-                        ),
-                    ),
-            )
-            // A tick where the game starts calling the need critical, so "how bad is it" is one glance.
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(CriticalStatFraction)
-                    .height(trackHeight),
-                contentAlignment = Alignment.CenterEnd,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(tick),
-                )
-            }
-        }
+        // Ten cells in the five-across strip, twenty on a full-width bar: a cell narrower than a
+        // couple of grid units stops reading as a cell and turns back into a gradient.
+        PixelBar(
+            fraction = animated,
+            color = if (warn) NeoColors.NeonRed else color,
+            segments = if (compact) 10 else 20,
+            height = if (compact) pixelUnits(4) else pixelUnits(5),
+            markerFraction = CriticalStatFraction,
+        )
     }
 }
 
-/** A round action button styled after a console face button. */
+/** A dock action button: a bevelled face that presses in under the thumb. */
 @Composable
 fun ActionButton(
     label: String,
@@ -194,9 +163,10 @@ fun ActionButton(
     enabled: Boolean = true,
     badge: Int? = null,
 ) {
-    val alpha = if (enabled) 1f else DisabledGraphicAlpha
+    val faceAlpha = if (enabled) 1f else DisabledGraphicAlpha
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    val down = pressed && enabled
     // Buttons that shrink under the thumb feel physical; the spring gives them a bounce back.
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.88f else 1f,
@@ -213,12 +183,16 @@ fun ActionButton(
     )
     // The icon, the badge and the caption are one control, so they get one announcement.
     val readOut = if (urgent) stringResource(R.string.cd_action_with_badge, label, badge ?: 0) else label
+    // The dock always sits on the console screen, so the bevel is derived against that, not
+    // against the theme background — otherwise the light theme washes the edges out.
+    val shell = NeoColors.SurfaceDark
+    val face = lerp(accent, shell, 0.20f)
+    val shift = if (down) pixelUnits(1) else 0.dp
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
             .semantics(mergeDescendants = true) { contentDescription = readOut }
-            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 enabled = enabled,
                 onClick = onClick,
@@ -227,58 +201,59 @@ fun ActionButton(
                 indication = null,
             )
             // Inside the clickable: the padding is touchable area, not a dead gap around it.
-            .padding(vertical = 6.dp, horizontal = 4.dp),
+            .padding(vertical = pixelUnits(2), horizontal = pixelUnits(1)),
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (urgent) {
                 Box(
                     modifier = Modifier
-                        .size(52.dp)
+                        .size(FaceButtonSize + pixelUnits(1))
                         .graphicsLayer { scaleX = pulse; scaleY = pulse }
-                        .clip(CircleShape)
-                        .background(accent.copy(alpha = 0.22f)),
+                        .pixelSurface(
+                            fill = accent.copy(alpha = 0.22f),
+                            accent = accent,
+                            bevel = PixelBevel.FLAT,
+                            borderUnits = 0,
+                            background = shell,
+                        ),
                 )
             }
             Box(
                 modifier = Modifier
-                    .size(52.dp)
-                    .graphicsLayer { scaleX = scale; scaleY = scale }
-                    .clip(CircleShape)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(accent.copy(alpha = 0.90f * alpha), accent.copy(alpha = 0.55f * alpha)),
-                        ),
-                    )
-                    .border(BorderStroke(2.dp, Color.White.copy(alpha = 0.16f * alpha)), CircleShape),
+                    .size(FaceButtonSize)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        alpha = faceAlpha
+                    }
+                    // Pressing flips the bevel; the icon moves with it so the face reads as sunk in.
+                    .pixelSurface(
+                        fill = face,
+                        accent = accent,
+                        bevel = if (down) PixelBevel.PRESSED else PixelBevel.RAISED,
+                        background = shell,
+                    ),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = Color.White.copy(alpha = alpha),
-                    modifier = Modifier.size(24.dp),
+                    tint = Color.White,
+                    modifier = Modifier
+                        .offset(x = shift, y = shift)
+                        .size(24.dp),
                 )
             }
             if (badge != null && badge > 0) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .size(18.dp)
-                        .clip(CircleShape)
-                        .background(NeoColors.NeonRed),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = if (badge > 9) stringResource(R.string.badge_overflow) else "$badge",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                    )
-                }
+                PixelBadge(
+                    text = if (badge > 9) stringResource(R.string.badge_overflow) else "$badge",
+                    color = NeoColors.NeonRed,
+                    background = shell,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                )
             }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(pixelUnits(1)))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -290,7 +265,7 @@ fun ActionButton(
     }
 }
 
-/** Home-menu style tile with a big square icon slot, like a console's game grid. */
+/** Home-menu style tile with a recessed square icon slot, like a console's game grid. */
 @Composable
 fun MenuTile(
     title: String,
@@ -300,41 +275,43 @@ fun MenuTile(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit = {},
 ) {
-    Card(
+    val fill = MaterialTheme.colorScheme.surfaceVariant
+    PixelPanel(
+        modifier = modifier.sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget),
+        fill = fill,
+        accent = accent,
+        contentPadding = PaddingValues(pixelUnits(2)),
         onClick = onClick,
-        modifier = modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        border = BorderStroke(2.dp, accent.copy(alpha = 0.55f)),
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(72.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.verticalGradient(listOf(accent.copy(alpha = 0.35f), accent.copy(alpha = 0.08f))),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) { content() }
-            Spacer(Modifier.height(8.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(pixelUnits(18))
+                // The art slot is pressed *into* the tile, so the cartridge reads as inset glass.
+                .pixelSurface(
+                    fill = lerp(fill, accent, 0.24f),
+                    accent = accent,
+                    bevel = PixelBevel.PRESSED,
+                )
+                .padding(pixelUnits(2)),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+        Spacer(Modifier.height(pixelUnits(2)))
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (subtitle != null) {
             Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                subtitle,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle != null) {
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
@@ -348,24 +325,28 @@ fun ToastBanner(message: String?, modifier: Modifier = Modifier) {
         exit = slideOutVertically { -it } + fadeOut(),
         modifier = modifier,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
+        PixelPanel(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(NeoColors.SurfaceCard.copy(alpha = 0.96f))
-                .border(BorderStroke(1.dp, NeoColors.NeonCyan.copy(alpha = 0.5f)), RoundedCornerShape(12.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .padding(horizontal = pixelUnits(3))
                 // The banner is the only feedback for most actions, so it has to announce itself.
                 .semantics { liveRegion = LiveRegionMode.Polite },
+            fill = NeoColors.SurfaceCard,
+            accent = NeoColors.NeonCyan,
+            background = NeoColors.SurfaceDark,
+            contentPadding = PaddingValues(horizontal = pixelUnits(3), vertical = pixelUnits(2)),
         ) {
-            Text(
-                text = message.orEmpty(),
-                style = MaterialTheme.typography.bodyMedium,
-                color = NeoColors.OnDark,
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = message.orEmpty(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NeoColors.OnDark,
+                )
+            }
         }
     }
 }
@@ -374,55 +355,61 @@ fun ToastBanner(message: String?, modifier: Modifier = Modifier) {
 @Composable
 fun CoinPill(coins: Int, modifier: Modifier = Modifier) {
     val readOut = stringResource(R.string.cd_coins, coins)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier
-            .clip(CircleShape)
-            .background(NeoColors.SurfaceCard)
-            .padding(horizontal = 10.dp, vertical = 5.dp)
-            .semantics(mergeDescendants = true) { contentDescription = readOut },
+    PixelPanel(
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = readOut },
+        fill = NeoColors.SurfaceCard,
+        accent = NeoColors.NeonYellow,
+        background = NeoColors.SurfaceDark,
+        borderUnits = 1,
+        contentPadding = PaddingValues(horizontal = pixelUnits(2), vertical = pixelUnits(1)),
     ) {
-        Canvas(Modifier.size(14.dp)) {
-            drawCircle(NeoColors.NeonYellow, size.minDimension / 2f)
-            drawCircle(Color(0xFF8A6A00), size.minDimension / 2f, style = androidx.compose.ui.graphics.drawscope.Stroke(2f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // A four-by-four pixel coin rather than a vector circle: at 12dp a stroked circle is
+            // the one antialiased curve left on the screen and it shows.
+            Canvas(Modifier.size(pixelUnits(3))) {
+                val u = size.minDimension / 5f
+                drawRect(NeoColors.NeonYellow, Offset(u, 0f), Size(u * 3f, u * 5f))
+                drawRect(NeoColors.NeonYellow, Offset(0f, u), Size(u * 5f, u * 3f))
+                drawRect(Color(0xFF8A6A00), Offset(u * 2f, u), Size(u, u * 3f))
+            }
+            Spacer(Modifier.width(pixelUnits(2)))
+            Text("$coins", style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDark, maxLines = 1)
         }
-        Spacer(Modifier.width(6.dp))
-        Text("$coins", style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDark, maxLines = 1)
     }
 }
 
-/** Level + XP readout with a thin progress line. */
+/** Level + XP readout with a segmented progress line. */
 @Composable
 fun LevelPill(level: Int, xp: Int, xpNeeded: Int, modifier: Modifier = Modifier) {
     val readOut = stringResource(R.string.cd_level, level, xp, xpNeeded)
-    Column(
+    PixelPanel(
         modifier = modifier
-            .width(96.dp)
+            .width(pixelUnits(24))
             .semantics(mergeDescendants = true) { contentDescription = readOut },
+        fill = NeoColors.SurfaceCard,
+        accent = NeoColors.NeonCyan,
+        background = NeoColors.SurfaceDark,
+        borderUnits = 1,
+        contentPadding = PaddingValues(horizontal = pixelUnits(2), vertical = pixelUnits(1)),
     ) {
         Text(
             stringResource(R.string.level_short, level),
             style = MaterialTheme.typography.labelMedium,
-            color = NeoAccents.cyan,
+            // The pill now guarantees its own dark fill, so the bright cyan is the readable
+            // choice here — NeoAccents' dimmed twin is for cyan sitting on a light surface.
+            color = NeoColors.NeonCyan,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Spacer(Modifier.height(2.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(CircleShape)
-                .background(NeoColors.SurfaceCard),
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth((xp.toFloat() / xpNeeded.coerceAtLeast(1)).coerceIn(0f, 1f))
-                    .height(4.dp)
-                    .clip(CircleShape)
-                    .background(NeoColors.NeonCyan),
-            )
-        }
+        Spacer(Modifier.height(pixelUnits(1)))
+        PixelBar(
+            fraction = xp.toFloat() / xpNeeded.coerceAtLeast(1),
+            color = NeoColors.NeonCyan,
+            segments = 10,
+            height = pixelUnits(3),
+            trackColor = NeoColors.SurfaceDark,
+            background = NeoColors.SurfaceDark,
+        )
     }
 }
 
