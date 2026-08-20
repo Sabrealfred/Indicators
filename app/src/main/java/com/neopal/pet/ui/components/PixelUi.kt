@@ -1,9 +1,20 @@
 package com.neopal.pet.ui.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -16,36 +27,63 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import kotlin.math.PI
+import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 /*
  * A chunky-but-soft UI kit that shares a grid with the pixel-art scene.
@@ -110,10 +148,20 @@ fun pixelEdgeColor(accent: Color, background: Color, toward: Float = 0.42f): Col
     lerp(accent.copy(alpha = 1f), background.copy(alpha = 1f), toward.coerceIn(0f, 1f))
 
 /**
+ * The fill of anything recessed — a text well, a meter track, an icon slot. Every well was being
+ * lerped by hand at its call site, which is how two wells side by side end up different depths.
+ *
+ * [depth] is how far the surface sinks toward [background]; the default is the well proper, and
+ * shallower values are for surfaces that only need to read as *behind* rather than as a hole.
+ */
+fun pixelWellFill(surface: Color, background: Color, depth: Float = 0.35f): Color =
+    lerp(surface.copy(alpha = 1f), background.copy(alpha = 1f), depth.coerceIn(0f, 1f))
+
+/**
  * A pixel-art corner: two overlapping rects, so the corner loses exactly [notch] pixels on each
  * axis instead of being swept through a radius the upscaled art never uses.
  */
-private fun DrawScope.notchedRect(
+fun DrawScope.notchedRect(
     color: Color,
     left: Float,
     top: Float,
@@ -130,7 +178,7 @@ private fun DrawScope.notchedRect(
 }
 
 /** Device pixels per grid unit, floored so a unit is always a whole number of pixels. */
-private fun DrawScope.gridUnit(): Float = floor(PixelUnit.toPx()).coerceAtLeast(1f)
+fun DrawScope.gridUnit(): Float = floor(PixelUnit.toPx()).coerceAtLeast(1f)
 
 private fun DrawScope.drawPixelSurface(
     fill: Color,
@@ -197,6 +245,8 @@ fun Modifier.pixelSurface(
  * The kit's container: a bevelled box with an optional title strip.
  *
  * Pass [onClick] to make the whole panel a button — it then also claims a [MinTouchTarget].
+ * Pass [titleTrailing] to hang a count or a small action off the right of the title strip; it is
+ * laid out in the strip's own [Row], so a badge and a button can sit there side by side.
  */
 @Composable
 fun PixelPanel(
@@ -210,6 +260,7 @@ fun PixelPanel(
     borderUnits: Int = 2,
     contentPadding: PaddingValues = PaddingValues(pixelUnits(3)),
     onClick: (() -> Unit)? = null,
+    titleTrailing: (@Composable RowScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val shell = modifier
@@ -226,14 +277,26 @@ fun PixelPanel(
 
     Column(modifier = shell) {
         if (title != null) {
-            PixelTitleStrip(title = title, accent = accent, titleColor = titleColor, fill = fill)
+            PixelTitleStrip(
+                title = title,
+                accent = accent,
+                titleColor = titleColor,
+                fill = fill,
+                trailing = titleTrailing,
+            )
         }
         Column(modifier = Modifier.padding(contentPadding), content = content)
     }
 }
 
 @Composable
-private fun PixelTitleStrip(title: String, accent: Color, titleColor: Color, fill: Color) {
+private fun PixelTitleStrip(
+    title: String,
+    accent: Color,
+    titleColor: Color,
+    fill: Color,
+    trailing: (@Composable RowScope.() -> Unit)?,
+) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -250,8 +313,14 @@ private fun PixelTitleStrip(title: String, accent: Color, titleColor: Color, fil
             color = titleColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.semantics { heading() },
+            // The title only takes the weight when something is competing for the row; without a
+            // trailing slot it stays intrinsically sized, exactly as it was.
+            modifier = (if (trailing != null) Modifier.weight(1f) else Modifier).semantics { heading() },
         )
+        if (trailing != null) {
+            Spacer(Modifier.width(pixelUnits(2)))
+            Row(verticalAlignment = Alignment.CenterVertically, content = trailing)
+        }
     }
     PixelDivider(color = lerp(fill.copy(alpha = 1f), accent, 0.45f))
 }
@@ -259,6 +328,10 @@ private fun PixelTitleStrip(title: String, accent: Color, titleColor: Color, fil
 /**
  * A button that physically depresses: on press the bevel flips and the content shifts one unit
  * down-right, so the face of the button moves rather than just changing colour.
+ *
+ * [bevel] and [pressedBevel] are the two halves of that flip. A tab that is already the live one
+ * pins both to [PixelBevel.PRESSED] so it stays sunk in while it is tapped; a glow-only button
+ * pins both to [PixelBevel.FLAT].
  */
 @Composable
 fun PixelButton(
@@ -271,6 +344,10 @@ fun PixelButton(
     borderUnits: Int = 2,
     contentPadding: PaddingValues = PaddingValues(horizontal = pixelUnits(3), vertical = pixelUnits(2)),
     interactionSource: MutableInteractionSource? = null,
+    bevel: PixelBevel = PixelBevel.RAISED,
+    pressedBevel: PixelBevel = PixelBevel.PRESSED,
+    /** Ink for the whole content slot; an unset one inherits, which is what it did before. */
+    contentColor: Color = LocalContentColor.current,
     content: @Composable RowScope.() -> Unit,
 ) {
     val source = interactionSource ?: remember { MutableInteractionSource() }
@@ -284,7 +361,7 @@ fun PixelButton(
             .pixelSurface(
                 fill = fill,
                 accent = accent,
-                bevel = if (down) PixelBevel.PRESSED else PixelBevel.RAISED,
+                bevel = if (down) pressedBevel else bevel,
                 borderUnits = borderUnits,
                 background = background,
             )
@@ -298,15 +375,17 @@ fun PixelButton(
             .padding(pixelUnits(borderUnits)),
         contentAlignment = Alignment.Center,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            modifier = Modifier
-                .offset(x = shift, y = shift)
-                .graphicsLayer { alpha = if (enabled) 1f else PixelDisabledAlpha }
-                .padding(contentPadding),
-            content = content,
-        )
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .offset(x = shift, y = shift)
+                    .graphicsLayer { alpha = if (enabled) 1f else PixelDisabledAlpha }
+                    .padding(contentPadding),
+                content = content,
+            )
+        }
     }
 }
 
@@ -335,7 +414,8 @@ fun PixelBar(
 ) {
     val value = fraction.coerceIn(0f, 1f)
     val edge = pixelEdgeColor(color, background)
-    val well = lerp(trackColor.copy(alpha = 1f), background.copy(alpha = 1f), 0.30f)
+    // Shallower than a text well: the track is behind the fill, not a hole the fill sits in.
+    val well = pixelWellFill(trackColor, background, depth = 0.30f)
 
     // The bar carries no text of its own; whoever owns the value announces it.
     Canvas(modifier.fillMaxWidth().height(height).clearAndSetSemantics { }) {
@@ -393,12 +473,26 @@ fun PixelBadge(
     /** Defaults to whichever of black or white actually reads on [color]. */
     contentColor: Color = inkFor(color),
     background: Color = MaterialTheme.colorScheme.background,
+    /**
+     * What TalkBack should say instead of the bare [text]. A badge reading "3" or "!" out of
+     * context is noise, so give it the sentence — "3 unread letters" — or pass the empty string
+     * to drop it from the tree when the row around it already says the same thing.
+     */
+    contentDescription: String? = null,
 ) {
+    val readOut = contentDescription
     Box(
         modifier = modifier
             .sizeIn(minWidth = pixelUnits(5), minHeight = pixelUnits(5))
             .pixelSurface(fill = color, accent = color, borderUnits = 1, background = background)
-            .padding(horizontal = pixelUnits(1), vertical = 0.dp),
+            .padding(horizontal = pixelUnits(1), vertical = 0.dp)
+            .then(
+                when {
+                    readOut == null -> Modifier
+                    readOut.isEmpty() -> Modifier.clearAndSetSemantics { }
+                    else -> Modifier.semantics(mergeDescendants = true) { this.contentDescription = readOut }
+                },
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -454,6 +548,524 @@ fun PixelDivider(
         while (x < size.width) {
             drawRect(color, Offset(x, 0f), Size(dash.coerceAtMost(size.width - x), size.height))
             x += dash * 2f
+        }
+    }
+}
+
+/**
+ * A one-of-many choice. A Material `FilterChip` inside a bevelled panel is exactly the second
+ * visual language this kit exists to remove, so the chip is a small panel that sits pressed *in*
+ * while it is the live one — the same "held down" reading the buttons already use.
+ */
+@Composable
+fun PixelChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    fill: Color = MaterialTheme.colorScheme.surfaceVariant,
+    background: Color = MaterialTheme.colorScheme.background,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+    enabled: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(horizontal = pixelUnits(3), vertical = pixelUnits(2)),
+) {
+    // Unselected chips borrow the muted on-surface colour for their edge: a row of chips all
+    // outlined in the accent reads as a row of selected ones.
+    val edgeAccent = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Box(
+        modifier = modifier
+            .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
+            .pixelSurface(
+                fill = if (selected) lerp(fill.copy(alpha = 1f), accent, 0.22f) else fill,
+                accent = edgeAccent,
+                bevel = if (selected) PixelBevel.PRESSED else PixelBevel.RAISED,
+                borderUnits = 1,
+                background = background,
+            )
+            // Role.RadioButton, not Button: "selected" is the state TalkBack has to announce.
+            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .padding(pixelUnits(1))
+            .padding(contentPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = contentColor.copy(alpha = if (enabled) contentColor.alpha else PixelDisabledAlpha),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * A labelled switch. Material's switch is a stadium track with a circular thumb — two shapes the
+ * art never draws — so this is a well with a bevelled block that slides between two notches.
+ *
+ * The whole row is the target: a 48dp switch alone is a small thing to hit next to its own label.
+ */
+@Composable
+fun PixelToggle(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    fill: Color = MaterialTheme.colorScheme.surfaceVariant,
+    background: Color = MaterialTheme.colorScheme.background,
+    labelColor: Color = MaterialTheme.colorScheme.onSurface,
+    enabled: Boolean = true,
+    /** Only for a switch whose off state is not simply "off" — otherwise Role.Switch says it. */
+    stateDescription: String? = null,
+) {
+    val travel = with(LocalDensity.current) { pixelUnits(6).toPx() }
+    // Held as a State and read in the layout lambda: `by` here would recompose the row every
+    // frame the knob is moving.
+    val slide = animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 140),
+        label = "toggle-$label",
+    )
+    val readOut = stateDescription
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = onCheckedChange,
+            )
+            .then(
+                if (readOut != null) {
+                    Modifier.semantics { this.stateDescription = readOut }
+                } else {
+                    Modifier
+                },
+            )
+            .padding(vertical = pixelUnits(1)),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = labelColor.copy(alpha = if (enabled) labelColor.alpha else PixelDisabledAlpha),
+            modifier = Modifier.weight(1f),
+        )
+        Spacer(Modifier.width(pixelUnits(2)))
+        // Off is a plain well; on tints the well itself, so the state survives a colour-blind eye.
+        val trackFill = if (checked) lerp(fill.copy(alpha = 1f), accent, 0.35f) else pixelWellFill(fill, background)
+        Box(
+            modifier = Modifier
+                .size(width = pixelUnits(12), height = pixelUnits(6))
+                .graphicsLayer { alpha = if (enabled) 1f else PixelDisabledAlpha }
+                .pixelSurface(
+                    fill = trackFill,
+                    accent = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    bevel = PixelBevel.PRESSED,
+                    borderUnits = 1,
+                    background = background,
+                ),
+        ) {
+            Box(
+                modifier = Modifier
+                    .offset { IntOffset((travel * slide.value).roundToInt(), 0) }
+                    .size(width = pixelUnits(6), height = pixelUnits(6))
+                    .pixelSurface(
+                        fill = if (checked) accent else fill,
+                        accent = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                        borderUnits = 1,
+                        background = background,
+                    ),
+            )
+        }
+    }
+}
+
+/**
+ * A slider that can only land on a notch.
+ *
+ * Material's slider is a hairline track with a round thumb, so it reads as a foreign control the
+ * moment it sits inside a bevelled panel. This one borrows [PixelBar] for the track and moves a
+ * bevelled block along it, snapping to [notches] equal stops so the value lands on the grid too.
+ */
+@Composable
+fun PixelSlider(
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+    /** What the current value *is* — "70 percent", "Classic". Read out after [label]. */
+    valueLabel: String? = null,
+    valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+    notches: Int = 10,
+    enabled: Boolean = true,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    fill: Color = MaterialTheme.colorScheme.surfaceVariant,
+    background: Color = MaterialTheme.colorScheme.background,
+) {
+    val steps = notches.coerceAtLeast(1)
+    val min = valueRange.start
+    val span = (valueRange.endInclusive - min).takeIf { it > 0f } ?: 1f
+    val current = value.coerceIn(min, valueRange.endInclusive)
+    val fraction = ((current - min) / span).coerceIn(0f, 1f)
+
+    val knobWidth = pixelUnits(5)
+    val knobPx = with(LocalDensity.current) { knobWidth.toPx() }
+    var widthPx by remember { mutableIntStateOf(0) }
+    // Held live: the gesture handlers outlive the composition that installed them.
+    val latestOnValueChange by rememberUpdatedState(onValueChange)
+
+    // Touch x is measured against the knob's travel, not the whole width, so the block ends up
+    // under the finger at both ends instead of running out of room.
+    val report: (Float) -> Unit = { x ->
+        val travel = (widthPx - knobPx).coerceAtLeast(1f)
+        val f = ((x - knobPx / 2f) / travel).coerceIn(0f, 1f)
+        val index = (f * steps).roundToInt().coerceIn(0, steps)
+        latestOnValueChange(min + span * index / steps)
+    }
+    val dragX = remember { mutableStateOf(0f) }
+    val readOut = valueLabel
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .onSizeChanged { widthPx = it.width }
+            // Tap sits outside the drag: the drag node sees the pointer first and only claims it
+            // once it has crossed the slop, so a tap on the track still lands on a notch and a
+            // drag never also fires a tap when the finger lifts.
+            .pointerInput(enabled) {
+                if (enabled) detectTapGestures { offset -> report(offset.x) }
+            }
+            .draggable(
+                state = rememberDraggableState { delta ->
+                    dragX.value += delta
+                    report(dragX.value)
+                },
+                orientation = Orientation.Horizontal,
+                enabled = enabled,
+                onDragStarted = { start ->
+                    dragX.value = start.x
+                    report(start.x)
+                },
+            )
+            .graphicsLayer { alpha = if (enabled) 1f else PixelDisabledAlpha }
+            .semantics {
+                contentDescription = label
+                if (readOut != null) stateDescription = readOut
+                progressBarRangeInfo = ProgressBarRangeInfo(current, valueRange, (steps - 1).coerceAtLeast(0))
+                if (!enabled) disabled()
+                setProgress { target ->
+                    if (!enabled) {
+                        false
+                    } else {
+                        val f = ((target - min) / span).coerceIn(0f, 1f)
+                        latestOnValueChange(min + span * (f * steps).roundToInt() / steps)
+                        true
+                    }
+                }
+            },
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        PixelBar(
+            fraction = fraction,
+            color = accent,
+            segments = steps,
+            height = pixelUnits(6),
+            trackColor = fill,
+            background = background,
+        )
+        Box(
+            modifier = Modifier
+                .offset { IntOffset((((widthPx - knobPx).coerceAtLeast(0f)) * fraction).roundToInt(), 0) }
+                .size(width = knobWidth, height = pixelUnits(9))
+                .pixelSurface(
+                    fill = lerp(fill.copy(alpha = 1f), accent, 0.35f),
+                    accent = accent,
+                    borderUnits = 1,
+                    background = background,
+                ),
+        )
+    }
+}
+
+/**
+ * A text field as a recessed well. Material's outlined field brings its own radius and floating
+ * label; the well is the same shape the kit uses for anything the player can put something into.
+ */
+@Composable
+fun PixelTextWell(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    /** The field's name for TalkBack. Falls back to [placeholder], which is usually the same word. */
+    label: String? = null,
+    placeholder: String? = null,
+    enabled: Boolean = true,
+    singleLine: Boolean = false,
+    minLines: Int = 1,
+    maxLines: Int = 1,
+    textStyle: TextStyle = MaterialTheme.typography.bodyMedium,
+    accent: Color = MaterialTheme.colorScheme.primary,
+    fill: Color = MaterialTheme.colorScheme.surfaceVariant,
+    background: Color = MaterialTheme.colorScheme.background,
+    contentColor: Color = MaterialTheme.colorScheme.onSurface,
+) {
+    val readOut = label ?: placeholder
+    Box(
+        modifier = modifier
+            .heightIn(min = MinTouchTarget)
+            .pixelSurface(
+                fill = pixelWellFill(fill, background),
+                accent = accent,
+                bevel = PixelBevel.PRESSED,
+                borderUnits = 1,
+                background = background,
+            )
+            .padding(horizontal = pixelUnits(2), vertical = pixelUnits(2)),
+        contentAlignment = Alignment.CenterStart,
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = enabled,
+            textStyle = textStyle.copy(color = contentColor),
+            cursorBrush = SolidColor(accent),
+            singleLine = singleLine,
+            minLines = minLines,
+            maxLines = maxLines,
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (readOut != null) {
+                        Modifier.semantics { contentDescription = readOut }
+                    } else {
+                        Modifier
+                    },
+                ),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty() && placeholder != null) {
+                        Text(
+                            text = placeholder,
+                            style = textStyle,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    inner()
+                }
+            },
+        )
+    }
+}
+
+/*
+ * A bitmap font for the HUD.
+ *
+ * A coin count set in Material's typeface sits a hairline stroke and a smooth curve next to art
+ * that has neither, and the eye reads the number as belonging to a different picture. These
+ * glyphs are 3×5 blocks on the same grid as everything else here, so the numerals are made of
+ * the same pixels as the creature standing beside them.
+ *
+ * It is deliberately not a text renderer: no kerning, no fallback, no shaping. Anything outside
+ * the covered set draws as a blank cell, so a label goes through [Text] and a *number* comes
+ * through here.
+ */
+
+/** Ink columns in one glyph cell. */
+const val PixelGlyphWidthUnits: Int = 3
+
+/** Ink rows in one glyph cell. */
+const val PixelGlyphHeightUnits: Int = 5
+
+/** Cell plus the one-unit gap that follows it. */
+const val PixelGlyphAdvanceUnits: Int = 4
+
+/** Rows top to bottom, each a 3-bit mask with the leftmost column in the high bit. */
+private fun glyph(r0: Int, r1: Int, r2: Int, r3: Int, r4: Int): Int =
+    r0 or (r1 shl 3) or (r2 shl 6) or (r3 shl 9) or (r4 shl 12)
+
+private val PixelDigitGlyphs = intArrayOf(
+    glyph(0b111, 0b101, 0b101, 0b101, 0b111),
+    glyph(0b010, 0b110, 0b010, 0b010, 0b111),
+    glyph(0b111, 0b001, 0b111, 0b100, 0b111),
+    glyph(0b111, 0b001, 0b111, 0b001, 0b111),
+    glyph(0b101, 0b101, 0b111, 0b001, 0b001),
+    glyph(0b111, 0b100, 0b111, 0b001, 0b111),
+    glyph(0b111, 0b100, 0b111, 0b101, 0b111),
+    glyph(0b111, 0b001, 0b010, 0b010, 0b010),
+    glyph(0b111, 0b101, 0b111, 0b101, 0b111),
+    glyph(0b111, 0b101, 0b111, 0b001, 0b111),
+)
+
+/** The bits for [c], or an empty cell for anything the font does not carry. */
+private fun glyphBits(c: Char): Int = when (c) {
+    in '0'..'9' -> PixelDigitGlyphs[c - '0']
+    '%' -> glyph(0b101, 0b001, 0b010, 0b100, 0b101)
+    '\u00B7' -> glyph(0b000, 0b000, 0b010, 0b000, 0b000)
+    '/' -> glyph(0b001, 0b001, 0b010, 0b100, 0b100)
+    '+' -> glyph(0b000, 0b010, 0b111, 0b010, 0b000)
+    '-' -> glyph(0b000, 0b000, 0b111, 0b000, 0b000)
+    ':' -> glyph(0b000, 0b010, 0b000, 0b010, 0b000)
+    '.' -> glyph(0b000, 0b000, 0b000, 0b000, 0b010)
+    'x', 'X', '\u00D7' -> glyph(0b000, 0b101, 0b010, 0b101, 0b000)
+    else -> 0
+}
+
+/** How wide [text] will be at [unit] device pixels per block, gap after the last glyph removed. */
+fun pixelDigitsWidth(text: String, unit: Float): Float =
+    if (text.isEmpty()) 0f else (PixelGlyphAdvanceUnits * text.length - 1) * unit
+
+/**
+ * Draws [text] as blocks with its top-left at [origin], and returns the width it covered so a
+ * caller laying numerals out along a row can advance by it.
+ *
+ * Every run of set bits in a row becomes one rect, which keeps a four-digit readout at a couple
+ * of dozen draw calls and allocates nothing — [Offset] and [Size] are value classes.
+ */
+fun DrawScope.drawPixelDigits(
+    text: String,
+    color: Color,
+    origin: Offset = Offset.Zero,
+    unit: Float = gridUnit(),
+): Float {
+    val u = unit.coerceAtLeast(1f)
+    for (i in text.indices) {
+        val bits = glyphBits(text[i])
+        if (bits == 0) continue
+        val glyphLeft = origin.x + i * PixelGlyphAdvanceUnits * u
+        for (row in 0 until PixelGlyphHeightUnits) {
+            val rowBits = (bits shr (row * PixelGlyphWidthUnits)) and 0b111
+            if (rowBits == 0) continue
+            var col = 0
+            while (col < PixelGlyphWidthUnits) {
+                if ((rowBits shr (PixelGlyphWidthUnits - 1 - col)) and 1 == 0) {
+                    col++
+                    continue
+                }
+                var run = 1
+                while (
+                    col + run < PixelGlyphWidthUnits &&
+                    (rowBits shr (PixelGlyphWidthUnits - 1 - col - run)) and 1 == 1
+                ) {
+                    run++
+                }
+                drawRect(
+                    color = color,
+                    topLeft = Offset(glyphLeft + col * u, origin.y + row * u),
+                    size = Size(run * u, u),
+                )
+                col += run
+            }
+        }
+    }
+    return pixelDigitsWidth(text, u)
+}
+
+/**
+ * A HUD numeral drawn from [drawPixelDigits]. Covers `0`-`9`, `%`, `·`, `/`, `+`, `-`, `:`, `.`
+ * and `x`; anything else comes out blank.
+ *
+ * [scale] multiplies the grid, so `scale = 2` is a 24×40dp digit. The canvas is decorative by
+ * default — a bare "12" is not worth reading aloud — so either pass [contentDescription] or let
+ * the row around it own the announcement.
+ */
+@Composable
+fun PixelDigits(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.onSurface,
+    scale: Int = 1,
+    contentDescription: String? = null,
+) {
+    val cell = PixelUnit * scale.coerceAtLeast(1)
+    val widthUnits = if (text.isEmpty()) 0 else PixelGlyphAdvanceUnits * text.length - 1
+    val readOut = contentDescription
+    Canvas(
+        modifier = modifier
+            .size(width = cell * widthUnits, height = cell * PixelGlyphHeightUnits)
+            .then(
+                if (readOut != null) {
+                    Modifier.semantics { this.contentDescription = readOut }
+                } else {
+                    Modifier.clearAndSetSemantics { }
+                },
+            ),
+    ) {
+        drawPixelDigits(text, color, Offset.Zero, floor(cell.toPx()).coerceAtLeast(1f))
+    }
+}
+
+/**
+ * The phase of the kit's shine sweep, wrapping 0f..1f once every [periodMillis].
+ *
+ * Exposed on its own because the item art already takes a phase (`ItemIcon(shinePhase = …)`) and
+ * had no way to be given one — every glint in the app should be on the same clock.
+ *
+ * Returned as a [State] rather than a value: read it inside a draw or layout lambda and the frame
+ * costs a redraw instead of a recomposition.
+ */
+@Composable
+fun rememberPixelShinePhase(enabled: Boolean = true, periodMillis: Int = 2400): State<Float> {
+    val transition = rememberInfiniteTransition(label = "pixel-shine")
+    return transition.animateFloat(
+        initialValue = 0f,
+        // Equal endpoints rather than a branch: the composable has to be called unconditionally.
+        targetValue = if (enabled) 1f else 0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = periodMillis.coerceAtLeast(1), easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "pixel-shine-phase",
+    )
+}
+
+/**
+ * A band of light that sweeps across whatever it decorates — for a newly unlocked item, or the
+ * one tile the screen wants the eye to land on.
+ *
+ * The band is a staircase of whole blocks rather than a smooth gradient, and it fades in and out
+ * at the ends of its travel so it reads as a glint rather than as a wipe. Draws over the content,
+ * so put it last in the chain; it is pure decoration and adds no semantics.
+ */
+@Composable
+fun Modifier.pixelShine(
+    enabled: Boolean = true,
+    color: Color = Color.White,
+    alpha: Float = 0.22f,
+    periodMillis: Int = 2400,
+    bandUnits: Int = 3,
+    slantUnits: Int = 2,
+): Modifier {
+    val phase = rememberPixelShinePhase(enabled = enabled, periodMillis = periodMillis)
+    return this.drawWithContent {
+        drawContent()
+        if (!enabled) return@drawWithContent
+        val u = gridUnit()
+        val rows = ceil(size.height / u).toInt()
+        if (rows <= 0 || size.width <= 0f) return@drawWithContent
+        val band = u * bandUnits.coerceAtLeast(1)
+        val slant = u * slantUnits.coerceAtLeast(0)
+        val lean = slant * (rows - 1)
+        // Travel starts fully off the leading edge and ends fully off the trailing one.
+        val start = -band - lean + phase.value * (size.width + band + lean)
+        val fade = sin(phase.value * PI).toFloat()
+        val ink = color.copy(alpha = color.alpha * alpha * fade)
+        if (ink.alpha <= 0.002f) return@drawWithContent
+        for (row in 0 until rows) {
+            val y = row * u
+            // Lower rows lag, so the band leans like light coming from above.
+            val x = start + (rows - 1 - row) * slant
+            val left = x.coerceAtLeast(0f)
+            val right = (x + band).coerceAtMost(size.width)
+            if (right <= left) continue
+            drawRect(ink, Offset(left, y), Size(right - left, (size.height - y).coerceAtMost(u)))
         }
     }
 }
