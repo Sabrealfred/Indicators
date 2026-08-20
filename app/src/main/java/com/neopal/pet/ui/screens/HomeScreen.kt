@@ -80,6 +80,7 @@ import com.neopal.pet.ui.components.FaceButton
 import com.neopal.pet.ui.components.LevelPill
 import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.PetStage
+import com.neopal.pet.ui.components.PixelPanel
 import com.neopal.pet.ui.components.StatBar
 import com.neopal.pet.ui.components.ToastBanner
 import com.neopal.pet.ui.components.WindowSize
@@ -497,15 +498,15 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(owned) { item ->
-                    Card(
+                    PixelPanel(
                         onClick = { onFeed(item.id) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        accent = androidx.compose.ui.graphics.Color(item.tint),
+                        background = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.width(104.dp),
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.padding(10.dp),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
                             Box(
                                 modifier = Modifier
@@ -544,15 +545,13 @@ private fun AchievementBanner(
         kotlinx.coroutines.delay(2_800)
         onDismiss()
     }
-    Card(
+    PixelPanel(
         modifier = modifier.padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = NeoColors.SurfaceCard),
+        fill = NeoColors.SurfaceCard,
+        accent = NeoColors.NeonYellow,
+        background = NeoColors.SurfaceDark,
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(12.dp),
-        ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.EmojiEvents, contentDescription = null, tint = NeoColors.NeonYellow, modifier = Modifier.size(28.dp))
             Spacer(Modifier.width(10.dp))
             Column {
@@ -581,9 +580,10 @@ private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modif
             .clickable { if (step < steps.lastIndex) step += 1 else onDone() },
         contentAlignment = Alignment.Center,
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = NeoColors.SurfaceCard),
+        PixelPanel(
+            fill = NeoColors.SurfaceCard,
+            accent = NeoColors.NeonCyan,
+            background = NeoColors.ChassisBlack,
             modifier = Modifier.padding(28.dp),
         ) {
             Column(
@@ -638,9 +638,10 @@ private fun OfflineReportCard(
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = NeoColors.SurfaceCard),
+        PixelPanel(
+            fill = NeoColors.SurfaceCard,
+            accent = NeoColors.NeonCyan,
+            background = NeoColors.ChassisBlack,
             modifier = Modifier.padding(26.dp),
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
