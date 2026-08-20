@@ -76,16 +76,17 @@ fun DrawScope.drawScene(
     // 4. Window with the sky behind it, plus sun, moon, stars and clouds.
     drawWindow(themeId, palette, n, twilight, timeSeconds, parallax)
 
-    // 5. Theme props sitting against the wall.
-    drawThemeProps(themeId, palette, timeSeconds, horizon, parallax)
-
-    // 6. Floor.
+    // 5. Floor. It goes down before the props so that each prop can drop its own shadow onto
+    // it; drawing the floor last would paint over every contact shadow in the room.
     drawDitheredVertical(palette.floor, palette.floorShade, Rect(0f, horizon, w, h), bands = 4)
     drawFloorboards(palette, horizon, c)
 
-    // 7. Ambient occlusion along the join. Cheap, and the single change that stops the room
+    // 6. Ambient occlusion along the join. Cheap, and the single change that stops the room
     // looking like two rectangles stacked on top of each other.
     drawContactShadow(palette, horizon, c)
+
+    // 7. Theme props, each sitting in its own pool of shade.
+    drawThemeProps(themeId, palette, timeSeconds, horizon, parallax)
 
     // 8. Daylight pouring through the window onto the floor.
     if (!lightsOff && daylight > 0.02f) {
@@ -146,7 +147,7 @@ private fun bayer(x: Int, y: Int): Float =
     (BAYER_8[(y and 7) * 8 + (x and 7)] + 0.5f) / 64f
 
 /** How far a seam between two tones is allowed to spread. Higher keeps more of the flat core. */
-private const val SEAM_SHARPNESS = 6f
+private const val SEAM_SHARPNESS = 4.5f
 
 /** The buffer is authored at this height; everything else is measured in fractions of it. */
 private const val ART_HEIGHT = 200f
@@ -519,8 +520,8 @@ private fun DrawScope.drawWindowLight(
     for (gy in gy0 until gy1) {
         val t = (gy - gy0).toFloat() / rows
         val onFloor = gy * cell >= horizon
-        val l = left - t * w * 0.34f
-        val r = left + winW - t * w * 0.06f
+        val l = max(0f, left - t * w * 0.34f)
+        val r = min(w, left + winW - t * w * 0.06f)
         val slab = (t * slabs).toInt().coerceIn(0, slabs - 1)
         val fade = 1f - slab / slabs.toFloat()
         // The wall only catches a glancing amount; the floor is where the light pools.

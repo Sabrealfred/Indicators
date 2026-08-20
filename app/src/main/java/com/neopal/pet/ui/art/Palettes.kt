@@ -191,12 +191,12 @@ object Palettes {
         fun evening(c: Color, keep: Float = 1f): Color {
             val k = t * keep
             val shifted = Color(
-                red = c.red * (1f - 0.52f * k),
-                green = c.green * (1f - 0.36f * k),
-                blue = c.blue * (1f - 0.10f * k),
+                red = c.red * (1f - 0.55f * k),
+                green = c.green * (1f - 0.40f * k),
+                blue = c.blue * (1f - 0.22f * k),
                 alpha = c.alpha,
             )
-            return lerp(shifted, palette.nightTint.copy(alpha = c.alpha), 0.34f * k)
+            return lerp(shifted, palette.nightTint.copy(alpha = c.alpha), 0.42f * k)
         }
         return palette.copy(
             wallTop = evening(palette.wallTop),
