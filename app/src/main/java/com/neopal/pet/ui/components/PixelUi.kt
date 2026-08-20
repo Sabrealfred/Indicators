@@ -88,10 +88,6 @@ private const val PixelDisabledAlpha = 0.38f
 private const val HighlightAlpha = 0.16f
 
 /**
- * A border colour derived from [accent] rather than picked. Blending toward [background] keeps
- * the edge in the same family as whatever it frames, and guarantees it is never pure black.
- */
-/**
  * Black or white, whichever reads on [fill]. Leaving this to the caller is how a badge ends up
  * as white text on gold: every call site has to remember, and one of them never does.
  */
@@ -103,10 +99,13 @@ fun inkFor(fill: Color): Color =
  * Kept here rather than lerped by hand at each call site so "unavailable" looks like one thing
  * across the whole app.
  */
-@Composable
 fun dimmedFor(color: Color, background: Color, amount: Float = 0.7f): Color =
     lerp(color, background, amount.coerceIn(0f, 1f))
 
+/**
+ * A border colour derived from [accent] rather than picked. Blending toward [background] keeps
+ * the edge in the same family as whatever it frames, and guarantees it is never pure black.
+ */
 fun pixelEdgeColor(accent: Color, background: Color, toward: Float = 0.42f): Color =
     lerp(accent.copy(alpha = 1f), background.copy(alpha = 1f), toward.coerceIn(0f, 1f))
 
@@ -167,19 +166,18 @@ private fun DrawScope.drawPixelSurface(
 }
 
 /**
+ * Padding that clears the bevel. `pixelSurface` pays out exactly the border width, so opaque
+ * content laid straight on top paints over the highlight edge and the panel loses its shape.
+ */
+fun bevelSafePadding(borderUnits: Int = 2): Dp = pixelUnits(borderUnits + 1)
+
+/**
  * Gives any composable the kit's bevelled, notched surface: a solid outer edge, a lighter
  * highlight on the top-left and a darker one on the bottom-right.
  *
  * Order matters — put this *after* any `graphicsLayer` so the surface scales with the content,
  * and *before* `padding` so the padding lands inside the border.
  */
-@Composable
-/**
- * Padding that clears the bevel. `pixelSurface` pays out exactly the border width, so opaque
- * content laid straight on top paints over the highlight edge and the panel loses its shape.
- */
-fun bevelSafePadding(borderUnits: Int = 2): Dp = pixelUnits(borderUnits + 1)
-
 @Composable
 fun Modifier.pixelSurface(
     fill: Color,
@@ -413,8 +411,6 @@ fun PixelBadge(
     }
 }
 
-/** A dashed rule built from whole blocks rather than a 1dp hairline. */
-@Composable
 /**
  * The vertical twin of [PixelDivider], for timelines and rails. The diary had to hand-roll one
  * because the kit only shipped the horizontal case.
@@ -440,6 +436,7 @@ fun PixelRail(
     }
 }
 
+/** A dashed rule built from whole blocks rather than a 1dp hairline. */
 @Composable
 fun PixelDivider(
     modifier: Modifier = Modifier,
