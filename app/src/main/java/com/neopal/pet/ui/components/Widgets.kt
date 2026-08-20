@@ -118,7 +118,7 @@ fun StatBar(
         if (!compact) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (icon != null) {
-                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(pixelUnits(4)))
                     Spacer(Modifier.width(pixelUnits(1)))
                 }
                 Text(
@@ -130,12 +130,13 @@ fun StatBar(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                Spacer(Modifier.width(pixelUnits(1)))
-                Text(
+                Spacer(Modifier.width(pixelUnits(2)))
+                // The value is a readout, so it is built from the same blocks as the meter under
+                // it; the name beside it is a word and stays in the real typeface. The glyphs are
+                // five units tall, which is what sets the height of this row now.
+                PixelDigits(
                     text = "$rounded",
-                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
                 )
             }
             Spacer(Modifier.height(pixelUnits(1)))
@@ -361,19 +362,21 @@ fun CoinPill(coins: Int, modifier: Modifier = Modifier) {
         accent = NeoColors.NeonYellow,
         background = NeoColors.SurfaceDark,
         borderUnits = 1,
-        contentPadding = PaddingValues(horizontal = pixelUnits(2), vertical = pixelUnits(1)),
+        // The count is now five units tall rather than a line of 12sp type, so the pill takes its
+        // breathing room from the grid on both axes instead of padding the sides harder.
+        contentPadding = PaddingValues(pixelUnits(1)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // A four-by-four pixel coin rather than a vector circle: at 12dp a stroked circle is
-            // the one antialiased curve left on the screen and it shows.
-            Canvas(Modifier.size(pixelUnits(3))) {
+            // A five-by-five pixel coin rather than a vector circle: at five units every pixel of
+            // it is exactly one grid unit, and it stands the same height as the numerals it labels.
+            Canvas(Modifier.size(pixelUnits(5))) {
                 val u = size.minDimension / 5f
                 drawRect(NeoColors.NeonYellow, Offset(u, 0f), Size(u * 3f, u * 5f))
                 drawRect(NeoColors.NeonYellow, Offset(0f, u), Size(u * 5f, u * 3f))
                 drawRect(Color(0xFF8A6A00), Offset(u * 2f, u), Size(u, u * 3f))
             }
             Spacer(Modifier.width(pixelUnits(2)))
-            Text("$coins", style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDark, maxLines = 1)
+            PixelDigits(text = "$coins", color = NeoColors.OnDark)
         }
     }
 }
