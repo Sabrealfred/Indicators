@@ -184,6 +184,9 @@ object Simulation {
         }
 
         current = current.copy(lastTickMillis = nowMillis, rngSeed = random.nextLong())
+        // Missions close out here rather than in the step loop: a long absence crosses several
+        // day boundaries at once, and only the final one is the day the player is looking at.
+        current = Missions.rollOver(current, config, events)
         val (withAchievements, unlocked) = Achievements.evaluate(current)
         unlocked.forEach { events += GameEvent.Unlocked(it) }
         // The diary is written from the same events the UI reacts to, so the two can never disagree.

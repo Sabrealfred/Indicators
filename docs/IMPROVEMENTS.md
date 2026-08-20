@@ -158,7 +158,7 @@ Un agente de diseño auditó el simulador contra el código y encontró tres cos
 |---|--------|--------|
 | 95 | El diario se hereda entre generaciones: un libro familiar | ✅ |
 | 96 | Cartas de hito ("tu mascota cumplió 5 días") como recuerdo coleccionable | 🔜 |
-| 97 | Misiones diarias y racha de días cuidando | 🔜 |
+| 97 | Misiones diarias y racha de días cuidando | ✅ (dominio + VM) 🔜 (pantalla) |
 | 98 | Resumen de vida al morir, compartible como imagen | 🔜 |
 | 99 | Sincronización en la nube y traspaso entre dispositivos | 💡 |
 | 100 | Tests de UI con capturas de regresión visual para el arte procedural | 🔜 |

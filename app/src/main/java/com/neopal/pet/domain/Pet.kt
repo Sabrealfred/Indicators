@@ -172,6 +172,14 @@ data class PetState(
     val album: List<AlbumEntry> = emptyList(),
     /** The pet's own diary, written by the simulation as things happen to it. */
     val chronicle: List<ChronicleEntry> = emptyList(),
+
+    /** Counters as they stood when the current pet day began; daily progress is the difference. */
+    val dayLedger: DayLedger = DayLedger(),
+    /** Today's missions whose reward has already been collected. Cleared at every rollover. */
+    val claimedMissionIds: Set<String> = emptySet(),
+    /** Consecutive pet days finishing every mission. Broken by a gap, not just by a bad day. */
+    val careStreakDays: Int = 0,
+    val bestCareStreak: Int = 0,
     val rngSeed: Long = 0L,
 ) {
     val isEgg: Boolean get() = stage == LifeStage.EGG

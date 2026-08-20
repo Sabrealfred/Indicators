@@ -15,6 +15,8 @@ import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
+import com.neopal.pet.domain.MissionProgress
+import com.neopal.pet.domain.Missions
 import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Simulation
@@ -216,6 +218,40 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         runAction(if (won) Sfx.LEVEL_UP else Sfx.GAME_MISS) {
             CareActions.finishGame(it, won, score, gameName, gameId, points)
         }
+
+    /**
+     * Today's missions with progress attached. Derived rather than stored, because progress is
+     * itself a derivation — see [com.neopal.pet.domain.DayLedger].
+     */
+    fun missions(): List<MissionProgress> =
+        _ui.value.pet?.let { Missions.today(it) } ?: emptyList()
+
+    /**
+     * Collects every finished mission. This is not a [CareActions] action: it moves no stat and
+     * the pet is not the one doing it, so it does not belong in the same list as feeding.
+     */
+    fun claimMissions() {
+        val pet = _ui.value.pet ?: return
+        val events = mutableListOf<GameEvent>()
+        val (updated, reward) = Missions.claim(pet, events)
+        if (reward.missions.isEmpty()) {
+            play(Sfx.DENY)
+            return
+        }
+        play(Sfx.COIN)
+        _ui.update {
+            it.copy(
+                pet = updated,
+                animation = PetAnimation.HAPPY,
+                animationId = it.animationId + 1,
+                deltas = statDeltas(pet, updated),
+            )
+        }
+        val label = if (reward.missions.size == 1) reward.missions.first().title else "${reward.missions.size} missions"
+        showToast("$label complete — +${reward.coins} coins")
+        handleEvents(events, offline = false)
+        persist(updated)
+    }
 
     /** Runs one pure action against the current state and folds the result into the UI. */
     private fun runAction(sfx: Sfx, block: (PetState) -> ActionResult) {
