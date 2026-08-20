@@ -55,6 +55,8 @@ import com.neopal.pet.ui.art.CreatureSpec
 import com.neopal.pet.ui.art.ParticleKind
 import com.neopal.pet.ui.art.ParticleSystem
 import com.neopal.pet.ui.art.PixelRenderer
+import com.neopal.pet.ui.art.SceneProp
+import com.neopal.pet.ui.art.ScenePropState
 import com.neopal.pet.ui.art.drawCreature
 import com.neopal.pet.ui.art.drawPoops
 import com.neopal.pet.ui.art.drawScene
@@ -64,6 +66,7 @@ import com.neopal.pet.ui.art.drawSickAura
 import com.neopal.pet.ui.art.drawSleepVignette
 import com.neopal.pet.ui.art.drawWeather
 import com.neopal.pet.ui.art.pingPong
+import com.neopal.pet.ui.art.scenePropHits
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -157,6 +160,9 @@ fun PetStage(
     var shake by remember { mutableFloatStateOf(0f) }
     var pointerX by remember { mutableFloatStateOf(0.5f) }
     var isStroking by remember { mutableStateOf(false) }
+    // The lamp and the poster. View state on purpose: nothing in the save file describes a room's
+    // light switch, and the ViewModel is not ours to extend.
+    var props by remember { mutableStateOf(ScenePropState()) }
     // Where the pet has wandered to, 0..1 across the floor, and which way it is facing.
     var wanderX by remember { mutableFloatStateOf(0.5f) }
     var wanderTarget by remember { mutableFloatStateOf(0.5f) }
@@ -304,8 +310,9 @@ fun PetStage(
             timeSeconds = time,
             // In pixel mode the light wash is drawn after the blit, at full resolution.
             lightsOff = state.lightsOff && !config.pixelMode,
-            parallax = quantise(sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f, steps = 12f),
+            parallax = sceneParallax(time, pointerX),
             petDay = day,
+            props = props,
         )
         drawPoops(state.poops, time)
         // Every third pet day turns wet, and the space and arcade rooms are indoors.
@@ -366,13 +373,29 @@ fun PetStage(
                 .pointerInput(state.poops, state.isDead) {
                     detectTapGestures(
                         onTap = { position ->
-                            if (hitsPoop(position, size.width.toFloat(), size.height.toFloat(), live.poops)) {
-                                onScoop()
-                            } else {
-                                onTap()
+                            val w = size.width.toFloat()
+                            val h = size.height.toFloat()
+                            when {
+                                hitsPoop(position, w, h, live.poops) -> onScoop()
+                                // Furniture answers first: a finger on the lamp is not also a poke.
+                                else -> {
+                                    val prop = propAt(position, w, h, live.roomTheme, sceneParallax(time, pointerX))
+                                    if (prop != null) props = props.withTap(prop, time) else onTap()
+                                }
                             }
                         },
-                        onDoubleTap = { onDoubleTap() },
+                        onDoubleTap = { position ->
+                            // A quick second tap on a prop is still aimed at the prop. Without this
+                            // the tap detector swallows both taps and tickles the pet instead.
+                            val prop = propAt(
+                                position,
+                                size.width.toFloat(),
+                                size.height.toFloat(),
+                                live.roomTheme,
+                                sceneParallax(time, pointerX),
+                            )
+                            if (prop != null) props = props.withTap(prop, time) else onDoubleTap()
+                        },
                         onLongPress = { onLongPress() },
                     )
                 }
@@ -467,6 +490,41 @@ private fun DrawScope.drawAtmosphere(night: Float, strength: Float) {
 
 /** Rounds a continuous value to [steps] discrete positions, to keep motion off sub-pixel drift. */
 private fun quantise(value: Float, steps: Float): Float = (value * steps).roundToInt() / steps
+
+/**
+ * The room's parallax offset. Shared by the drawing and the hit test so that a prop and its tap
+ * target cannot drift apart.
+ */
+private fun sceneParallax(time: Float, pointerX: Float): Float =
+    quantise(sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f, steps = 12f)
+
+/**
+ * The prop under a tap, or null. [scenePropHits] builds a list, so this belongs on a finger-down
+ * and nowhere near the draw path.
+ */
+private fun propAt(
+    position: Offset,
+    width: Float,
+    height: Float,
+    themeId: String,
+    parallax: Float,
+): SceneProp? {
+    val hits = scenePropHits(themeId, width, height, parallax)
+    for (index in hits.indices) {
+        val hit = hits[index]
+        if (hit.bounds.contains(position)) return hit.prop
+    }
+    return null
+}
+
+/**
+ * The lamp switches, the poster turns over, and both flinch under the finger. The variant is left
+ * to run past four: the art wraps it, so there is no second copy of that number to keep in step.
+ */
+private fun ScenePropState.withTap(prop: SceneProp, now: Float): ScenePropState = when (prop) {
+    SceneProp.LAMP -> copy(lampOn = !lampOn, tapped = prop, tappedAt = now)
+    SceneProp.POSTER -> copy(posterVariant = posterVariant + 1, tapped = prop, tappedAt = now)
+}
 
 /** True when a tap landed on one of the piles drawn along the floor. */
 private fun hitsPoop(position: Offset, width: Float, height: Float, poops: Int): Boolean {

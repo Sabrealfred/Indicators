@@ -2,6 +2,7 @@
 
 package com.neopal.pet.ui.screens
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +48,7 @@ import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.ui.PetViewModel
-import com.neopal.pet.ui.art.ItemIcon
+import com.neopal.pet.ui.art.drawItem
 import com.neopal.pet.ui.components.CoinPill
 import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.PixelBadge
@@ -57,6 +58,7 @@ import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelPanel
 import com.neopal.pet.ui.components.pixelSurface
 import com.neopal.pet.ui.components.pixelUnits
+import com.neopal.pet.ui.components.rememberPixelShinePhase
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.abs
 
@@ -75,6 +77,14 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         2 -> ItemCatalog.ofKind(ItemKind.TOY)
         3 -> ItemCatalog.hats
         else -> ItemCatalog.rooms
+    }
+
+    // The dearest thing on this shelf the player can afford and does not already own: the one
+    // tile a glint is worth spending on, and it climbs the shelf as coins come in. A shop where
+    // every tile sparkles points at nothing.
+    val featured = remember(items, pet.coins, pet.inventory) {
+        items.filter { it.price > 0 && pet.coins >= it.price && (pet.inventory[it.id] ?: 0) == 0 }
+            .maxByOrNull { it.price }
     }
 
     Column(
@@ -109,7 +119,12 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(pixelUnits(3)),
         ) {
             items(items) { item ->
-                ShopCard(item = item, pet = pet, onClick = { inspecting = item })
+                ShopCard(
+                    item = item,
+                    pet = pet,
+                    shine = item.id == featured?.id,
+                    onClick = { inspecting = item },
+                )
             }
         }
     }
@@ -133,13 +148,16 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
 }
 
 @Composable
-private fun ShopCard(item: Item, pet: PetState, onClick: () -> Unit) {
+private fun ShopCard(item: Item, pet: PetState, shine: Boolean, onClick: () -> Unit) {
     val owned = pet.inventory[item.id] ?: 0
     val equipped = pet.equippedHat == item.id || pet.roomTheme == item.id
     val canAfford = pet.coins >= item.price
     // Each item frames itself in its own colour, so a shelf of them reads as distinct things.
     val tint = Color(item.tint)
     val fill = MaterialTheme.colorScheme.surfaceVariant
+    // On the kit's shine clock, so every glint in the app sweeps together. Read inside the draw
+    // lambda below, never here, where it would recompose the whole card sixty times a second.
+    val shinePhase = rememberPixelShinePhase(enabled = shine)
 
     PixelPanel(
         modifier = Modifier.fillMaxWidth(),
@@ -161,7 +179,9 @@ private fun ShopCard(item: Item, pet: PetState, onClick: () -> Unit) {
                 .padding(pixelUnits(3)),
             contentAlignment = Alignment.Center,
         ) {
-            ItemIcon(item.iconKey, tint, Modifier.size(pixelUnits(14)), variant = item.id)
+            Canvas(modifier = Modifier.size(pixelUnits(14))) {
+                drawItem(item.iconKey, tint, variant = item.id, shinePhase = shinePhase.value)
+            }
             if (equipped) {
                 PixelBadge(
                     text = "EQUIPPED",

@@ -25,6 +25,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -45,6 +46,7 @@ import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.PixelBevel
 import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelShine
 import com.neopal.pet.ui.components.pixelSurface
 import com.neopal.pet.ui.components.pixelUnits
 
@@ -56,6 +58,9 @@ import com.neopal.pet.ui.components.pixelUnits
 fun AlbumScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
+    // What was already on the shelf when the player walked in. Anything that appears afterwards is
+    // a shot they just took, and that card — only that card — is worth a sweep of light.
+    val onArrival = remember { pet.album.mapTo(HashSet()) { it.id } }
 
     Column(
         modifier = Modifier
@@ -118,14 +123,16 @@ fun AlbumScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(pixelUnits(3)),
                 horizontalArrangement = Arrangement.spacedBy(pixelUnits(3)),
             ) {
-                items(pet.album.reversed()) { entry -> AlbumCard(entry) }
+                items(pet.album.reversed()) { entry ->
+                    AlbumCard(entry, fresh = entry.id !in onArrival)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun AlbumCard(entry: AlbumEntry) {
+private fun AlbumCard(entry: AlbumEntry, fresh: Boolean) {
     val room = Palettes.room(entry.roomTheme)
     // The drawing carries no information the caption does not, so the whole card is one node.
     val readOut = stringResource(
@@ -138,7 +145,11 @@ private fun AlbumCard(entry: AlbumEntry) {
     // the mount, and the caption on the plate along the top.
     val frame = NeoAccents.gold
     PixelPanel(
-        modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = readOut },
+        modifier = Modifier
+            .semantics(mergeDescendants = true) { contentDescription = readOut }
+            // Over the whole card, brass and all, so a new photograph catches the light the way a
+            // print does when you tilt it.
+            .pixelShine(enabled = fresh, color = frame),
         accent = frame,
         title = entry.title,
         contentPadding = PaddingValues(pixelUnits(2)),
