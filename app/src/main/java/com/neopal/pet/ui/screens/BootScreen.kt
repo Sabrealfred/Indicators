@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -29,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.EvolutionBranch
@@ -38,6 +40,9 @@ import com.neopal.pet.domain.Species
 import com.neopal.pet.ui.art.CreatureFrame
 import com.neopal.pet.ui.art.CreatureSpec
 import com.neopal.pet.ui.art.drawCreature
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
 import kotlin.math.sin
@@ -82,7 +87,7 @@ fun BootScreen(
                     radius = 1400f,
                 ),
             )
-            .clickable(enabled = ready) { onContinue(hasSave) },
+            .clickable(enabled = ready, onClickLabel = "Start") { onContinue(hasSave) },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -121,12 +126,25 @@ fun BootScreen(
                 color = NeoColors.NeonCyan.copy(alpha = glow),
             )
             Spacer(Modifier.height(36.dp))
-            Text(
-                text = if (ready) "TAP TO START" else "LOADING...",
-                style = MaterialTheme.typography.labelMedium,
-                color = NeoColors.OnDarkMuted.copy(alpha = if (ready) glow else 0.5f),
-                textAlign = TextAlign.Center,
-            )
+            // The prompt is the one piece of chrome on the boot screen, so it wears the kit:
+            // a raised face once the save is in, held pressed-in while there is nothing to tap.
+            PixelPanel(
+                modifier = Modifier.graphicsLayer { alpha = if (ready) glow else 0.5f },
+                fill = NeoColors.SurfaceCard,
+                accent = if (ready) NeoColors.NeonCyan else NeoColors.OnDarkMuted,
+                background = NeoColors.ChassisBlack,
+                bevel = if (ready) PixelBevel.RAISED else PixelBevel.PRESSED,
+                contentPadding = PaddingValues(horizontal = pixelUnits(4), vertical = pixelUnits(2)),
+            ) {
+                Text(
+                    text = if (ready) "TAP TO START" else "LOADING...",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (ready) NeoColors.OnDark else NeoColors.OnDarkMuted,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
+            }
         }
 
         // Two rail stripes framing the screen, the visual signature of the console look.

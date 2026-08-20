@@ -12,32 +12,45 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.ui.components.MinTouchTarget
+import com.neopal.pet.ui.components.PixelButton
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.sin
+
+/** The night the memorial sits in. The lower colour is what every bevel is derived against. */
+private val MemorialSky = Color(0xFF141726)
+private val MemorialDeep = Color(0xFF08090F)
+
+/** Stone, not chrome: the plaque borrows the gravestone's own greys. */
+private val PlaqueFill = Color(0xFF1A1D29)
+private val PlaqueEdge = Color(0xFF4A4E5A)
 
 /**
  * End of a run. Shows what the pet achieved, how it died, and hands the player straight into
@@ -66,12 +79,12 @@ fun MemorialScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(
-                Brush.verticalGradient(listOf(Color(0xFF141726), Color(0xFF08090F))),
+                Brush.verticalGradient(listOf(MemorialSky, MemorialDeep)),
             )
-            .padding(24.dp),
+            .padding(pixelUnits(6)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(pixelUnits(5)))
         Text("IN MEMORY", style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDarkMuted)
         Text(pet.name.uppercase(), style = MaterialTheme.typography.displayLarge, color = NeoColors.OnDark)
 
@@ -86,7 +99,7 @@ fun MemorialScreen(
                 val w = size.width
                 val h = size.height
                 drawRoundRect(
-                    color = Color(0xFF4A4E5A),
+                    color = PlaqueEdge,
                     topLeft = Offset(w * 0.30f, h * 0.35f),
                     size = Size(w * 0.40f, h * 0.45f),
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(w * 0.20f, w * 0.20f),
@@ -122,7 +135,7 @@ fun MemorialScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = NeoColors.NeonRed,
         )
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(pixelUnits(3)))
         Text(
             text = "Lived ${pet.ageInPetDays(config)} days as a ${pet.stage.displayName}, " +
                 "${pet.branch.displayName.lowercase()} to the end.",
@@ -130,20 +143,30 @@ fun MemorialScreen(
             color = NeoColors.OnDarkMuted,
             textAlign = TextAlign.Center,
         )
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(pixelUnits(4)))
         // The last thing it wrote, not a tally of what you got wrong. A memorial that prints a
         // mistake counter turns a death into an invoice.
         pet.chronicle.lastOrNull()?.let { last ->
-            Text(
-                text = "“${last.text}”",
-                style = MaterialTheme.typography.bodyMedium,
-                fontStyle = FontStyle.Italic,
-                color = NeoColors.OnDark,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = 8.dp),
-            )
+            // A plaque: no title strip, no chip, no glow — just stone around the line, and enough
+            // padding that nothing else on screen crowds it.
+            PixelPanel(
+                modifier = Modifier.fillMaxWidth(),
+                fill = PlaqueFill,
+                accent = PlaqueEdge,
+                background = MemorialDeep,
+                contentPadding = PaddingValues(horizontal = pixelUnits(5), vertical = pixelUnits(4)),
+            ) {
+                Text(
+                    text = "“${last.text}”",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontStyle = FontStyle.Italic,
+                    color = NeoColors.OnDark,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(pixelUnits(3)))
         Text(
             text = "${pet.mealsEaten} meals shared · ${pet.gamesWon} games won · ${pet.album.size} pictures kept",
             style = MaterialTheme.typography.labelSmall,
@@ -153,36 +176,54 @@ fun MemorialScreen(
 
         Spacer(Modifier.weight(1f))
         Column(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(pixelUnits(3)),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Button(
+            PixelButton(
                 onClick = onOpenDiary,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(pixelUnits(13)),
+                accent = NeoColors.NeonCyan,
+                fill = NeoColors.SurfaceCard,
+                background = MemorialDeep,
             ) {
-                Text("Read the diary")
+                Text("Read the diary", style = MaterialTheme.typography.titleSmall, color = NeoColors.OnDark, maxLines = 1)
             }
-            OutlinedButton(
+            PixelButton(
                 onClick = onStartNextGeneration,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
+                // Quieter than the diary button: the ground colour with a stone edge, so leaving
+                // is offered rather than urged.
+                accent = PlaqueEdge,
+                fill = MemorialSky,
+                background = MemorialDeep,
             ) {
-                Text("When you're ready: generation ${pet.generation + 1}")
+                Text(
+                    "When you're ready: generation ${pet.generation + 1}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = NeoColors.OnDark,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                text = "Stay a moment",
-                style = MaterialTheme.typography.labelSmall,
-                color = NeoColors.OnDarkMuted,
-                textAlign = TextAlign.Center,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable(onClick = onBack)
-                    .padding(vertical = 6.dp),
-            )
+                    .heightIn(min = MinTouchTarget)
+                    .clickable(role = Role.Button, onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = "Stay a moment",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = NeoColors.OnDarkMuted,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                )
+            }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(pixelUnits(4)))
     }
 }

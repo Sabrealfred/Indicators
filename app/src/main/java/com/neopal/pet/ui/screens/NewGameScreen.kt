@@ -6,25 +6,22 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,8 +30,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.LifeStage
@@ -44,7 +46,13 @@ import com.neopal.pet.ui.art.CreatureFrame
 import com.neopal.pet.ui.art.CreatureSpec
 import com.neopal.pet.ui.art.Palettes
 import com.neopal.pet.ui.art.drawCreature
-import com.neopal.pet.ui.theme.NeoColors
+import com.neopal.pet.ui.components.MinTouchTarget
+import com.neopal.pet.ui.components.NeoAccents
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelButton
+import com.neopal.pet.ui.components.PixelPanel
+import com.neopal.pet.ui.components.pixelSurface
+import com.neopal.pet.ui.components.pixelUnits
 import kotlin.math.sin
 
 /** Species pick + naming. The preview animates so the choice feels alive before you commit. */
@@ -63,12 +71,15 @@ fun NewGameScreen(
         animationSpec = infiniteRepeatable(tween(2400, easing = LinearEasing), RepeatMode.Restart),
         label = "preview-clock",
     )
+    val accent = NeoAccents.cyan
+    val surface = MaterialTheme.colorScheme.surfaceVariant
+    val background = MaterialTheme.colorScheme.background
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(20.dp),
+            .background(background)
+            .padding(pixelUnits(5)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(
@@ -85,15 +96,21 @@ fun NewGameScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(pixelUnits(4)))
 
-        // Big animated preview of the currently selected family.
+        // Big animated preview of the currently selected family, sunk into the page like the
+        // cartridge slot on the home menu.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(220.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                .pixelSurface(
+                    fill = surface,
+                    accent = accent,
+                    bevel = PixelBevel.PRESSED,
+                    background = background,
+                )
+                .padding(pixelUnits(2)),
             contentAlignment = Alignment.Center,
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
@@ -116,56 +133,105 @@ fun NewGameScreen(
                 )
             }
         }
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(pixelUnits(4)))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(pixelUnits(2)),
         ) {
             Species.entries.forEach { option ->
                 val palette = Palettes.creature(option, EvolutionBranch.BALANCED)
-                val selected = option == species
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
+                val isSelected = option == species
+                PixelPanel(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(
-                            BorderStroke(if (selected) 3.dp else 1.dp, if (selected) NeoColors.NeonCyan else palette.body.copy(alpha = 0.4f)),
-                            RoundedCornerShape(14.dp),
-                        )
-                        .clickable { species = option }
-                        .padding(vertical = 10.dp),
+                        .semantics { selected = isSelected },
+                    fill = if (isSelected) lerp(surface, accent, 0.20f) else surface,
+                    accent = if (isSelected) accent else palette.body,
+                    background = background,
+                    // The chosen egg is held down: same geometry, light from the other corner.
+                    bevel = if (isSelected) PixelBevel.PRESSED else PixelBevel.RAISED,
+                    contentPadding = PaddingValues(vertical = pixelUnits(2), horizontal = pixelUnits(1)),
+                    onClick = { species = option },
                 ) {
-                    Canvas(Modifier.size(38.dp)) {
+                    Canvas(Modifier.size(38.dp).align(Alignment.CenterHorizontally)) {
                         drawCircle(palette.body, size.minDimension / 2.4f)
                         drawCircle(palette.accent, size.minDimension / 5f, Offset(size.width * 0.62f, size.height * 0.38f))
                     }
-                    Spacer(Modifier.height(6.dp))
-                    Text(option.displayName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(Modifier.height(pixelUnits(2)))
+                    Text(
+                        option.displayName,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.align(Alignment.CenterHorizontally),
+                    )
                 }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
-        OutlinedTextField(
-            value = name,
-            onValueChange = { if (it.length <= 12) name = it },
-            label = { Text("Name") },
-            singleLine = true,
+        Spacer(Modifier.height(pixelUnits(4)))
+        PixelPanel(
             modifier = Modifier.fillMaxWidth(),
-        )
+            accent = accent,
+            background = background,
+            title = "Name",
+            contentPadding = PaddingValues(pixelUnits(2)),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = MinTouchTarget)
+                    // A well, not an outlined field: the name is something you drop into the panel.
+                    .pixelSurface(
+                        fill = lerp(surface, background, 0.35f),
+                        accent = accent,
+                        bevel = PixelBevel.PRESSED,
+                        borderUnits = 1,
+                        background = background,
+                    )
+                    .padding(horizontal = pixelUnits(2), vertical = pixelUnits(2)),
+                contentAlignment = Alignment.CenterStart,
+            ) {
+                BasicTextField(
+                    value = name,
+                    // The twelve-character cap is what the save format and the top bar can show.
+                    onValueChange = { if (it.length <= 12) name = it },
+                    textStyle = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onSurface),
+                    cursorBrush = SolidColor(accent),
+                    singleLine = true,
+                    maxLines = 1,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "Name" },
+                    decorationBox = { inner ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (name.isEmpty()) {
+                                Text(
+                                    "Pip",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                )
+                            }
+                            inner()
+                        }
+                    },
+                )
+            }
+        }
         Spacer(Modifier.weight(1f))
-        Button(
+        PixelButton(
             onClick = { onStart(name.ifBlank { "Pip" }, species) },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(52.dp),
-            shape = RoundedCornerShape(16.dp),
+                .height(pixelUnits(13)),
+            accent = accent,
+            background = background,
         ) {
-            Text("START", style = MaterialTheme.typography.titleMedium)
+            Text("START", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(pixelUnits(3)))
     }
 }

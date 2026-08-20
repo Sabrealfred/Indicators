@@ -510,6 +510,12 @@ private fun PixelStepSlider(
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .onSizeChanged { widthPx = it.width }
+            // Tap sits outside the drag: the drag node sees the pointer first and only claims it
+            // once it has crossed the slop, so a tap on the track still lands on a notch and a
+            // drag never also fires a tap when the finger lifts.
+            .pointerInput(enabled) {
+                if (enabled) detectTapGestures { offset -> report(offset.x) }
+            }
             .draggable(
                 state = rememberDraggableState { delta ->
                     dragX.value += delta
@@ -522,9 +528,6 @@ private fun PixelStepSlider(
                     report(start.x)
                 },
             )
-            .pointerInput(enabled) {
-                if (enabled) detectTapGestures { offset -> report(offset.x) }
-            }
             .graphicsLayer { alpha = if (enabled) 1f else DisabledAlpha }
             .semantics {
                 contentDescription = label
@@ -607,16 +610,18 @@ private fun PixelTextWell(
                 .fillMaxWidth()
                 .semantics { contentDescription = placeholder },
             decorationBox = { inner ->
-                if (value.isEmpty()) {
-                    Text(
-                        placeholder,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (value.isEmpty()) {
+                        Text(
+                            placeholder,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    inner()
                 }
-                inner()
             },
         )
     }
