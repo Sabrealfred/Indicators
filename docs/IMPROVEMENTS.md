@@ -11,7 +11,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 1 | Render a buffer de baja resolución y escalado nearest-neighbour: píxeles reales, no vectores suaves | ✅ |
 | 2 | Resolución de píxel configurable (96 / 144 / 216 / 288 px de alto) | ✅ |
 | 3 | Interruptor de modo píxel en ajustes, con vista previa en vivo | ✅ |
-| 4 | Paleta limitada por escena (dithering de 16–32 colores) para que el look sea consistente | 🔜 |
+| 4 | Paleta limitada por escena (dithering de 16–32 colores) para que el look sea consistente | ✅ |
 | 5 | Dithering de Bayer en los degradados de cielo en vez de gradiente continuo | 🔜 |
 | 6 | Snap de posiciones al grid de píxel para que la criatura no "flote" entre subpíxeles | 🔜 |
 | 7 | Outline de 1 px consistente en todo sprite (hoy el grosor varía con el tamaño) | 🔜 |
@@ -30,21 +30,21 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 15 | Mirada que sigue tu dedo mientras acariciás | ✅ |
 | 16 | Parpadeo doble ocasional y parpadeo más rápido cuando está nerviosa | ✅ (parcial: falta el doble) |
 | 17 | Cambio de color según el ánimo: enfermo, hambriento, cansado, triste, sucio y feliz | ✅ |
-| 18 | Rubor progresivo cuando el vínculo sube, no un estado binario | 🔜 |
+| 18 | Rubor progresivo cuando el vínculo sube, no un estado binario | ✅ |
 | 19 | Respiración visible distinta despierta/dormida/enferma | ✅ |
-| 20 | Cola con física de resorte que sigue al cuerpo con retardo | 🔜 |
-| 21 | Sombra que se achica y aclara cuando salta | 🔜 |
+| 20 | Cola con física de resorte que sigue al cuerpo con retardo | ✅ |
+| 21 | Sombra que se achica y aclara cuando salta | ✅ |
 | 22 | Poses idle secundarias: bostezo, rascarse y mirar al techo, cada ~9 s | ✅ (falta sentarse) |
 | 23 | Reacción al toque por zona: cabeza = feliz, panza = risa, cola = molestia | 💡 |
-| 24 | Estirarse al despertar antes de volver al idle | 🔜 |
+| 24 | Estirarse al despertar antes de volver al idle | ✅ |
 | 25 | La comida se ve y se achica bocado a bocado mientras come | ✅ |
 | 26 | Transición de evolución con silueta a contraluz antes del fogonazo | ✅ (fogonazo) 🔜 (silueta) |
 | 27 | Anillo de "aura" según la rama evolutiva (Athletic deja estela al moverse) | 💡 |
 | 28 | Mirada vertical: la criatura puede mirar arriba y abajo, no solo a los costados | ✅ |
-| 29 | Sudor cuando la energía está baja y tirita cuando está enferma | 🔜 |
+| 29 | Sudor cuando la energía está baja y tirita cuando está enferma | ✅ |
 | 30 | Pupilas que se dilatan al ver comida | 💡 |
 | 31 | Envejecimiento visual gradual dentro de cada etapa, no solo al cambiar de etapa | 💡 |
-| 32 | Accesorios que se mueven con el cuerpo (el gorro rebota al saltar) | 🔜 |
+| 32 | Accesorios que se mueven con el cuerpo (el gorro rebota al saltar) | ✅ |
 
 ## C. Interacciones táctiles (33–48)
 
@@ -55,8 +55,8 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 35 | Acariciar arrastrando el dedo, con estela de corazones | ✅ |
 | 36 | Tocar una caca para recogerla de a una, en vez de un botón de menú | ✅ |
 | 37 | Mantener pulsado para sacar una foto | ✅ |
-| 38 | Arrastrar la comida desde la despensa hasta la boca | 🔜 |
-| 39 | Arrastrar el jabón sobre el cuerpo para bañarla, frotando | 🔜 |
+| 38 | Arrastrar la comida desde la despensa hasta la boca | ✅ (a la escena, no a la boca) |
+| 39 | Arrastrar el jabón sobre el cuerpo para bañarla, frotando | ✅ |
 | 40 | Pellizcar para hacer zoom en la mascota (modo foto) | 💡 |
 | 41 | Sacudir el teléfono para despertarla (acelerómetro) | 💡 |
 | 42 | Soplar al micrófono para apagar las velas del cumpleaños | 💡 |
@@ -65,7 +65,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 45 | Rechazos con lenguaje corporal, no solo un cartel | ✅ |
 | 46 | Deshacer inmediato tras una acción equivocada (5 s) | 💡 |
 | 47 | Modo zurdo: dock y rieles espejados | 💡 |
-| 48 | Atajo de "cuidado rápido": una acción resuelve la necesidad más urgente | 🔜 |
+| 48 | Atajo de "cuidado rápido": una acción resuelve la necesidad más urgente | ✅ |
 
 ## D. UI, pantallas y flujo (49–64)
 
@@ -80,7 +80,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 55 | Widget de pantalla de inicio con el estado y una acción rápida | 🔜 |
 | 56 | Diario de la mascota escrito en primera persona, con línea de tiempo | ✅ |
 | 57 | Récords por minijuego visibles en el menú de juegos | ✅ |
-| 58 | Comparativa de generaciones (esta vs. la anterior) | 🔜 |
+| 58 | Comparativa de generaciones (esta vs. la anterior) | ✅ (parcial: falta registro por generación) |
 | 59 | Ficha de ítem antes de comprar: cada stat que mueve, precio contra saldo | ✅ |
 | 60 | Búsqueda y filtros en la tienda cuando haya más de 40 ítems | 💡 |
 | 61 | Layouts reales por tamaño: teléfono chico sin rieles, landscape y tablet a dos paneles | ✅ |
@@ -94,9 +94,9 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 |---|--------|--------|
 | 65 | Sombra de contacto, contorno y brillo consistentes en todos los iconos | ✅ |
 | 66 | Icono de cuarto distinto por tema, no genérico | ✅ |
-| 67 | Barrido de brillo animado en ítems nuevos o destacados | ✅ (API lista) 🔜 (usarlo) |
+| 67 | Barrido de brillo animado en ítems nuevos o destacados | ✅ (API del kit lista) 🔜 (adoptarla en pantallas) |
 | 68 | Siluetas inconfundibles: ningún par de iconos se confunde a 24 px | ✅ |
-| 69 | Fuente bitmap propia para los números del HUD | 🔜 |
+| 69 | Fuente bitmap propia para los números del HUD | ✅ (kit) 🔜 (adoptarla en el HUD) |
 | 70 | Contraste WCAG AA verificado y corregido (8 pares fallaban en tema claro) | ✅ |
 | 71 | Iconos animados en el dock (la comida humea, el jabón burbujea) | 💡 |
 | 72 | Set de iconos alternativo "line art" como opción | 💡 |
@@ -111,9 +111,9 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 76 | Movimiento ambiental por tema: nubes, olas, cometa, hojas, marquesina | ✅ |
 | 77 | Capa de primer plano con parallax invertido para dar profundidad | ✅ |
 | 78 | Clima conectado al calendario de la mascota: llueve cada tercer día, los cuartos interiores no | ✅ |
-| 79 | Estaciones que cambian la decoración cada N días de mascota | 🔜 |
+| 79 | Estaciones que cambian la decoración cada N días de mascota | ✅ |
 | 80 | Cacas con variación de tamaño y rotación por índice | ✅ |
-| 81 | Objetos del cuarto interactuables (tocar la lámpara la enciende) | 🔜 |
+| 81 | Objetos del cuarto interactuables (tocar la lámpara la enciende) | ✅ (arte + hitboxes) 🔜 (gestos) |
 | 82 | Editor de cuarto: mover y colocar decoraciones | 💡 |
 
 ## G. Minijuegos (83–90)

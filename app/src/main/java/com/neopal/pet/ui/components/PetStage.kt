@@ -297,6 +297,7 @@ fun PetStage(
     // The whole world in one lambda, so it can be drawn straight to the screen or through
     // the pixel buffer without duplicating a single line.
     val world: DrawScope.() -> Unit = {
+        val day = state.ageInPetDays(config)
         drawScene(
             themeId = state.roomTheme,
             night = night,
@@ -304,10 +305,10 @@ fun PetStage(
             // In pixel mode the light wash is drawn after the blit, at full resolution.
             lightsOff = state.lightsOff && !config.pixelMode,
             parallax = quantise(sin(time * 0.12f) + (pointerX - 0.5f) * 0.6f, steps = 12f),
+            petDay = day,
         )
         drawPoops(state.poops, time)
         // Every third pet day turns wet, and the space and arcade rooms are indoors.
-        val day = state.ageInPetDays(config)
         val weather = when {
             state.roomTheme == "room_space" || state.roomTheme == "room_arcade" -> "none"
             day % 3 == 2 && state.roomTheme == "room_forest" -> "rain"
