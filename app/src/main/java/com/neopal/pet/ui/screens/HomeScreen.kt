@@ -2,11 +2,13 @@ package com.neopal.pet.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -31,6 +34,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -41,8 +45,6 @@ import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.ThumbDown
 import androidx.compose.material.icons.filled.ThumbUp
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -51,22 +53,42 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.GameConfig
+import com.neopal.pet.domain.Item
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
 import com.neopal.pet.domain.PetState
@@ -80,12 +102,19 @@ import com.neopal.pet.ui.components.FaceButton
 import com.neopal.pet.ui.components.LevelPill
 import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.PetStage
+import com.neopal.pet.ui.components.PixelBadge
+import com.neopal.pet.ui.components.PixelBar
+import com.neopal.pet.ui.components.PixelBevel
+import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelPanel
 import com.neopal.pet.ui.components.StatBar
 import com.neopal.pet.ui.components.ToastBanner
 import com.neopal.pet.ui.components.WindowSize
+import com.neopal.pet.ui.components.pixelSurface
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.components.rememberWindowSize
 import com.neopal.pet.ui.theme.NeoColors
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** The pet is the point of this screen; chrome never gets more than this share of the height. */
@@ -93,6 +122,21 @@ private const val CHROME_MAX_FRACTION = 0.42f
 
 /** In a two-pane layout the scene keeps at least this much of the window height. */
 private const val PET_MIN_HEIGHT_FRACTION = 0.45f
+
+/** The one item that washes instead of feeding, so the tray knows which gesture it belongs to. */
+private const val SOAP_ID = "soap"
+
+/** The care strip is chrome too, so the scrolling chrome below it gives up its share. */
+private val CareStripHeight: Dp = 68.dp
+
+/** Tray chips are square and never smaller than a comfortable thumb. */
+private val TrayChipSize: Dp = 52.dp
+
+/** The item that follows the finger while it is being carried. */
+private val DragGhostSize: Dp = 48.dp
+
+/** How far the finger has to travel over the pet before a scrub counts as a full wash. */
+private val RubDistance: Dp = 360.dp
 
 /** One dock entry. Holding them as data lets the same set render as a row or as a grid. */
 private data class HomeAction(
@@ -105,12 +149,37 @@ private data class HomeAction(
 )
 
 /**
+ * The single most useful thing to do this second, named before it is tapped. A button that only
+ * promises to "help" is a coin flip; this one says which item it spends and which meter is low.
+ */
+private data class QuickCare(
+    val label: String,
+    val reason: String,
+    val icon: ImageVector,
+    val accent: Color,
+    val onAct: () -> Unit,
+)
+
+/**
+ * Live state of a tray drag. The gesture writes to it directly rather than going through
+ * recomposition, so a fast finger can never read a frame-old position or a stale target.
+ */
+@Stable
+private class TrayDragState {
+    var item by mutableStateOf<Item?>(null)
+    var position by mutableStateOf(Offset.Zero)
+    var overStage by mutableStateOf(false)
+    /** 0..1 of a full scrub; only the soap uses it. */
+    var progress by mutableFloatStateOf(0f)
+}
+
+/**
  * The main screen: the console chassis, the live pet, its meters, and the action dock.
  * Everything the player needs minute to minute is one tap away from here.
  *
- * The screen has two shapes. Portrait on a phone stacks bar / scene / meters / dock. Landscape and
- * tablet widths put the scene on the left and move all the chrome into a standing right panel, so
- * the pet never gets letterboxed and a tablet is not just a stretched phone.
+ * The screen has two shapes. Portrait on a phone stacks bar / scene / care strip / meters / dock.
+ * Landscape and tablet widths put the scene on the left and move all the chrome into a standing
+ * right panel, so the pet never gets letterboxed and a tablet is not just a stretched phone.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,6 +194,14 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         if (pet.isDead) onOpen(Routes.MEMORIAL)
     }
 
+    // Where the scene ended up on screen, so a dragged item knows when it is over the pet.
+    val stageBounds = remember { mutableStateOf(Rect.Zero) }
+    var rootOrigin by remember { mutableStateOf(Offset.Zero) }
+    val dragState = remember { TrayDragState() }
+    val haptics = LocalHapticFeedback.current
+    val hapticsOn by rememberUpdatedState(ui.config.hapticsEnabled)
+    val rubDistancePx = with(LocalDensity.current) { RubDistance.toPx() }
+
     // The scene is passed down as a slot so each layout can size it without re-plumbing PetStage.
     val stage: @Composable (Modifier) -> Unit = { stageModifier ->
         PetStage(
@@ -134,7 +211,7 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             actionId = ui.animationId,
             deltas = ui.deltas,
             servedItemId = ui.servedItemId,
-            modifier = stageModifier,
+            modifier = stageModifier.onGloballyPositioned { stageBounds.value = it.boundsInRoot() },
             onTapPet = { viewModel.petPet() },
             onDoubleTapPet = { viewModel.tickle() },
             onLongPressPet = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
@@ -161,7 +238,75 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         HomeAction("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted) { onOpen(Routes.SETTINGS) },
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    val quickCare = quickCareFor(pet, viewModel, onOpen)
+    val inventory = pet.inventory
+    val carriable = remember(inventory) {
+        val foods = ItemCatalog.foods
+            .filter { (inventory[it.id] ?: 0) > 0 }
+            .sortedByDescending { it.satiety }
+        val soap = ItemCatalog[SOAP_ID]?.takeIf { (inventory[SOAP_ID] ?: 0) > 0 }
+        (listOfNotNull(foods.firstOrNull(), soap) + foods.drop(1)).distinct()
+    }
+    // Nothing in the tray is worth carrying to an egg, a sleeper or a pet that is gone.
+    val tray = if (pet.isDead || pet.isEgg || pet.isSleeping) emptyList() else carriable
+
+    val onDragStart: (Item, Offset) -> Unit = { item, at ->
+        dragState.item = item
+        dragState.position = at
+        dragState.overStage = stageBounds.value.contains(at)
+        dragState.progress = 0f
+    }
+    val onDragMove: (Offset, Offset) -> Unit = { at, delta ->
+        val carried = dragState.item
+        if (carried != null) {
+            val over = stageBounds.value.contains(at)
+            // A tick as the item crosses into the room is the only cue that the drop will land.
+            if (over && !dragState.overStage && hapticsOn) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+            dragState.overStage = over
+            dragState.position = at
+            if (over && carried.id == SOAP_ID) {
+                dragState.progress =
+                    (dragState.progress + (abs(delta.x) + abs(delta.y)) / rubDistancePx).coerceAtMost(1f)
+                // A full scrub pays off under the finger, without waiting for the release.
+                if (dragState.progress >= 1f) {
+                    dragState.item = null
+                    viewModel.bathe()
+                }
+            }
+        }
+    }
+    val onDragEnd: () -> Unit = {
+        val carried = dragState.item
+        val landed = dragState.overStage
+        dragState.item = null
+        if (carried != null && landed) {
+            if (carried.id == SOAP_ID) viewModel.bathe() else viewModel.feed(carried.id)
+        }
+    }
+    val onDragCancel: () -> Unit = { dragState.item = null }
+
+    val careStrip: @Composable (Modifier) -> Unit = { stripModifier ->
+        CareStrip(
+            pet = pet,
+            quick = quickCare,
+            tray = tray,
+            drag = dragState,
+            onTapItem = { item -> if (item.id == SOAP_ID) viewModel.bathe() else viewModel.feed(item.id) },
+            onDragStart = onDragStart,
+            onDragMove = onDragMove,
+            onDragEnd = onDragEnd,
+            onDragCancel = onDragCancel,
+            modifier = stripModifier,
+        )
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .onGloballyPositioned { rootOrigin = it.positionInRoot() },
+    ) {
         ConsoleFrame(
             modifier = Modifier
                 .fillMaxSize()
@@ -180,9 +325,22 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             onHome = { onOpen(Routes.STATS) },
         ) {
             if (window.isTwoPane) {
-                TwoPaneHome(pet = pet, config = ui.config, window = window, actions = actions, stage = stage)
+                TwoPaneHome(
+                    pet = pet,
+                    config = ui.config,
+                    window = window,
+                    actions = actions,
+                    stage = stage,
+                    careStrip = careStrip,
+                )
             } else {
-                StackedHome(pet = pet, config = ui.config, actions = actions, stage = stage)
+                StackedHome(
+                    pet = pet,
+                    config = ui.config,
+                    actions = actions,
+                    stage = stage,
+                    careStrip = careStrip,
+                )
             }
         }
 
@@ -222,6 +380,14 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
                     .padding(top = if (window.isShort) 40.dp else 70.dp),
             )
         }
+
+        // Last, so the carried item passes over every overlay — and takes no input of its own.
+        DragLayer(
+            drag = dragState,
+            stage = stageBounds.value,
+            origin = rootOrigin,
+            modifier = Modifier.fillMaxSize(),
+        )
     }
 
     if (showFeedSheet) {
@@ -246,8 +412,108 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
 }
 
 /**
- * Portrait phone: bar, scene, meters, dock. The meters and dock are capped and scroll internally,
- * so a small phone — or a 1.3x font scale — eats into the chrome rather than into the pet.
+ * Resolves the most urgent need into one concrete, nameable action. Returns null when there is
+ * genuinely nothing pressing — an affordance that fires blanks teaches players to ignore it.
+ */
+private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String) -> Unit): QuickCare? {
+    if (pet.isDead || pet.isEgg || pet.isSleeping) return null
+    fun owned(id: String): Boolean = (pet.inventory[id] ?: 0) > 0
+
+    if (pet.isSick) {
+        val dose = ItemCatalog.ofKind(ItemKind.MEDICINE)
+            .filter { it.health > 0f && owned(it.id) }
+            .maxByOrNull { it.health }
+        return if (dose != null) {
+            QuickCare(
+                label = "Give ${dose.name}",
+                reason = "${pet.name} is sick",
+                icon = Icons.Filled.Medication,
+                accent = NeoColors.StatHealth,
+            ) { viewModel.useMedicine(dose.id) }
+        } else {
+            QuickCare(
+                label = "Buy medicine",
+                reason = "${pet.name} is sick and the cabinet is empty",
+                icon = Icons.Filled.ShoppingBag,
+                accent = NeoColors.StatHealth,
+            ) { onOpen(Routes.SHOP) }
+        }
+    }
+
+    return when (CareActions.topNeed(pet)) {
+        "Hungry" -> {
+            val food = ItemCatalog.foods.filter { owned(it.id) }.maxByOrNull { it.satiety }
+            if (food != null) {
+                QuickCare(
+                    label = "Feed ${food.name}",
+                    reason = "Satiety ${pet.stats.satiety.roundToInt()}",
+                    icon = Icons.Filled.Restaurant,
+                    accent = NeoColors.StatSatiety,
+                ) { viewModel.feed(food.id) }
+            } else {
+                QuickCare(
+                    label = "Buy food",
+                    reason = "Satiety ${pet.stats.satiety.roundToInt()} and the pantry is empty",
+                    icon = Icons.Filled.ShoppingBag,
+                    accent = NeoColors.StatSatiety,
+                ) { onOpen(Routes.SHOP) }
+            }
+        }
+
+        "Dirty" -> when {
+            pet.poops > 0 -> QuickCare(
+                label = "Clean the room",
+                reason = "${pet.poops} mess${if (pet.poops > 1) "es" else ""} on the floor",
+                icon = Icons.Filled.CleaningServices,
+                accent = NeoColors.StatHygiene,
+            ) { viewModel.cleanRoom() }
+
+            owned(SOAP_ID) -> QuickCare(
+                label = "Scrub with Bubble Soap",
+                reason = "Hygiene ${pet.stats.hygiene.roundToInt()}",
+                icon = Icons.Filled.CleaningServices,
+                accent = NeoColors.StatHygiene,
+            ) { viewModel.bathe() }
+
+            else -> QuickCare(
+                label = "Clean the room",
+                reason = "Hygiene ${pet.stats.hygiene.roundToInt()}",
+                icon = Icons.Filled.CleaningServices,
+                accent = NeoColors.StatHygiene,
+            ) { viewModel.cleanRoom() }
+        }
+
+        "Sleepy" -> QuickCare(
+            label = "Tuck ${pet.name} in",
+            reason = "Energy ${pet.stats.energy.roundToInt()}",
+            icon = Icons.Filled.Lightbulb,
+            accent = NeoColors.StatEnergy,
+        ) { viewModel.putToSleep() }
+
+        // Too tired or too ill to play is still boredom; petting is the one thing always accepted.
+        "Bored" -> if (CareActions.canPlay(pet) == null) {
+            QuickCare(
+                label = "Play a game",
+                reason = "Happiness ${pet.stats.happiness.roundToInt()}",
+                icon = Icons.Filled.SportsEsports,
+                accent = NeoColors.NeonCyan,
+            ) { onOpen(Routes.GAMES) }
+        } else {
+            QuickCare(
+                label = "Pet ${pet.name}",
+                reason = "Happiness ${pet.stats.happiness.roundToInt()}, not up for a game",
+                icon = Icons.Filled.Favorite,
+                accent = NeoColors.StatHappiness,
+            ) { viewModel.petPet() }
+        }
+
+        else -> null
+    }
+}
+
+/**
+ * Portrait phone: bar, scene, care strip, meters, dock. The meters and dock are capped and scroll
+ * internally, so a small phone — or a 1.3x font scale — eats into the chrome rather than the pet.
  */
 @Composable
 private fun StackedHome(
@@ -255,9 +521,11 @@ private fun StackedHome(
     config: GameConfig,
     actions: List<HomeAction>,
     stage: @Composable (Modifier) -> Unit,
+    careStrip: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val chromeMax = maxHeight * CHROME_MAX_FRACTION
+        // The care strip counts against the same budget, so the scene keeps the share it had.
+        val chromeMax = (maxHeight * CHROME_MAX_FRACTION - CareStripHeight).coerceAtLeast(120.dp)
         Column(modifier = Modifier.fillMaxSize()) {
             TopBar(pet = pet, config = config)
 
@@ -267,6 +535,8 @@ private fun StackedHome(
                     .weight(1f)
                     .padding(horizontal = 8.dp),
             )
+
+            careStrip(Modifier.fillMaxWidth())
 
             Column(
                 modifier = Modifier
@@ -284,6 +554,9 @@ private fun StackedHome(
 /**
  * Landscape and tablet: the scene keeps the left and most of the width, everything else stands in
  * a persistent right panel. The panel scrolls, so large fonts push it into a scroll, never a clip.
+ *
+ * The care strip stays under the scene rather than in the panel: it is a drag source, and a drag
+ * that starts inside a scrolling column is a fight between the finger and the scroll.
  */
 @Composable
 private fun TwoPaneHome(
@@ -292,6 +565,7 @@ private fun TwoPaneHome(
     window: WindowSize,
     actions: List<HomeAction>,
     stage: @Composable (Modifier) -> Unit,
+    careStrip: @Composable (Modifier) -> Unit,
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val panelFraction = if (window.isExpandedWidth) 0.34f else 0.32f
@@ -299,16 +573,26 @@ private fun TwoPaneHome(
         val panelWidth = (maxWidth * panelFraction)
             .coerceIn(200.dp, 360.dp)
             .coerceAtMost(maxWidth * 0.45f)
-        val petMinHeight = maxHeight * PET_MIN_HEIGHT_FRACTION
+        val stripMax = maxHeight * (1f - PET_MIN_HEIGHT_FRACTION)
 
         Row(modifier = Modifier.fillMaxSize()) {
-            stage(
-                Modifier
+            Column(
+                modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .heightIn(min = petMinHeight)
-                    .padding(horizontal = 6.dp, vertical = 4.dp),
-            )
+                    .fillMaxHeight(),
+            ) {
+                stage(
+                    Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                )
+                careStrip(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = stripMax),
+                )
+            }
             Column(
                 modifier = Modifier
                     .width(panelWidth)
@@ -366,6 +650,272 @@ private fun TopBar(
             LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
             Spacer(Modifier.width(8.dp))
             CoinPill(pet.coins)
+        }
+    }
+}
+
+/**
+ * The quick-care button and the carry tray on one line.
+ *
+ * They belong together: both answer "what does it need?", and both live outside every scrolling
+ * container so a drag that starts here is never mistaken for a scroll. How many chips fit is a
+ * function of the width — the button keeps the rest and ellipsises rather than pushing them off.
+ */
+@Composable
+private fun CareStrip(
+    pet: PetState,
+    quick: QuickCare?,
+    tray: List<Item>,
+    drag: TrayDragState,
+    onTapItem: (Item) -> Unit,
+    onDragStart: (Item, Offset) -> Unit,
+    onDragMove: (Offset, Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    ) {
+        val reserved = if (quick != null) 148.dp else 8.dp
+        val roomForChips = ((maxWidth - reserved) / (TrayChipSize + 6.dp)).toInt()
+        val visible = if (tray.isEmpty()) emptyList() else tray.take(roomForChips.coerceIn(1, 4))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            if (quick != null) {
+                QuickCareButton(care = quick, modifier = Modifier.weight(1f))
+            } else {
+                CalmStatus(pet = pet, modifier = Modifier.weight(1f))
+            }
+            visible.forEach { item ->
+                TrayChip(
+                    item = item,
+                    count = pet.inventory[item.id] ?: 0,
+                    petName = pet.name,
+                    carried = drag.item?.id == item.id,
+                    onTap = { onTapItem(item) },
+                    onStart = { at -> onDragStart(item, at) },
+                    onMove = onDragMove,
+                    onEnd = onDragEnd,
+                    onCancel = onDragCancel,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickCareButton(care: QuickCare, modifier: Modifier = Modifier) {
+    PixelButton(
+        onClick = care.onAct,
+        modifier = modifier.semantics(mergeDescendants = true) {
+            contentDescription = "${care.label}. ${care.reason}"
+        },
+        accent = care.accent,
+        // Mixed most of the way to the console screen: the accent is a signal, not a slab.
+        fill = lerp(care.accent, NeoColors.SurfaceDark, 0.76f),
+        background = NeoColors.SurfaceDark,
+        contentPadding = PaddingValues(horizontal = pixelUnits(2), vertical = pixelUnits(1)),
+    ) {
+        Icon(care.icon, contentDescription = null, tint = care.accent, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = care.label,
+                style = MaterialTheme.typography.labelLarge,
+                color = NeoColors.OnDark,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = care.reason,
+                style = MaterialTheme.typography.labelSmall,
+                color = NeoColors.OnDarkMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** What the strip says when nothing is wrong. Silence would read as a screen that failed to load. */
+@Composable
+private fun CalmStatus(pet: PetState, modifier: Modifier = Modifier) {
+    val text = when {
+        pet.isEgg -> "The egg is warming up."
+        pet.isSleeping -> "${pet.name} is asleep. Nothing needed."
+        pet.isDead -> "${pet.name} is no longer with us."
+        else -> "Nothing urgent. ${pet.name} is doing fine."
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .heightIn(min = MinTouchTarget)
+            .padding(horizontal = 6.dp),
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = NeoColors.OnDarkMuted,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/**
+ * One carriable item. Tapping serves it — that path has to keep working for anyone who cannot
+ * drag — and dragging it onto the scene does the same thing with your own hand.
+ */
+@Composable
+private fun TrayChip(
+    item: Item,
+    count: Int,
+    petName: String,
+    carried: Boolean,
+    onTap: () -> Unit,
+    onStart: (Offset) -> Unit,
+    onMove: (Offset, Offset) -> Unit,
+    onEnd: () -> Unit,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tint = Color(item.tint)
+    val washes = item.id == SOAP_ID
+    val readOut = if (washes) {
+        "Wash $petName with ${item.name}, $count left. Or drag it onto $petName."
+    } else {
+        "Feed ${item.name} to $petName, $count left. Or drag it onto $petName."
+    }
+    // The chip's own position, so a drag can be reported in the coordinates the scene is measured in.
+    var origin by remember { mutableStateOf(Offset.Zero) }
+    val start by rememberUpdatedState(onStart)
+    val move by rememberUpdatedState(onMove)
+    val end by rememberUpdatedState(onEnd)
+    val cancel by rememberUpdatedState(onCancel)
+
+    Box(
+        modifier = modifier
+            .size(TrayChipSize)
+            .onGloballyPositioned { origin = it.positionInRoot() }
+            .pointerInput(item.id) {
+                detectDragGestures(
+                    onDragStart = { local -> start(origin + local) },
+                    onDrag = { change, amount -> move(origin + change.position, amount) },
+                    onDragEnd = { end() },
+                    onDragCancel = { cancel() },
+                )
+            }
+            .semantics(mergeDescendants = true) { contentDescription = readOut }
+            .clickable(role = Role.Button, onClick = onTap)
+            .pixelSurface(
+                fill = lerp(tint, NeoColors.SurfaceDark, 0.78f),
+                accent = tint,
+                bevel = if (carried) PixelBevel.PRESSED else PixelBevel.RAISED,
+                background = NeoColors.SurfaceDark,
+            )
+            .padding(pixelUnits(2)),
+        contentAlignment = Alignment.Center,
+    ) {
+        ItemIcon(
+            iconKey = item.iconKey,
+            tint = tint,
+            modifier = Modifier
+                .fillMaxSize()
+                // While it is in the air it should not also be sitting in the tray.
+                .alpha(if (carried) 0.2f else 1f),
+            variant = item.id,
+        )
+        if (count > 1) {
+            PixelBadge(
+                text = "$count",
+                color = NeoColors.ChassisLight,
+                background = NeoColors.SurfaceDark,
+                modifier = Modifier.align(Alignment.TopEnd),
+            )
+        }
+    }
+}
+
+/**
+ * The carried item and the landing zone it is over. Purely a read-out: it holds no pointer input
+ * of its own, so every gesture the scene already understood still reaches the scene.
+ */
+@Composable
+private fun DragLayer(
+    drag: TrayDragState,
+    stage: Rect,
+    origin: Offset,
+    modifier: Modifier = Modifier,
+) {
+    val item = drag.item ?: return
+    val tint = Color(item.tint)
+    val washes = item.id == SOAP_ID
+    val density = LocalDensity.current
+    val ghostHalf = with(density) { (DragGhostSize / 2).toPx() }
+
+    Box(modifier = modifier.clearAndSetSemantics { }) {
+        if (drag.overStage && !stage.isEmpty) {
+            Box(
+                modifier = Modifier
+                    .offset {
+                        IntOffset((stage.left - origin.x).roundToInt(), (stage.top - origin.y).roundToInt())
+                    }
+                    .size(
+                        width = with(density) { stage.width.toDp() },
+                        height = with(density) { stage.height.toDp() },
+                    )
+                    .background(tint.copy(alpha = 0.10f)),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
+                PixelPanel(
+                    modifier = Modifier
+                        .padding(bottom = 10.dp)
+                        .widthIn(max = 220.dp),
+                    fill = NeoColors.SurfaceCard,
+                    accent = tint,
+                    background = NeoColors.SurfaceDark,
+                    contentPadding = PaddingValues(horizontal = pixelUnits(3), vertical = pixelUnits(2)),
+                ) {
+                    Text(
+                        text = if (washes) "Rub to scrub" else "Let go to feed",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = NeoColors.OnDark,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (washes) {
+                        Spacer(Modifier.height(pixelUnits(1)))
+                        PixelBar(
+                            fraction = drag.progress,
+                            color = tint,
+                            segments = 12,
+                            height = pixelUnits(3),
+                            trackColor = NeoColors.SurfaceDark,
+                            background = NeoColors.SurfaceDark,
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                // Read inside the layout lambda, so the finger moves the ghost without recomposing.
+                .offset {
+                    IntOffset(
+                        (drag.position.x - origin.x - ghostHalf).roundToInt(),
+                        (drag.position.y - origin.y - ghostHalf).roundToInt(),
+                    )
+                }
+                .size(DragGhostSize),
+        ) {
+            ItemIcon(item.iconKey, tint, Modifier.fillMaxSize(), variant = item.id)
         }
     }
 }
@@ -500,9 +1050,13 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
                 items(owned) { item ->
                     PixelPanel(
                         onClick = { onFeed(item.id) },
-                        accent = androidx.compose.ui.graphics.Color(item.tint),
+                        accent = Color(item.tint),
                         background = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.width(104.dp),
+                        modifier = Modifier
+                            .width(104.dp)
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = "${item.name}, ${pet.inventory[item.id] ?: 0} left"
+                            },
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -512,13 +1066,19 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
                                 modifier = Modifier
                                     .size(56.dp)
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(androidx.compose.ui.graphics.Color(item.tint).copy(alpha = 0.18f)),
+                                    .background(Color(item.tint).copy(alpha = 0.18f)),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                ItemIcon(item.iconKey, androidx.compose.ui.graphics.Color(item.tint), Modifier.size(44.dp), variant = item.id)
+                                ItemIcon(item.iconKey, Color(item.tint), Modifier.size(44.dp), variant = item.id)
                             }
                             Spacer(Modifier.height(6.dp))
-                            Text(item.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface)
+                            Text(
+                                text = item.name,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text(
                                 "x${pet.inventory[item.id] ?: 0}",
                                 style = MaterialTheme.typography.labelSmall,
@@ -572,11 +1132,12 @@ private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modif
     val steps = listOf(
         "Tap $petName to pet it. Double-tap to tickle, swipe up to toss it in the air." to "Say hello",
         "Tap a mess on the floor to scoop it. Long-press $petName for a photo." to "Got it",
+        "Drag food from the tray onto $petName to feed it, and rub the soap over it to wash." to "Nice",
         "Feed, play and clean to raise it well — how you care decides what it evolves into." to "Start",
     )
     Box(
         modifier = modifier
-            .background(androidx.compose.ui.graphics.Color(0xCC08090F))
+            .background(Color(0xCC08090F))
             .clickable { if (step < steps.lastIndex) step += 1 else onDone() },
         contentAlignment = Alignment.Center,
     ) {
@@ -606,12 +1167,19 @@ private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modif
                     Text(steps[step].second)
                 }
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Skip",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = NeoColors.OnDarkMuted,
-                    modifier = Modifier.clickable { onDone() },
-                )
+                Box(
+                    modifier = Modifier
+                        .heightIn(min = MinTouchTarget)
+                        .clickable(role = Role.Button) { onDone() }
+                        .padding(horizontal = 16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = "Skip",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = NeoColors.OnDarkMuted,
+                    )
+                }
             }
         }
     }
@@ -634,7 +1202,7 @@ private fun OfflineReportCard(
     }
     Box(
         modifier = modifier
-            .background(androidx.compose.ui.graphics.Color(0xCC08090F))
+            .background(Color(0xCC08090F))
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
