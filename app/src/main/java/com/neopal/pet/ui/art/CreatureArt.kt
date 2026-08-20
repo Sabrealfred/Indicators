@@ -20,6 +20,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** Everything the renderer needs to know about *who* the creature is. */
@@ -55,6 +56,20 @@ data class CreatureFrame(
     val gazeY: Float = 0f,
     /** Egg-only: 0 = intact, 1 = fully cracked. */
     val crack: Float = 0f,
+    /** 0..1 warmth in the cheeks. Rides the bond stat, so affection shows as a slow blush. */
+    val blush: Float = 0f,
+    /** Extra tail swing on top of the wag, fed by the spring that lets it lag behind the body. */
+    val tailSwing: Float = 0f,
+    /** 0 = arms at rest, 1 = reaching straight up. */
+    val armsUp: Float = 0f,
+    /** 0..1 sweat visibility. */
+    val sweat: Float = 0f,
+    /** 0..1 loop position of the sweat beads running down the face. */
+    val sweatPhase: Float = 0f,
+    /** −1..1 tremor. Applied as a single art pixel, so anything finer is simply not drawn. */
+    val shiver: Float = 0f,
+    /** Accessory lag in degrees; a hat keeps leaning after the head has stopped. */
+    val hatTilt: Float = 0f,
 )
 
 /** Per-stage proportions. Babies are all head and eyes; elders shrink and droop. */
@@ -211,12 +226,24 @@ fun DrawScope.drawCreature(
 
     val p = proportionsFor(spec.stage, spec.branch, spec.weightGrams)
     val bodyR = unit * p.bodyRadius
-    val cy = center.y + frame.bobY * unit
-    val bodyCenter = Offset(center.x, cy)
+    // Whole art pixels only. A body that bobs in fractions of a pixel resamples its own outline
+    // every frame, which reads as a shimmer rather than as breathing.
+    val cy = center.y + (frame.bobY * unit).roundToInt()
+    val tremor = (frame.shiver * unit * 0.007f).roundToInt().toFloat()
+    val bodyCenter = Offset(center.x + tremor, cy)
 
-    drawGroundShadow(center.x, center.y + bodyR * 1.15f, bodyR * (1.05f - frame.bobY * 0.6f), palette)
+    // Height is only legible through the shadow: it tightens and thins on the way up and is
+    // back at full weight the instant the feet land.
+    val lift = (-frame.bobY * 6.25f).coerceIn(0f, 1f)
+    drawGroundShadow(
+        x = center.x,
+        y = center.y + bodyR * 1.15f,
+        radius = bodyR * (1.05f - lift * 0.40f),
+        palette = palette,
+        strength = 1f - lift * 0.58f,
+    )
 
-    rotate(degrees = frame.lean, pivot = Offset(center.x, center.y + bodyR)) {
+    rotate(degrees = frame.lean, pivot = Offset(center.x + tremor, center.y + bodyR)) {
         // Back-most parts first: tail, then back limbs, then body, then face, then hat.
         drawTail(bodyCenter, bodyR, p, spec, palette, frame)
         drawLimbs(bodyCenter, bodyR, p, palette, frame, back = true)
@@ -225,7 +252,8 @@ fun DrawScope.drawCreature(
         drawLimbs(bodyCenter, bodyR, p, palette, frame, back = false)
         drawFace(bodyCenter, bodyR, p, spec, palette, frame)
         drawBranchMarks(bodyCenter, bodyR, p, spec, palette)
-        spec.hatId?.let { drawHat(it, bodyCenter, bodyR, p) }
+        spec.hatId?.let { drawHat(it, bodyCenter, bodyR, p, frame) }
+        drawSweat(bodyCenter, bodyR, p, frame)
         if (spec.stage == LifeStage.ELDER) drawElderMarks(bodyCenter, bodyR, palette)
     }
 
@@ -240,17 +268,24 @@ fun DrawScope.drawCreature(
 
 // ------------------------------------------------------------------ body parts
 
-private fun DrawScope.drawGroundShadow(x: Float, y: Float, radius: Float, palette: CreaturePalette) {
+private fun DrawScope.drawGroundShadow(
+    x: Float,
+    y: Float,
+    radius: Float,
+    palette: CreaturePalette,
+    strength: Float = 1f,
+) {
     // Two passes: a wide faint one plus a tight core, so the contact shadow has an edge that
     // fades instead of a hard rim of near-black under the feet.
     val cast = lerp(palette.bodyShade, AMBIENT_COOL, 0.40f)
+    val k = strength.coerceIn(0f, 1f)
     drawOval(
-        color = cast.copy(alpha = 0.10f),
+        color = cast.copy(alpha = 0.10f * k),
         topLeft = Offset(x - radius * 1.12f, y - radius * 0.27f),
         size = Size(radius * 2.24f, radius * 0.54f),
     )
     drawOval(
-        color = cast.copy(alpha = 0.20f),
+        color = cast.copy(alpha = 0.20f * k),
         topLeft = Offset(x - radius, y - radius * 0.22f),
         size = Size(radius * 2f, radius * 0.44f),
     )
@@ -413,11 +448,17 @@ private fun DrawScope.drawLimbs(
     val len = bodyR * p.limbLength
     val thickness = bodyR * 0.20f
     val dir = if (back) -1f else 1f
+    // Reaching up pulls the hands in as well as up, which is what stops a stretch reading as a
+    // T-pose. The shoulders stay put; only the ends travel.
+    val reach = frame.armsUp.coerceIn(0f, 1f)
 
     // Arms
     listOf(-1f, 1f).forEach { side ->
         val start = Offset(center.x + side * w * 0.86f, armY)
-        val end = Offset(start.x + side * len, armY + swing * side * dir)
+        val end = Offset(
+            start.x + side * len * (1f - reach * 0.55f),
+            armY + swing * side * dir - reach * (len + bodyR * 0.55f),
+        )
         if (back) {
             // Behind the body: shadow tone only, so the arm sits back instead of competing.
             drawLine(tones.shadow.copy(alpha = 0.85f), start, end, strokeWidth = thickness, cap = StrokeCap.Round)
@@ -475,10 +516,12 @@ private fun DrawScope.drawTail(
 ) {
     if (p.tail <= 0.01f) return
     val w = bodyR * p.bodyWidth
-    val wag = frame.armSwing * 0.5f
+    // The wag is the pose; [CreatureFrame.tailSwing] is the spring that lets the tip carry on
+    // after the body has stopped.
+    val wag = (frame.armSwing * 0.5f + frame.tailSwing).coerceIn(-1.6f, 1.6f)
     val baseX = center.x - w * 0.85f
     val baseY = center.y + bodyR * 0.45f
-    val tipX = baseX - bodyR * p.tail * (1f + wag * 0.2f)
+    val tipX = baseX - bodyR * p.tail * (1f + wag * 0.20f)
     val tipY = baseY - bodyR * p.tail * (0.5f + wag * 0.5f)
     val accent = tonesFor(palette.accent)
 
@@ -817,15 +860,19 @@ private fun DrawScope.drawFace(
     }
 
     // Blush: three nested ovals so it fades outward like a soft airbrush instead of sitting
-    // there as a flat sticker. Each ring is about a pixel of falloff at bodyR ≈ 60.
-    if (spec.mood == Mood.HAPPY || spec.mood == Mood.NEUTRAL) {
-        listOf(-1f, 1f).forEach { side ->
+    // there as a flat sticker. Each ring is about a pixel of falloff at bodyR ≈ 60. Intensity
+    // is continuous, so a new pet is barely pink and an old friend is properly warm.
+    val blush = frame.blush.coerceIn(0f, 1f)
+    if (blush > 0.03f) {
+        val grow = 0.80f + blush * 0.26f
+        for (s in 0..1) {
+            val side = if (s == 0) -1f else 1f
             val bx = center.x + side * spread * 1.55f
             val by = eyeY + r * 0.7f + bodyR * 0.06f
             for (i in 0..2) {
-                val k = 1f - i * 0.28f
+                val k = (1f - i * 0.28f) * grow
                 drawOval(
-                    color = palette.blush.copy(alpha = 0.10f + i * 0.06f),
+                    color = palette.blush.copy(alpha = (0.10f + i * 0.06f) * blush),
                     topLeft = Offset(bx - bodyR * 0.10f * k, by - bodyR * 0.06f * k),
                     size = Size(bodyR * 0.20f * k, bodyR * 0.12f * k),
                 )
@@ -1000,6 +1047,35 @@ private fun DrawScope.drawElderMarks(center: Offset, bodyR: Float, palette: Crea
     }
 }
 
+/**
+ * Two beads running down the temples when energy is nearly gone. They are deliberately small and
+ * low-contrast: exhaustion should be something you notice on the second look, not a klaxon.
+ */
+private fun DrawScope.drawSweat(center: Offset, bodyR: Float, p: Proportions, frame: CreatureFrame) {
+    val amount = frame.sweat.coerceIn(0f, 1f)
+    if (amount < 0.05f) return
+    val w = bodyR * p.bodyWidth
+    val eyeY = center.y + bodyR * p.eyeHeight
+    val drop = Color(0xFFC8E8FF)
+    for (i in 0..1) {
+        val side = if (i == 0) 1f else -1f
+        val phase = (frame.sweatPhase + i * 0.5f) % 1f
+        // Fade in as the bead forms, fade out as it runs off the chin.
+        val fade = if (phase < 0.15f) phase / 0.15f else 1f - (phase - 0.15f) / 0.85f
+        val alpha = amount * fade * 0.80f
+        if (alpha < 0.02f) continue
+        val r = bodyR * (0.045f + amount * 0.020f) * (if (i == 0) 1f else 0.75f)
+        val x = (center.x + side * w * 0.90f).roundToInt().toFloat()
+        val y = (eyeY - bodyR * 0.36f + phase * bodyR * 0.62f).roundToInt().toFloat()
+        drawCircle(drop.copy(alpha = alpha), r, Offset(x, y))
+        drawCircle(
+            Color.White.copy(alpha = alpha * 0.75f),
+            r * 0.38f,
+            Offset(x - r * 0.30f, y - r * 0.32f),
+        )
+    }
+}
+
 private fun DrawScope.drawEgg(center: Offset, unit: Float, palette: CreaturePalette, frame: CreatureFrame) {
     val w = unit * 0.26f
     val h = unit * 0.34f
@@ -1065,9 +1141,26 @@ private fun DrawScope.drawHat(
     center: Offset,
     bodyR: Float,
     p: Proportions,
+    frame: CreatureFrame,
 ) {
-    val topY = center.y - bodyR * 1.02f
+    // A hat is a loose mass, not a decal. It rides the head as the body stretches and squashes,
+    // overshoots that motion a little so a jump throws it up and a landing drops it back on,
+    // and keeps leaning for a beat after the pet has stopped walking.
+    val head = center.y - bodyR * (frame.squash + 0.02f)
+    val topY = head - bodyR * (frame.squash - 1f) * 0.55f
     val w = bodyR * p.bodyWidth
+    rotate(degrees = frame.hatTilt, pivot = Offset(center.x, topY + bodyR * 0.30f)) {
+        drawHatShape(hatId, center, bodyR, topY, w)
+    }
+}
+
+private fun DrawScope.drawHatShape(
+    hatId: String,
+    center: Offset,
+    bodyR: Float,
+    topY: Float,
+    w: Float,
+) {
     when (hatId) {
         "hat_cap" -> {
             val cap = Path().apply {

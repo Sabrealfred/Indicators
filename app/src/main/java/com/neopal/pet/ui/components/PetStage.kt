@@ -78,7 +78,7 @@ private fun durationOf(animation: PetAnimation): Float = when (animation) {
     PetAnimation.HAPPY -> 1.4f
     PetAnimation.PLAY -> 1.6f
     PetAnimation.SLEEP -> 1.2f
-    PetAnimation.WAKE -> 1.0f
+    PetAnimation.WAKE -> 1.6f
     PetAnimation.CLEAN -> 1.8f
     PetAnimation.HEAL -> 1.8f
     PetAnimation.REFUSE -> 1.0f
@@ -165,6 +165,14 @@ fun PetStage(
     var idlePose by remember { mutableStateOf(IdlePose.NONE) }
     var idlePoseStart by remember { mutableFloatStateOf(0f) }
     var nextIdlePose by remember { mutableFloatStateOf(9f) }
+    // The tail and anything worn are loose masses hanging off the body rather than parts of it,
+    // so they get their own damped springs: they overshoot when the pet sets off and carry on
+    // swinging for a beat after it has stopped.
+    var tailLag by remember { mutableFloatStateOf(0f) }
+    var tailVel by remember { mutableFloatStateOf(0f) }
+    var hatLag by remember { mutableFloatStateOf(0f) }
+    var hatVel by remember { mutableFloatStateOf(0f) }
+    var lastWanderX by remember { mutableFloatStateOf(0.5f) }
 
     // Frame loop: advance the clock, the particles, the blink and the screen shake.
     LaunchedEffect(Unit) {
@@ -204,6 +212,16 @@ fun PetStage(
                     // Sleeping, sick or gone: settle back to the middle of the room.
                     wanderX += (0.5f - wanderX) * dt * 0.8f
                 }
+
+                // Drag on the trailing parts is the body's own velocity, pointing backwards.
+                val drag = (-(wanderX - lastWanderX) / dt.coerceAtLeast(0.001f) * 7f)
+                    .coerceIn(-1.2f, 1.2f)
+                lastWanderX = wanderX
+                tailVel += ((drag - tailLag) * 30f - tailVel * 5f) * dt
+                tailLag += tailVel * dt
+                hatVel += ((drag * 0.7f - hatLag) * 46f - hatVel * 7f) * dt
+                hatLag += hatVel * dt
+
                 labels.removeAll { time - it.bornAt > LABEL_LIFETIME }
 
                 // Blink roughly every three seconds, twice as often when the pet is nervous.
@@ -272,6 +290,8 @@ fun PetStage(
         facing = if (wanderTarget > wanderX) 1f else -1f,
         idlePose = idlePose,
         idleProgress = ((time - idlePoseStart) / idlePose.seconds).coerceIn(0f, 1f),
+        tailLag = tailLag,
+        hatLag = hatLag,
     )
 
     // The whole world in one lambda, so it can be drawn straight to the screen or through
@@ -496,6 +516,8 @@ private fun buildFrame(
     facing: Float = 0f,
     idlePose: IdlePose = IdlePose.NONE,
     idleProgress: Float = 0f,
+    tailLag: Float = 0f,
+    hatLag: Float = 0f,
 ): CreatureFrame {
     val motion = if (reducedMotion) 0.35f else 1f
     val blink = if (blinkPhase > 0f) {
@@ -510,6 +532,19 @@ private fun buildFrame(
         walking -> facing
         else -> sin(time * 0.35f)
     }
+    // Affection is a slow warming rather than a switch: a new pet is barely pink, one you have
+    // raised for a week is properly flushed, and a sick or miserable one loses most of it.
+    val bond = (state.stats.bond / 100f).coerceIn(0f, 1f)
+    val bonded = when {
+        state.isDead -> 0f
+        state.mood == Mood.SICK || state.mood == Mood.SAD -> bond * 0.30f
+        state.mood == Mood.HAPPY -> 0.22f + bond * 0.78f
+        else -> bond * 0.85f
+    }
+    val stroked = if (isStroking) 0.25f else 0f
+    val warmth = (bonded + stroked).coerceIn(0f, 1f)
+
+    val exhausted = ((28f - state.stats.energy) / 28f).coerceIn(0f, 1f)
     // Walking gets a faster bounce, swinging arms and a lean into the direction of travel.
     var frame = CreatureFrame(
         bobY = if (walking) abs(sin(time * 6f)) * -0.02f * motion else sin(time * 1.6f) * 0.012f * motion,
@@ -520,6 +555,16 @@ private fun buildFrame(
         armSwing = sin(time * (if (walking) 6f else 1.2f)) * (if (walking) 0.8f else 0.25f) * motion,
         gaze = gaze,
         crack = hatchProgress,
+        blush = warmth,
+        tailSwing = tailLag * motion,
+        hatTilt = (hatLag * 12f * motion).coerceIn(-14f, 14f),
+        sweat = if (state.isDead || state.isEgg || state.isSleeping) 0f else exhausted,
+        sweatPhase = (time * 0.5f) % 1f,
+        shiver = if (state.isSick && !state.isSleeping && !state.isDead) {
+            sin(time * 44f) * motion
+        } else {
+            0f
+        },
     )
 
     if (idlePose != IdlePose.NONE && !state.isSleeping && !state.isDead) {
@@ -582,6 +627,7 @@ private fun buildFrame(
                 mouthOpen = 0.45f + jump.height * 0.25f,
                 armSwing = sin(p * 18f) * 0.9f * motion,
                 eyeOpen = 0.85f,
+                blush = (frame.blush + 0.28f).coerceAtMost(1f),
             )
         }
         PetAnimation.PLAY -> {
@@ -616,7 +662,25 @@ private fun buildFrame(
             squash = 0.94f,
         )
         PetAnimation.SLEEP -> frame.copy(eyeOpen = (1f - p).coerceIn(0f, 1f), lean = 6f * p)
-        PetAnimation.WAKE -> frame.copy(eyeOpen = p, squash = 1f + 0.08f * (1f - p))
+        PetAnimation.WAKE -> {
+            // Waking is its own beat: reach up, hang at full extension, then flop back down
+            // through a squash into the idle. Cutting straight to idle reads as a teleport.
+            val stretch = when {
+                p < 0.45f -> p / 0.45f
+                p < 0.62f -> 1f
+                else -> 1f - (p - 0.62f) / 0.38f
+            }
+            val settle = if (p > 0.62f) sin((p - 0.62f) / 0.38f * PI.toFloat()) else 0f
+            frame.copy(
+                eyeOpen = blink * (p * 2f).coerceAtMost(1f),
+                squash = 1f + (stretch * 0.18f - settle * 0.12f) * motion,
+                bobY = frame.bobY - stretch * 0.024f * motion,
+                armsUp = stretch,
+                armSwing = 0f,
+                mouthOpen = stretch * 0.5f,
+                lean = sin(p * 5f) * 2f * motion,
+            )
+        }
         PetAnimation.LEVEL_UP -> {
             val hop = abs(sin(p * 2f * PI.toFloat()))
             frame.copy(bobY = -hop * 0.14f * motion, flash = (1f - p) * 0.4f, mouthOpen = 0.6f)
