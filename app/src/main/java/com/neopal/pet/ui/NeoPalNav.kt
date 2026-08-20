@@ -24,6 +24,7 @@ import com.neopal.pet.ui.screens.ChronicleScreen
 import com.neopal.pet.ui.screens.GamesScreen
 import com.neopal.pet.ui.screens.HomeScreen
 import com.neopal.pet.ui.screens.MemorialScreen
+import com.neopal.pet.ui.screens.MissionsScreen
 import com.neopal.pet.ui.screens.NewGameScreen
 import com.neopal.pet.ui.screens.SettingsScreen
 import com.neopal.pet.ui.screens.ShopScreen
@@ -45,6 +46,7 @@ object Routes {
     const val ALBUM = "album"
     const val CHRONICLE = "chronicle"
     const val ACHIEVEMENTS = "achievements"
+    const val MISSIONS = "missions"
     const val SETTINGS = "settings"
     const val MEMORIAL = "memorial"
 }
@@ -120,6 +122,7 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
             composable(Routes.ALBUM) { AlbumScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.CHRONICLE) { ChronicleScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.ACHIEVEMENTS) { AchievementsScreen(viewModel) { navController.popBackStack() } }
+            composable(Routes.MISSIONS) { MissionsScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     viewModel = viewModel,

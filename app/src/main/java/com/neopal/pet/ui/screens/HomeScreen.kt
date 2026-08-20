@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
@@ -223,10 +224,14 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
     // One highlight at a time: the dock should answer "what now?" without doing it for you.
     val urgent = CareActions.topNeed(pet)
     fun cue(need: String): Int = if (urgent == need) 1 else 0
+    // A finished mission is the only thing in this game that waits to be collected, so it gets
+    // the dock's own badge rather than a strip of its own — the pet keeps every pixel it had.
+    val collectable = viewModel.missions().count { it.claimable }
     val actions = listOf(
         HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
         HomeAction("Clean", Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
         HomeAction("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue("Bored")) { onOpen(Routes.GAMES) },
+        HomeAction("Missions", Icons.Filled.Assignment, NeoColors.NeonYellow, badge = collectable) { onOpen(Routes.MISSIONS) },
         HomeAction("Medicine", Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
         HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
         HomeAction("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
@@ -625,11 +630,12 @@ private fun TopBar(
             Text(name, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.labelSmall, color = NeoColors.OnDarkMuted, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.height(6.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
-                Spacer(Modifier.width(8.dp))
-                CoinPill(pet.coins)
-            }
+            // Stacked, not side by side: the level pill is a fixed 96dp and the coin pill grew
+            // when its count moved to block glyphs, so at four figures the two no longer fit
+            // across a panel that floors at 200dp — and the digits would clip, silently.
+            LevelPill(pet.level, pet.xp, pet.xpForNextLevel)
+            Spacer(Modifier.height(4.dp))
+            CoinPill(pet.coins)
         }
     } else {
         Row(

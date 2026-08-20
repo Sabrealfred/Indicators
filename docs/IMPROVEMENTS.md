@@ -80,7 +80,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 55 | Widget de pantalla de inicio con el estado y una acción rápida | 🔜 |
 | 56 | Diario de la mascota escrito en primera persona, con línea de tiempo | ✅ |
 | 57 | Récords por minijuego visibles en el menú de juegos | ✅ |
-| 58 | Comparativa de generaciones (esta vs. la anterior) | ✅ (parcial: falta registro por generación) |
+| 58 | Comparativa de generaciones (esta vs. la anterior) | ✅ |
 | 59 | Ficha de ítem antes de comprar: cada stat que mueve, precio contra saldo | ✅ |
 | 60 | Búsqueda y filtros en la tienda cuando haya más de 40 ítems | 💡 |
 | 61 | Layouts reales por tamaño: teléfono chico sin rieles, landscape y tablet a dos paneles | ✅ |
@@ -94,9 +94,9 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 |---|--------|--------|
 | 65 | Sombra de contacto, contorno y brillo consistentes en todos los iconos | ✅ |
 | 66 | Icono de cuarto distinto por tema, no genérico | ✅ |
-| 67 | Barrido de brillo animado en ítems nuevos o destacados | ✅ (API del kit lista) 🔜 (adoptarla en pantallas) |
+| 67 | Barrido de brillo animado en ítems nuevos o destacados | ✅ |
 | 68 | Siluetas inconfundibles: ningún par de iconos se confunde a 24 px | ✅ |
-| 69 | Fuente bitmap propia para los números del HUD | ✅ (kit) 🔜 (adoptarla en el HUD) |
+| 69 | Fuente bitmap propia para los números del HUD | ✅ |
 | 70 | Contraste WCAG AA verificado y corregido (8 pares fallaban en tema claro) | ✅ |
 | 71 | Iconos animados en el dock (la comida humea, el jabón burbujea) | 💡 |
 | 72 | Set de iconos alternativo "line art" como opción | 💡 |
@@ -113,7 +113,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 78 | Clima conectado al calendario de la mascota: llueve cada tercer día, los cuartos interiores no | ✅ |
 | 79 | Estaciones que cambian la decoración cada N días de mascota | ✅ |
 | 80 | Cacas con variación de tamaño y rotación por índice | ✅ |
-| 81 | Objetos del cuarto interactuables (tocar la lámpara la enciende) | ✅ (arte + hitboxes) 🔜 (gestos) |
+| 81 | Objetos del cuarto interactuables (tocar la lámpara la enciende) | ✅ |
 | 82 | Editor de cuarto: mover y colocar decoraciones | 💡 |
 
 ## G. Minijuegos (83–90)
@@ -158,7 +158,7 @@ Un agente de diseño auditó el simulador contra el código y encontró tres cos
 |---|--------|--------|
 | 95 | El diario se hereda entre generaciones: un libro familiar | ✅ |
 | 96 | Cartas de hito ("tu mascota cumplió 5 días") como recuerdo coleccionable | 🔜 |
-| 97 | Misiones diarias y racha de días cuidando | ✅ (dominio + VM) 🔜 (pantalla) |
+| 97 | Misiones diarias y racha de días cuidando | ✅ |
 | 98 | Resumen de vida al morir, compartible como imagen | 🔜 |
 | 99 | Sincronización en la nube y traspaso entre dispositivos | 💡 |
 | 100 | Tests de UI con capturas de regresión visual para el arte procedural | 🔜 |
