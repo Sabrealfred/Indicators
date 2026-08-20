@@ -115,6 +115,74 @@ data class AlbumEntry(
 )
 
 /**
+ * One finished run, sealed when the next generation starts and never touched again.
+ *
+ * The album could only ever confess how far a pet got, and only if it lived long enough to be
+ * photographed. These are the numbers a player is actually asking about when they wonder whether
+ * they are getting better at this: how long it lasted, how it was cared for on the way, and what
+ * finally took it.
+ */
+@Serializable
+data class RunRecord(
+    val generation: Int = 0,
+    val name: String = "",
+    val species: Species = Species.AQUA,
+    /** Stages never go backwards, so the stage it died in is the furthest it ever reached. */
+    val stage: LifeStage = LifeStage.EGG,
+    val branch: EvolutionBranch = EvolutionBranch.BALANCED,
+    val personality: Personality = Personality.CALM,
+    val lifespanSeconds: Long = 0L,
+    /** Null when the run ended without dying; the comparison has to be able to say so. */
+    val deathReason: DeathReason? = null,
+    /** Time-weighted average of [Stats.careScore] across the whole life, 0..1. */
+    val careScore: Float = 0f,
+    val peakBond: Float = 0f,
+    val careMistakes: Int = 0,
+    val mealsEaten: Int = 0,
+    val gamesPlayed: Int = 0,
+    val gamesWon: Int = 0,
+    val cleanups: Int = 0,
+    val medicineDoses: Int = 0,
+    val level: Int = 1,
+    val bestCareStreak: Int = 0,
+    val endedAtMillis: Long = 0L,
+) {
+    /** The only ending that is not a failure. */
+    val diedOfOldAge: Boolean get() = deathReason == DeathReason.OLD_AGE
+
+    /**
+     * Neglect per hour lived. The raw count rewards a pet that died young for dying young, so the
+     * comparison between two runs of different lengths has to be a rate.
+     */
+    val mistakesPerHour: Float get() = careMistakes / (lifespanSeconds / 3600f).coerceAtLeast(1f)
+
+    companion object {
+        /** Seals [state] as it stood at the end of its run. */
+        fun of(state: PetState, endedAtMillis: Long): RunRecord = RunRecord(
+            generation = state.generation,
+            name = state.name,
+            species = state.species,
+            stage = state.stage,
+            branch = state.branch,
+            personality = state.personality,
+            lifespanSeconds = state.ageSeconds,
+            deathReason = state.deathReason,
+            careScore = state.lifetimeCareScore,
+            peakBond = maxOf(state.peakBond, state.stats.bond),
+            careMistakes = state.careMistakes,
+            mealsEaten = state.mealsEaten,
+            gamesPlayed = state.gamesPlayed,
+            gamesWon = state.gamesWon,
+            cleanups = state.cleanups,
+            medicineDoses = state.medicineDoses,
+            level = state.level,
+            bestCareStreak = state.bestCareStreak,
+            endedAtMillis = endedAtMillis,
+        )
+    }
+}
+
+/**
  * The full save state of one run. Serialized as a single JSON blob so the schema can grow
  * without a migration dance; unknown fields are ignored on read and defaults fill the gaps.
  */
@@ -146,6 +214,11 @@ data class PetState(
     val medicineDoses: Int = 0,
 
     val careMistakes: Int = 0,
+    /** Highest bond ever reached. Bond decays, so the closing value undersells the run. */
+    val peakBond: Float = 0f,
+    /** Sum of `careScore × seconds` since hatching, and the seconds it was sampled over. */
+    val careScoreSeconds: Double = 0.0,
+    val careSampleSeconds: Long = 0L,
     val praises: Int = 0,
     val scolds: Int = 0,
     val mealsEaten: Int = 0,
@@ -166,6 +239,12 @@ data class PetState(
     val deathAtSeconds: Long = 0L,
 
     val generation: Int = 1,
+    /**
+     * Every earlier run this save still remembers, oldest first, capped at
+     * [Simulation.MAX_REMEMBERED_GENERATIONS]. Empty on a save written before the log existed,
+     * which is not the same as a run that did nothing — nobody may show a zero for it.
+     */
+    val previousGenerations: List<RunRecord> = emptyList(),
     /** Best score per minigame id, so a good run is remembered. */
     val highScores: Map<String, Int> = emptyMap(),
     val unlockedAchievements: Set<String> = emptySet(),
@@ -189,6 +268,13 @@ data class PetState(
 
     /** Seconds spent in the current life stage. */
     val secondsInStage: Long get() = (ageSeconds - stageStartedSeconds).coerceAtLeast(0L)
+
+    /**
+     * Care across the whole life, 0..1. Grading the closing stats instead scores every neglected
+     * pet at zero and flatters every pet that merely survived to old age.
+     */
+    val lifetimeCareScore: Float
+        get() = if (careSampleSeconds > 0L) (careScoreSeconds / careSampleSeconds).toFloat() else stats.careScore
 
     /** XP needed to reach the next level; grows quadratically but stays reachable. */
     val xpForNextLevel: Int get() = 60 + (level - 1) * 45

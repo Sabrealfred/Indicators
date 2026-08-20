@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -40,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -50,30 +52,25 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.R
-import com.neopal.pet.domain.AlbumEntry
 import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.GameConfig
-import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.RunRecord
 import com.neopal.pet.domain.Simulation
-import com.neopal.pet.domain.Species
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.NeoAccents
+import com.neopal.pet.ui.components.PixelBadge
+import com.neopal.pet.ui.components.PixelBar
+import com.neopal.pet.ui.components.PixelDigits
+import com.neopal.pet.ui.components.PixelDivider
+import com.neopal.pet.ui.components.PixelPanel
 import com.neopal.pet.ui.components.StatBar
+import com.neopal.pet.ui.components.dimmedFor
+import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.components.rememberWindowSize
 import com.neopal.pet.ui.theme.NeoColors
+import java.util.Locale
 import kotlin.math.roundToInt
-
-/**
- * What a past pet managed, rebuilt from the album. The save file keeps no per-generation record,
- * and the album is the one thing that survives a death — so it is the only witness there is.
- */
-private data class RunSummary(
-    val stage: LifeStage,
-    val branch: EvolutionBranch,
-    val species: Species,
-    val ageSeconds: Long,
-)
 
 /** The full read-out: every meter, the growth timer, and the care record behind evolutions. */
 @Composable
@@ -83,7 +80,6 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     val pet = ui.pet ?: return
     val config = ui.config
     val window = rememberWindowSize()
-    val previous = remember(pet.album, pet.bornAtMillis) { previousRun(pet.album, pet.bornAtMillis) }
 
     Column(
         modifier = Modifier
@@ -147,7 +143,7 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    GenerationsCard(pet, config, previous)
+                    GenerationsCard(pet, config)
                     RecordCard(pet)
                 }
             }
@@ -158,7 +154,7 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             ) {
                 NeedsCard(pet)
                 GrowthCard(pet, config)
-                GenerationsCard(pet, config, previous)
+                GenerationsCard(pet, config)
                 RecordCard(pet)
             }
         }
@@ -247,61 +243,156 @@ private fun RecordCard(pet: PetState) {
 }
 
 /**
- * This pet against the last one. The point of a second generation is finding out whether you
- * have got any better at this, and that question needs the previous run standing next to it.
+ * This pet against the last one. The point of a second generation is finding out whether you have
+ * got any better at this, so the comparison runs on the record the simulation sealed when the last
+ * pet died — not on a silhouette pieced together from whichever milestones happened to be
+ * photographed.
  */
 @Composable
-private fun GenerationsCard(pet: PetState, config: GameConfig, previous: RunSummary?) {
+private fun GenerationsCard(pet: PetState, config: GameConfig) {
     if (pet.generation <= 1) return
-    val last = pet.generation - 1
-    SectionCard("Generations") {
-        if (previous == null) {
+    val last = pet.previousGenerations.lastOrNull()
+    PixelPanel(
+        modifier = Modifier.fillMaxWidth(),
+        accent = NeoAccents.cyan,
+        title = "Generations",
+        titleTrailing = {
+            PixelBadge(
+                text = "${pet.generation}",
+                color = NeoAccents.cyan,
+                contentDescription = "Generation ${pet.generation}",
+            )
+        },
+    ) {
+        if (last == null) {
+            // A save carried over from a build that kept no history has nothing here and never
+            // will. A table of zeroes would read as a generation that did nothing at all.
+            val missing = pet.generation - 1
+            val lead = if (missing == 1) {
+                "The generation before this one was never written down"
+            } else {
+                "The $missing generations before this one were never written down"
+            }
             Text(
-                "Generation $last left no photos behind, so there is nothing to compare against. " +
-                    "Every evolution files itself in the album on its own — this one will have a record.",
+                "$lead — this save is older than the log. Generation ${pet.generation} is being " +
+                    "recorded, so the pet after it will have something to be measured against.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        } else {
-            val nowDays = pet.ageInPetDays(config)
-            val thenDays = (previous.ageSeconds / config.secondsPerPetDay).toInt()
-            CompareHeader(now = "Now", then = "Gen $last")
-            CompareRow(
-                label = stringResource(R.string.stats_age),
-                now = stringResource(R.string.stats_age_value, nowDays),
-                then = stringResource(R.string.stats_age_value, thenDays),
-                ahead = nowDays > thenDays,
-            )
-            CompareRow(
-                label = "Stage",
-                now = pet.stage.displayName,
-                then = previous.stage.displayName,
-                ahead = pet.stage.order > previous.stage.order,
-            )
-            CompareRow(label = "Branch", now = pet.branch.displayName, then = previous.branch.displayName)
-            CompareRow(label = "Species", now = pet.species.displayName, then = previous.species.displayName)
-            Spacer(Modifier.height(8.dp))
+            return@PixelPanel
+        }
+
+        val nowDays = pet.ageInPetDays(config)
+        val thenDays = (last.lifespanSeconds / config.secondsPerPetDay).toInt()
+        // Raw mistake counts reward a pet for dying young, so both sides are rated per hour lived.
+        val nowMistakes = pet.careMistakes / (pet.ageSeconds / 3600f).coerceAtLeast(1f)
+
+        if (!pet.isDead) {
+            // A finished life against a life in progress: the totals are not a fair race yet, and
+            // a green number on an unfinished run should not be read as one.
             Text(
-                text = verdict(pet, previous, nowDays, thenDays, last),
+                "Generation ${last.generation} is a finished life. This one is still being lived, " +
+                    "so its counts are still filling in.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Spacer(Modifier.height(pixelUnits(2)))
         }
+        CompareHeader(now = "Now", then = "Gen ${last.generation}")
+        CompareDigits("Pet days", "$nowDays", "$thenDays", ahead = nowDays > thenDays)
+        CompareText(
+            label = "Stage",
+            now = pet.stage.displayName,
+            then = last.stage.displayName,
+            ahead = pet.stage.order > last.stage.order,
+        )
+        // The growth card grades the stats as they stand this second; this one grades the whole
+        // life, which is the only way two finished runs can be held against each other.
+        CompareText(
+            label = "Lifetime care",
+            now = careGrade(pet.lifetimeCareScore),
+            then = careGrade(last.careScore),
+            ahead = pet.lifetimeCareScore > last.careScore,
+        )
+        CompareBars("Care", pet.lifetimeCareScore, last.careScore, NeoColors.StatHealth, last.generation)
+        CompareDigits(
+            label = "Mistakes per hour",
+            now = oneDecimal(nowMistakes),
+            then = oneDecimal(last.mistakesPerHour),
+            ahead = nowMistakes < last.mistakesPerHour,
+        )
+        CompareDigits("Meals", "${pet.mealsEaten}", "${last.mealsEaten}", ahead = pet.mealsEaten > last.mealsEaten)
+        CompareDigits(
+            label = "Games won",
+            now = "${pet.gamesWon}",
+            then = "${last.gamesWon}",
+            ahead = pet.gamesWon > last.gamesWon,
+        )
+        CompareBars("Peak bond", pet.peakBond / 100f, last.peakBond / 100f, NeoColors.StatBond, last.generation)
+
+        Spacer(Modifier.height(pixelUnits(2)))
+        PixelDivider()
+        Spacer(Modifier.height(pixelUnits(2)))
+        Ending(last)
+        Spacer(Modifier.height(pixelUnits(2)))
+        Text(
+            text = verdict(pet, last, nowDays, thenDays),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/** How the last run ended — the one line of it this pet cannot be compared against. */
+@Composable
+private fun Ending(last: RunRecord) {
+    val badge = last.deathReason?.displayName ?: "Unfinished"
+    val who = "${last.name} · ${last.species.displayName} · " +
+        "${last.branch.displayName} · ${last.personality.displayName}"
+    val sentence = when {
+        last.diedOfOldAge -> "A whole life, ended by nothing but time."
+        last.deathReason != null -> "It never saw the end of ${last.stage.displayName}."
+        else -> "Replaced rather than lost."
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .semantics(mergeDescendants = true) { contentDescription = "Ending. $badge. $who. $sentence" },
+    ) {
+        PixelBadge(
+            text = badge.uppercase(),
+            // Old age is the one ending that is not a failure, so it does not get the alarm colour.
+            color = if (last.diedOfOldAge) NeoAccents.gold else MaterialTheme.colorScheme.error,
+            contentDescription = "",
+        )
+        Spacer(Modifier.height(pixelUnits(2)))
+        Text(
+            who,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            sentence,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
 /** One honest sentence about the comparison, including "too early to tell". */
-private fun verdict(pet: PetState, previous: RunSummary, nowDays: Int, thenDays: Int, last: Int): String = when {
-    pet.stage.order > previous.stage.order ->
-        "${pet.name} has already outgrown generation $last."
-    pet.stage.order < previous.stage.order ->
-        "Generation $last reached ${previous.stage.displayName}. ${pet.name} is not there yet."
+private fun verdict(pet: PetState, last: RunRecord, nowDays: Int, thenDays: Int): String = when {
+    pet.stage.order > last.stage.order ->
+        "${pet.name} has already outgrown generation ${last.generation}."
+    pet.stage.order < last.stage.order ->
+        "Generation ${last.generation} reached ${last.stage.displayName}. ${pet.name} is not there yet."
     nowDays < thenDays ->
-        "Same stage as generation $last, and ${thenDays - nowDays} pet day(s) quicker about it."
+        "Same stage as generation ${last.generation}, and ${thenDays - nowDays} pet day(s) quicker about it."
     nowDays > thenDays ->
-        "Same stage as generation $last, ${nowDays - thenDays} pet day(s) later."
+        "Same stage as generation ${last.generation}, ${nowDays - thenDays} pet day(s) later."
     else ->
-        "Neck and neck with generation $last so far."
+        "Neck and neck with generation ${last.generation} so far."
 }
 
 @Composable
@@ -309,12 +400,12 @@ private fun CompareHeader(now: String, then: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 2.dp)
+            .padding(bottom = pixelUnits(1))
             // Every row below names both sides in full, so the header would only repeat itself.
             .clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(pixelUnits(2)),
     ) {
-        Spacer(Modifier.weight(1.1f))
+        Spacer(Modifier.weight(CompareLabelWeight))
         Text(
             now.uppercase(),
             style = MaterialTheme.typography.labelSmall,
@@ -336,30 +427,16 @@ private fun CompareHeader(now: String, then: String) {
     }
 }
 
+/** Wide enough for "Mistakes per hour" to wrap in two lines instead of eating a value column. */
+private const val CompareLabelWeight = 1.2f
+
 /**
- * Label, this run, last run. All three carry weight so a long species name or a 1.3x font scale
+ * Label, this run, last run. All three carry weight so a long branch name or a 1.3x font scale
  * wraps the row instead of pushing the previous generation off the card.
  */
 @Composable
-private fun CompareRow(label: String, now: String, then: String, ahead: Boolean = false) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .semantics(mergeDescendants = true) {
-                contentDescription = "$label. This generation $now. Generation before $then."
-            },
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1.1f),
-        )
+private fun CompareText(label: String, now: String, then: String, ahead: Boolean = false) {
+    CompareRow(label, "$label. This generation $now. Generation before $then.") {
         Text(
             now,
             style = MaterialTheme.typography.bodyMedium,
@@ -384,31 +461,81 @@ private fun CompareRow(label: String, now: String, then: String, ahead: Boolean 
 }
 
 /**
- * Rebuilds the run that came before this one. Album entries are kept across generations and each
- * new pet restarts its own clock, so an age that jumps backwards is exactly where one life ended.
+ * The numeric twin of [CompareText], drawn in the kit's numerals. Digits are a fixed-size canvas,
+ * so only short readouts belong here — a value that can run to five characters stays as text.
  */
-private fun previousRun(album: List<AlbumEntry>, bornAtMillis: Long): RunSummary? {
-    if (bornAtMillis <= 0L) return null
-    val earlier = album
-        .filter { it.capturedAtMillis in 1 until bornAtMillis }
-        .sortedBy { it.capturedAtMillis }
-    if (earlier.isEmpty()) return null
-
-    var current = mutableListOf<AlbumEntry>()
-    var previousAge = -1L
-    earlier.forEach { entry ->
-        if (entry.petAgeSeconds < previousAge) current = mutableListOf()
-        current += entry
-        previousAge = entry.petAgeSeconds
+@Composable
+private fun CompareDigits(label: String, now: String, then: String, ahead: Boolean = false) {
+    CompareRow(label, "$label. This generation $now. Generation before $then.") {
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            PixelDigits(now, color = if (ahead) NeoAccents.green else MaterialTheme.colorScheme.onSurface)
+        }
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            PixelDigits(then, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
-    val furthest = current.maxByOrNull { it.stage.order } ?: return null
-    return RunSummary(
-        stage = furthest.stage,
-        branch = furthest.branch,
-        species = furthest.species,
-        ageSeconds = current.maxOf { it.petAgeSeconds },
-    )
 }
+
+@Composable
+private fun CompareRow(label: String, readOut: String, values: @Composable RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = pixelUnits(1))
+            .semantics(mergeDescendants = true) { contentDescription = readOut },
+        horizontalArrangement = Arrangement.spacedBy(pixelUnits(2)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(CompareLabelWeight),
+        )
+        values()
+    }
+}
+
+/**
+ * The same 0..1 measure twice, this run over the last. Two stacked meters read as one comparison
+ * where two numbers side by side read as two separate facts.
+ */
+@Composable
+private fun CompareBars(label: String, now: Float, then: Float, color: Color, generation: Int) {
+    val background = MaterialTheme.colorScheme.background
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = pixelUnits(1))
+            .semantics(mergeDescendants = true) {
+                contentDescription = "$label. This generation ${percent(now)} percent. " +
+                    "Generation $generation ${percent(then)} percent."
+            },
+    ) {
+        Text(
+            label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(pixelUnits(1)))
+        PixelBar(fraction = now, color = color, height = pixelUnits(4))
+        Spacer(Modifier.height(pixelUnits(1)))
+        // The past run sits behind the present one in weight as well as in order.
+        PixelBar(
+            fraction = then,
+            color = dimmedFor(color, background),
+            height = pixelUnits(2),
+            background = background,
+        )
+    }
+}
+
+private fun percent(fraction: Float): Int = (fraction.coerceIn(0f, 1f) * 100).roundToInt()
+
+/** The pixel font carries a full stop and no comma, so the decimal mark cannot follow the locale. */
+private fun oneDecimal(value: Float): String = String.format(Locale.US, "%.1f", value)
 
 @Composable
 private fun RenameDialog(current: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {

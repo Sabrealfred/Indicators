@@ -122,10 +122,21 @@ object Simulation {
             rngSeed = seed,
         )
 
+    /**
+     * How many finished runs a save keeps. The save is one JSON blob rewritten on every tick, so
+     * the history has to be bounded; eight is more past lives than a comparison can use and small
+     * enough that the blob never grows into the write.
+     */
+    const val MAX_REMEMBERED_GENERATIONS = 8
+
     /** Restarts after a death, carrying the album, achievements, coins and generation forward. */
     fun nextGeneration(previous: PetState, name: String, species: Species, nowMillis: Long): PetState =
         newGame(name, species, nowMillis, seed = previous.rngSeed * 31 + nowMillis).copy(
             generation = previous.generation + 1,
+            // The run that is ending is sealed here and nowhere else: this is the one moment the
+            // whole of it is still in hand.
+            previousGenerations = (previous.previousGenerations + RunRecord.of(previous, nowMillis))
+                .takeLast(MAX_REMEMBERED_GENERATIONS),
             coins = previous.coins,
             album = previous.album,
             chronicle = previous.chronicle,
@@ -276,7 +287,16 @@ object Simulation {
         // Weight drifts down slowly when the pet is not overfed.
         val weight = (s.weightGrams - 0.0015f * d).coerceIn(6f, 120f)
         stats = stats.copy(health = stats.health.coerceAtLeast(healthFloor))
-        s = s.copy(stats = stats.coerced(), weightGrams = weight)
+        val settled = stats.coerced()
+        s = s.copy(
+            stats = settled,
+            weightGrams = weight,
+            // Read before this step's drain as well as after it, so the value a care action set
+            // between ticks is the one kept rather than that value minus a tick of decay.
+            peakBond = max(s.peakBond, max(state.stats.bond, settled.bond)),
+            careScoreSeconds = s.careScoreSeconds + settled.careScore.toDouble() * dt,
+            careSampleSeconds = s.careSampleSeconds + dt,
+        )
 
         s = handleSleepCycle(s, config, events)
         s = handlePoop(s, dt, random, events)
