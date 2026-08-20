@@ -245,6 +245,13 @@ data class GameConfig(
      * disappeared entirely — so the default sits higher.
      */
     val pixelHeight: Int = 200,
+    /**
+     * How much the pixel blocks are allowed to bleed into each other, 0..1. Zero is a razor-hard
+     * retro look; higher values round the light off the edges without blurring the art itself.
+     */
+    val softFinish: Float = 0.55f,
+    /** Warm/cool colour grade and vignette over the finished frame, 0..1. */
+    val atmosphere: Float = 0.7f,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
 ) {

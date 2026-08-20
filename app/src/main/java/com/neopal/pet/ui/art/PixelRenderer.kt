@@ -33,8 +33,16 @@ class PixelRenderer(private val targetHeight: Int = 200) {
     private var bufferCanvas: Canvas? = null
     private val bufferScope = CanvasDrawScope()
 
-    /** Renders [block] at low resolution and blits the result across [target]. */
-    fun render(target: DrawScope, block: DrawScope.() -> Unit) {
+    /**
+     * Renders [block] at low resolution and blits the result across [target].
+     *
+     * @param softness 0 leaves the blocks razor-hard. Above zero the buffer is composited a
+     * second time, slightly larger and bilinearly sampled, at low alpha — a cheap bloom that
+     * rounds the corner of every block and lets light bleed a pixel or two past an edge. The
+     * pixels stay honest because the crisp copy underneath is what you actually read; this only
+     * takes the glare off them.
+     */
+    fun render(target: DrawScope, block: DrawScope.() -> Unit, softness: Float = 0f) {
         val viewWidth = target.size.width
         val viewHeight = target.size.height
         if (viewWidth < 1f || viewHeight < 1f) return
@@ -67,15 +75,29 @@ class PixelRenderer(private val targetHeight: Int = 200) {
 
         val destinationWidth = width * scale
         val destinationHeight = height * scale
+        val offset = IntOffset(
+            x = ((viewWidth - destinationWidth) / 2f).roundToInt(),
+            y = ((viewHeight - destinationHeight) / 2f).roundToInt(),
+        )
         target.drawImage(
             image = bitmap,
-            dstOffset = IntOffset(
-                x = ((viewWidth - destinationWidth) / 2f).roundToInt(),
-                y = ((viewHeight - destinationHeight) / 2f).roundToInt(),
-            ),
+            dstOffset = offset,
             dstSize = IntSize(destinationWidth, destinationHeight),
             filterQuality = FilterQuality.None,
         )
+
+        val glow = softness.coerceIn(0f, 1f)
+        if (glow > 0.01f) {
+            val grow = max(1, (scale * 0.7f).roundToInt())
+            target.drawImage(
+                image = bitmap,
+                dstOffset = IntOffset(offset.x - grow, offset.y - grow),
+                dstSize = IntSize(destinationWidth + grow * 2, destinationHeight + grow * 2),
+                alpha = 0.22f * glow,
+                filterQuality = FilterQuality.Medium,
+                blendMode = BlendMode.Plus,
+            )
+        }
     }
 
     companion object {

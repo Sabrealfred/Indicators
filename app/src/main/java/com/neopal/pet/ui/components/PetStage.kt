@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.inset
@@ -398,7 +399,11 @@ fun PetStage(
                 dy = (dy / block).roundToInt() * block
             }
             translate(dx, dy) {
-                if (config.pixelMode) pixelRenderer.render(this) { world() } else world()
+                if (config.pixelMode) {
+                    pixelRenderer.render(this, block = { world() }, softness = config.softFinish)
+                } else {
+                    world()
+                }
             }
             // Atmosphere on top of the blit: gradients belong at screen resolution, where they
             // stay smooth, while the art underneath stays chunky.
@@ -406,11 +411,37 @@ fun PetStage(
                 if (state.lightsOff) drawLightsOutOverlay()
                 if (state.isSleeping) drawSleepVignette(0.8f)
             }
+            drawAtmosphere(night = night, strength = config.atmosphere)
         }
 
         FloatingLabels(labels = labels, now = time)
         MoodBubble(state = state, action = activeAction)
     }
+}
+
+/**
+ * The finishing pass, drawn at screen resolution over everything else: a colour grade that warms
+ * the picture by day and cools it at night, and a vignette that pulls the eye to the middle of
+ * the room. Both are wide, smooth gradients — exactly what the low-resolution buffer cannot hold
+ * without banding, and exactly what makes a frame feel composed rather than merely drawn.
+ */
+private fun DrawScope.drawAtmosphere(night: Float, strength: Float) {
+    val amount = strength.coerceIn(0f, 1f)
+    if (amount <= 0.01f) return
+    val daylight = 1f - night.coerceIn(0f, 1f)
+    if (daylight > 0.01f) {
+        drawRect(Color(0xFFFFB870).copy(alpha = 0.055f * daylight * amount))
+    }
+    if (night > 0.01f) {
+        drawRect(Color(0xFF6C86FF).copy(alpha = 0.10f * night * amount))
+    }
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color.Transparent, Color(0xFF0B0D16).copy(alpha = 0.30f * amount)),
+            center = Offset(size.width * 0.5f, size.height * 0.48f),
+            radius = size.minDimension * 0.95f,
+        ),
+    )
 }
 
 /** Rounds a continuous value to [steps] discrete positions, to keep motion off sub-pixel drift. */

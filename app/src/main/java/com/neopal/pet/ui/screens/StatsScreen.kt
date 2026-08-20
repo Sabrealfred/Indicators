@@ -17,6 +17,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -47,6 +55,7 @@ import kotlin.math.roundToInt
 /** The full read-out: every meter, the growth timer, and the care record behind evolutions. */
 @Composable
 fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
+    var renaming by remember { mutableStateOf(false) }
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
     val config = ui.config
@@ -74,8 +83,16 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
                     .weight(1f)
+                    .clickable { renaming = true }
                     .semantics { heading() },
             )
+            IconButton(onClick = { renaming = true }) {
+                Icon(
+                    Icons.Filled.Edit,
+                    contentDescription = "Rename ${pet.name}",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
         Text(
             "${pet.species.displayName} · ${pet.stage.displayName} · ${pet.branch.displayName} · ${pet.personality.displayName}",
@@ -147,6 +164,46 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         }
         Spacer(Modifier.height(24.dp))
     }
+
+    if (renaming) {
+        RenameDialog(
+            current = pet.name,
+            onDismiss = { renaming = false },
+            onConfirm = { name ->
+                viewModel.rename(name)
+                renaming = false
+            },
+        )
+    }
+}
+
+@Composable
+private fun RenameDialog(current: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var draft by remember { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = draft,
+                    onValueChange = { if (it.length <= 12) draft = it },
+                    singleLine = true,
+                    label = { Text("Name") },
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Twelve characters. It keeps everything else — the diary is still its diary.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(draft) }, enabled = draft.isNotBlank()) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** A hint about where the care history is pointing, without naming the form outright. */

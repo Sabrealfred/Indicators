@@ -142,12 +142,15 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         )
     }
 
+    // One highlight at a time: the dock should answer "what now?" without doing it for you.
+    val urgent = CareActions.topNeed(pet)
+    fun cue(need: String): Int = if (urgent == need) 1 else 0
     val actions = listOf(
-        HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead) { showFeedSheet = true },
+        HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
         HomeAction("Clean", Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
-        HomeAction("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null) { onOpen(Routes.GAMES) },
+        HomeAction("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue("Bored")) { onOpen(Routes.GAMES) },
         HomeAction("Medicine", Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
-        HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead) { viewModel.toggleLights() },
+        HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
         HomeAction("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
         HomeAction("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
         HomeAction("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },

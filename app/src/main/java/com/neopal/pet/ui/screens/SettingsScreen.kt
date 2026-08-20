@@ -166,6 +166,43 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         }
 
         Spacer(Modifier.height(10.dp))
+        SettingsCard("Finish", "How soft the picture is, and how much atmosphere sits over it.") {
+            Text(
+                "Pixel softness ${(config.softFinish * 100).roundToInt()}%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Slider(
+                value = config.softFinish,
+                onValueChange = { value -> viewModel.updateConfig { it.copy(softFinish = value) } },
+                valueRange = 0f..1f,
+                enabled = config.pixelMode,
+            )
+            Text(
+                "At zero the blocks are razor-hard. Higher lets light bleed a pixel past an edge, " +
+                    "which takes the glare off without blurring the art.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Atmosphere ${(config.atmosphere * 100).roundToInt()}%",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Slider(
+                value = config.atmosphere,
+                onValueChange = { value -> viewModel.updateConfig { it.copy(atmosphere = value) } },
+                valueRange = 0f..1f,
+            )
+            Text(
+                "Warm light by day, cool by night, and a soft vignette around the room.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
         SettingsCard("Pace", "How long a whole life takes, and how fast the clock runs.") {
             val lifetimeHours = Simulation.expectedLifetimeSeconds(config) / 3600f
             Text(
