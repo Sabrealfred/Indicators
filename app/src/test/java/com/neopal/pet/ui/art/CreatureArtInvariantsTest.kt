@@ -790,15 +790,20 @@ private class NpArtRecorder : DrawScope {
     private inner class NpArtTransform : DrawTransform {
         override val size: Size get() = Size(NP_UNIT, NP_UNIT)
 
+        // Explicit receivers, and not for style. Both DrawScope and DrawTransform carry
+        // @DrawScopeMarker, which is a @DslMarker — so from inside this transform the enclosing
+        // recorder's members cannot be reached implicitly, even though this is an inner class of
+        // it. Hand-written stubs of these interfaces tend to omit the annotation, which makes the
+        // implicit form compile everywhere except against the real Compose artefact.
         override fun translate(left: Float, top: Float) {
-            dx += left
-            dy += top
+            this@NpArtRecorder.dx += left
+            this@NpArtRecorder.dy += top
         }
 
         override fun rotate(degrees: Float, pivot: Offset) {
-            rot += degrees
-            px = pivot.x + dx
-            py = pivot.y + dy
+            this@NpArtRecorder.rot += degrees
+            this@NpArtRecorder.px = pivot.x + this@NpArtRecorder.dx
+            this@NpArtRecorder.py = pivot.y + this@NpArtRecorder.dy
         }
 
         override fun inset(left: Float, top: Float, right: Float, bottom: Float) = npArtUnsupported()
