@@ -19,6 +19,20 @@ sealed interface GameEvent {
     data class Died(val reason: DeathReason) : GameEvent
     data class Unlocked(val achievement: Achievement) : GameEvent
     data class Message(val text: String) : GameEvent
+
+    // ---- the autonomous half -------------------------------------------------------------
+    /** The brain committed to something. Carries its own reasoning so the log can show it. */
+    data class Decided(val decision: Decision) : GameEvent
+    /** An activity the brain started has run its course. */
+    data class Finished(val kind: ActivityKind, val note: String) : GameEvent
+    data class LearnedSkill(val skill: Skill) : GameEvent
+    data class IntellectGrew(val from: Int, val to: Int) : GameEvent
+    data class MetPal(val pal: Pal) : GameEvent
+    data class PalLeft(val name: String) : GameEvent
+    data class Befriended(val pal: Pal) : GameEvent
+    data class Paired(val pal: Pal) : GameEvent
+    data class EggLaid(val egg: NestEgg) : GameEvent
+    data class ChildHatched(val child: Pal) : GameEvent
 }
 
 data class SimResult(val state: PetState, val events: List<GameEvent>)
@@ -111,16 +125,31 @@ object Simulation {
         return h >= 21.5f || h < 6.5f
     }
 
-    fun newGame(name: String, species: Species, nowMillis: Long, seed: Long = nowMillis): PetState =
-        PetState(
+    fun newGame(
+        name: String,
+        species: Species,
+        nowMillis: Long,
+        seed: Long = nowMillis,
+        /** Set when the egg came from a pairing; a founder rolls its own. */
+        genome: Genome? = null,
+        parentNames: List<String> = emptyList(),
+    ): PetState {
+        val random = Random(seed)
+        return PetState(
             name = name,
             species = species,
             stage = LifeStage.EGG,
-            personality = Personality.entries[Random(seed).nextInt(Personality.entries.size)],
+            personality = Personality.entries[random.nextInt(Personality.entries.size)],
+            genome = genome ?: Genome.founder(species, random),
+            parentNames = parentNames,
             lastTickMillis = nowMillis,
             bornAtMillis = nowMillis,
             rngSeed = seed,
         )
+    }
+
+    /** How many decisions a save remembers. The blob is rewritten every tick, so this is bounded. */
+    const val MAX_DECISION_LOG = 40
 
     /**
      * How many finished runs a save keeps. The save is one JSON blob rewritten on every tick, so

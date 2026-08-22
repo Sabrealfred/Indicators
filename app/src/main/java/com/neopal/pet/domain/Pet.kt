@@ -259,6 +259,41 @@ data class PetState(
     /** Consecutive pet days finishing every mission. Broken by a gap, not just by a bad day. */
     val careStreakDays: Int = 0,
     val bestCareStreak: Int = 0,
+
+    // ---- mind, body and family ----------------------------------------------------------
+    //
+    // Everything below is inert on a save that predates it: autonomy defaults to OFF, the skill
+    // set is empty, and the genome falls back to the neutral starter shape. An upgraded save is
+    // therefore exactly the pet the player left, and the new systems only start once asked for.
+
+    /** The heritable body and temperament. Seeded from the species when the egg is made. */
+    val genome: Genome = Genome(),
+    /** How much of its own day the pet is allowed to run. */
+    val autonomy: Autonomy = Autonomy.OFF,
+    /** What the brain committed to, and until when. Null means it is between decisions. */
+    val activity: Activity? = null,
+    /** Newest last, capped at [Simulation.MAX_DECISION_LOG]. The pet's own account of itself. */
+    val decisions: List<Decision> = emptyList(),
+
+    /** 0..100. Gates which skills can be learned and how well the brain weighs its options. */
+    val intellect: Float = 5f,
+    val skills: Set<Skill> = emptySet(),
+    /** Study time banked toward the skill currently being learned. */
+    val studySeconds: Long = 0L,
+    /** The skill the pet is working on. Null means it picks one when it next studies. */
+    val studying: Skill? = null,
+    /** Lifetime totals, for achievements and the stats screen. */
+    val studySessions: Int = 0,
+    val selfCareActions: Int = 0,
+    val socialActions: Int = 0,
+
+    /** Everyone the pet has met, present or not. */
+    val pals: List<Pal> = emptyList(),
+    /** Eggs waiting to hatch. */
+    val nest: List<NestEgg> = emptyList(),
+    /** Names of this pet's own parents, for the family tree. Empty for a founder. */
+    val parentNames: List<String> = emptyList(),
+
     val rngSeed: Long = 0L,
 ) {
     val isEgg: Boolean get() = stage == LifeStage.EGG
@@ -297,6 +332,34 @@ data class PetState(
 
     /** True when the pet is unhappy enough to refuse interactions. */
     val isSulking: Boolean get() = !isDead && !isSleeping && stats.happiness < 12f
+
+    /** The expressed body: what the renderer draws, and what the breeding screen compares. */
+    val morphology: Morphology get() = Morphology.of(genome, stage, branch, weightGrams)
+
+    /** True when the pet both has the skill and is allowed to use it at this autonomy level. */
+    fun canAct(skill: Skill): Boolean {
+        if (skill !in skills) return false
+        return when (autonomy) {
+            Autonomy.OFF -> false
+            // Assisted covers upkeep only. Anything that spends resources, leaves the room or
+            // starts a family stays the player's call, because those are the decisions someone
+            // who asked for "just handle the chores" would be annoyed to find already made.
+            Autonomy.ASSIST -> skill in ASSIST_SKILLS
+            Autonomy.FULL -> true
+        }
+    }
+
+    /** Pals actually in the room right now. */
+    val presentPals: List<Pal> get() = pals.filter { it.present }
+
+    /** Whether the pet is old enough for any of this to apply. Eggs and babies are just babies. */
+    val isMindAwake: Boolean
+        get() = !isDead && stage.order >= LifeStage.CHILD.order
+
+    companion object {
+        /** What [Autonomy.ASSIST] is allowed to do on its own. */
+        val ASSIST_SKILLS = setOf(Skill.TIDY_UP, Skill.SELF_GROOM, Skill.SELF_SETTLE)
+    }
 }
 
 /** Tunables. Exposed in settings so a run can be sped up for testing or slowed for a long game. */

@@ -99,6 +99,33 @@ object Chronicle {
             DeathReason.NEGLECT -> "I don't think anyone was coming back." to ChronicleKind.LOSS
         }
 
+        // The autonomous half writes here too, but sparingly. A pet that logs every decision
+        // fills its own diary with "I ate a berry" and buries the lines that mattered — so the
+        // routine ones stay in the decision log and only the firsts and the family reach here.
+        is GameEvent.LearnedSkill ->
+            "I worked out how to ${event.skill.displayName.lowercase()}. Nobody showed me." to ChronicleKind.MILESTONE
+
+        is GameEvent.MetPal ->
+            "Someone new came by. They're called ${event.pal.name}." to ChronicleKind.JOY
+
+        is GameEvent.Befriended ->
+            "${event.pal.name} is my friend now. I decided it, not you." to ChronicleKind.JOY
+
+        is GameEvent.Paired ->
+            "${event.pal.name} and I chose each other." to ChronicleKind.MILESTONE
+
+        is GameEvent.EggLaid ->
+            "There's an egg in the nest. Ours." to ChronicleKind.MILESTONE
+
+        is GameEvent.ChildHatched ->
+            "${event.child.name} hatched today. I know exactly how that feels." to ChronicleKind.MILESTONE
+
+        is GameEvent.Decided,
+        is GameEvent.Finished,
+        is GameEvent.IntellectGrew,
+        is GameEvent.PalLeft,
+        -> null
+
         is GameEvent.Unlocked -> null
         is GameEvent.Pooped, is GameEvent.FellAsleep, is GameEvent.WokeUp -> null
         is GameEvent.Message -> event.text to ChronicleKind.CARE
