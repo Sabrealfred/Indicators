@@ -146,9 +146,74 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     persist(result.state)
                 }
                 handleEvents(result.events, offline = false)
+                maybeReconsider(result.events)
             }
         }
     }
+
+    /**
+     * Offers the local brain's fresh decision to the remote one, and takes its answer if it has
+     * a better idea.
+     *
+     * This is deliberately *after* the local brain has already chosen and acted, not instead of
+     * it. A network call cannot live inside the simulation step: the step loop is pure and
+     * synchronous, which is the property that makes the whole domain testable, and running up to
+     * two thousand of them during a catch-up would be two thousand requests. So the local brain
+     * decides, the creature acts, and only then is the model asked whether it would have done
+     * something else. When it would, [Brain.adopt] re-checks that the option is still legal and
+     * the creature changes its mind visibly, which is a thing creatures do.
+     *
+     * Throttled hard. A free model tier is a small number of calls, and a pet that thinks out
+     * loud every fifteen seconds would spend the whole allowance before lunch.
+     */
+    private fun maybeReconsider(events: List<GameEvent>) {
+        if (events.none { it is GameEvent.Decided }) return
+        val current = _ui.value
+        val pet = current.pet ?: return
+        val config = current.config
+        if (!config.mind.usable || !config.mind.decidesActions || !mind.isReady) return
+        if (reconsidering) return
+        if (pet.ageSeconds - lastReconsideredAtSeconds < RECONSIDER_GAP_SECONDS) return
+
+        val options = Brain.considerations(pet, config)
+        // Nothing to reconsider when there is no real alternative to the thing it just did.
+        if (options.count { it.available } < 2) return
+
+        reconsidering = true
+        lastReconsideredAtSeconds = pet.ageSeconds
+        viewModelScope.launch {
+            val choice = mind.choose(PetBrief.of(pet, config), options)
+            reconsidering = false
+            if (choice == null) return@launch
+            val picked = options.getOrNull(choice.index) ?: return@launch
+            // Agreeing with the local brain is the common case and is not worth a second entry in
+            // the log; only a change of mind is.
+            if (picked.kind == pet.activity?.kind) return@launch
+            val now = _ui.value.pet ?: return@launch
+            val adopted = mutableListOf<GameEvent>()
+            val changed = Brain.adopt(
+                state = now,
+                kind = picked.kind,
+                reason = choice.reason,
+                config = _ui.value.config,
+                random = kotlin.random.Random(now.rngSeed),
+                events = adopted,
+            ) ?: return@launch
+            _ui.update { it.copy(pet = changed) }
+            handleEvents(adopted, offline = false)
+            persist(changed)
+        }
+    }
+
+    /** True while a reconsideration is in flight, so they cannot pile up. */
+    private var reconsidering = false
+    private var lastReconsideredAtSeconds = Long.MIN_VALUE
+
+    /**
+     * Pet seconds between reconsiderations. Five minutes is frequent enough that a player watching
+     * for a while sees it happen, and rare enough that a free tier lasts the day.
+     */
+    private val RECONSIDER_GAP_SECONDS = 300L
 
     // ---------------------------------------------------------------- lifecycle
 
