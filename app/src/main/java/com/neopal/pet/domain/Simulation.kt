@@ -290,6 +290,14 @@ object Simulation {
                 decayScale = decayScale,
                 healthFloor = if (protectHealth) config.offlineHealthFloor else 0f,
             )
+            // Today's high-water marks are taken here, inside the loop, because a stat goal is
+            // only ever true for a moment and roll-over happens after the whole catch-up has
+            // run. Guarded on the ledger still being today's: a long absence walks past the
+            // boundary mid-loop, and energy climbing back overnight belongs to the day it
+            // happened on, not to the one it is being credited against.
+            if (current.ageInPetDays(config) == current.dayLedger.dayIndex) {
+                current = Missions.observe(current)
+            }
             remaining -= dt
         }
 

@@ -31,7 +31,10 @@ object CareActions {
         events: MutableList<GameEvent>,
         accepted: Boolean = true,
     ): ActionResult {
-        val (withAchievements, unlocked) = Achievements.evaluate(state)
+        // The moment a player scrubs a pet clean is the moment "get hygiene above 90" is true,
+        // and it stops being true minutes later. Recording it here rather than waiting for the
+        // next tick means the credit is never a race against the drain.
+        val (withAchievements, unlocked) = Achievements.evaluate(Missions.observe(state))
         unlocked.forEach { events += GameEvent.Unlocked(it) }
         return ActionResult(withAchievements, animation, toast, events.toList(), accepted)
     }
