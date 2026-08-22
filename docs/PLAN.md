@@ -103,12 +103,12 @@ iguales y conviene no tocarlas en bloque.
 | Modo manual rechaza todo | Un jugador que tomó el volante lo conserva |
 | Todo lo que vuelve del modelo se **acota y valida** | Es entrada hostil relayed por red, sin importar quién la generó |
 
-### 4.2 Restricciones de **cautela y costo** — estas sí se levantan 📋
+### 4.2 Restricciones de **cautela y costo** — ✅ todas levantadas
 
 | # | Hoy | Propuesta | Depende de |
 |---|---|---|---|
 | 4.2.1 | ~~Plan de 3 pasos máximo~~ | ✅ **hecho** — 3 pasos al nacer, 6 con intelecto pleno, y un plan que va ganando se **extiende solo** hasta 3 veces. Sin modelo: la evidencia que le daría una lección es la que dice que vale seguir. El reloj pasó a ser **por paso** |
-| 4.2.2 | Sólo herramientas de **lectura** | Herramientas que **actúan**, cada una por la misma revalidación que `adopt`. Más capaz sin debilitar nada | Contrato de tool-calling |
+| 4.2.2 | ~~Sólo herramientas de **lectura**~~ | ✅ **hecho** — la mente elige *cuál* comida, no sólo el verbo. Cada comida a mano es una opción aparte; se sigue eligiendo por índice sobre una lista ya validada y el target se revalida al ejecutarse, así que no se toma nada nuevo por confianza. Y sin modelo también: apetito y la rama gourmand tiran hacia lo rico, con una manía fija por criatura |
 | 4.2.3 | ~~Cadencia fija~~ | ✅ **hecho** — la cadencia escala con el intelecto, en banda estrecha (0.6x–1.5x) para que un tier gratis dure el día |
 | 4.2.4 | ~~Nunca aprende de sí misma~~ | ✅ **hecho** — cada plan se compara contra el cuidado con el que empezó; una mejora clara deja lección, topeada por debajo de lo que enseña una muerte |
 | 4.2.5 | ~~Nunca inicia conversación~~ | ✅ **hecho** — habla sola sólo en primeras veces y puntos de quiebre (crecer, aprender una skill, hacer un amigo, emparejarse, una cría, curarse, sacar una lección propia). Nada de comidas: una criatura que comenta cada plato es una notificación |
@@ -189,6 +189,15 @@ pantalla de cuatro tonos no tiene más oscuro adonde ir.
 | 6.5 | Log de decisiones no es lazy (hasta 40 filas) | Acotado hoy; si el tope crece, `LazyColumn` |
 | 6.6 | ~~Ruta de red nunca ejecutada~~ | ✅ **cerrada**. El cliente no tiene un solo import de Android, así que lo único que faltaba era algo del otro lado de un socket. 16 tests lo corren contra un servidor de mentira sobre `ServerSocket`: la clave viaja como header y en ningún otro lado, el 302 no se sigue, el 429 es un no callado, el cuerpo de error no llega a nadie, el timeout corta a tiempo |
 
+### Lo que enseñó el balance de la comida
+
+La primera versión de §4.2.2 tenía el ajuste al revés: el *encaje* (qué tan bien la comida llena
+el hueco) aplastaba al gusto en todos los niveles de hambre, así que los genes eran decoración. La
+regla que salió del arreglo es mejor que la que me propuse escribir: **el hambre le gana al gusto,
+pero sólo mientras el hambre sea real**. Una criatura dos tercios vacía come lo que llene y no hay
+nada que discutir; una con un poco de hambre es justo donde una preferencia tiene lugar para
+mostrarse. El test del gourmand muerto de hambre es el que no se me hubiera ocurrido escribir.
+
 ### El bug que 6.6 dejó pasar — anotado porque la forma se repite
 
 Los tres throttles del cerebro remoto arrancaban en `Long.MIN_VALUE` y leían
@@ -217,8 +226,6 @@ cerrada y verde en CI. Lo que queda:
    items tocan el mismo archivo
 2. Transición al cambiar de modo de pantalla (§5.3.3) en `PixelRenderer.kt`
 
-**Después, en serie (tocan el mismo contrato):**
-3. Herramientas que actúan (§4.2.2) — cambia el contrato del proveedor, no se paraleliza
 
 **Bloqueado por decisión tuya:**
 - Desplegar el proxy (§3.7.1) — el código está, la clave y el deploy son tuyos
