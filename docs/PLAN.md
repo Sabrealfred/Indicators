@@ -103,7 +103,7 @@ iguales y conviene no tocarlas en bloque.
 
 | # | Hoy | Propuesta | Depende de |
 |---|---|---|---|
-| 4.2.1 | Plan de 3 pasos máximo | Planes largos que se **extienden solos** al terminar, si la criatura tiene intelecto alto | `Errands.MAX_STEPS`, sub-planes |
+| 4.2.1 | ~~Plan de 3 pasos máximo~~ | ✅ **hecho** — 3 pasos al nacer, 6 con intelecto pleno, y un plan que va ganando se **extiende solo** hasta 3 veces. Sin modelo: la evidencia que le daría una lección es la que dice que vale seguir. El reloj pasó a ser **por paso** |
 | 4.2.2 | Sólo herramientas de **lectura** | Herramientas que **actúan**, cada una por la misma revalidación que `adopt`. Más capaz sin debilitar nada | Contrato de tool-calling |
 | 4.2.3 | ~~Cadencia fija~~ | ✅ **hecho** — la cadencia escala con el intelecto, en banda estrecha (0.6x–1.5x) para que un tier gratis dure el día |
 | 4.2.4 | ~~Nunca aprende de sí misma~~ | ✅ **hecho** — cada plan se compara contra el cuidado con el que empezó; una mejora clara deja lección, topeada por debajo de lo que enseña una muerte |
@@ -121,37 +121,54 @@ iguales y conviene no tocarlas en bloque.
 | 5.1.1 | Rhythm Tap | ✅ existe | — |
 | 5.1.2 | Memory Match | ✅ existe | — |
 | 5.1.3 | Snack Catch | ✅ existe | — |
-| 5.1.4 | **Escondidas** | Cooperativo *con* la criatura, no contra ella. Ella esconde o busca según su genoma | Archivo propio |
-| 5.1.5 | **Traer la pelota** | Físicas simples; la criatura mejora con `vigor` y con práctica | Archivo propio |
-| 5.1.6 | **Dueto** | Llamada y respuesta cantada; la criatura improvisa según personalidad | Archivo propio |
-| 5.1.7 | **Rompecabezas de formas** | La criatura puede resolverlo **sola** si tiene intelecto suficiente — el primer juego donde mirarla jugar es el juego | Archivo propio |
+| 5.1.4 | ✅ **Escondidas** | Cooperativo *con* la criatura, no contra ella. Ella esconde o busca según su genoma | Archivo propio |
+| 5.1.5 | ✅ **Traer la pelota** | Físicas simples; la criatura mejora con `vigor` y con práctica | Archivo propio |
+| 5.1.6 | ✅ **Dueto** | Llamada y respuesta cantada; la criatura improvisa según personalidad | Archivo propio |
+| 5.1.7 | ✅ **Rompecabezas de formas** | La criatura puede resolverlo **sola** si tiene intelecto suficiente — el primer juego donde mirarla jugar es el juego | Archivo propio |
 
-Los cuatro son archivos nuevos e independientes: **se pueden hacer los cuatro en paralelo**.
-Contrato compartido: cada uno expone `@Composable fun XGame(viewModel, onExit)` y termina llamando
-`viewModel.finishGame(won, score, gameName, gameId, points)`.
+Los cuatro se hicieron en paralelo, en cuatro archivos nuevos sin solapamiento, y **los cuatro
+están cableados**: ruta en `NeoPalNav.kt`, cartucho en `GamesScreen.kt`. Siete juegos en la
+estantería; la grilla ya reflowaba sola.
+
+Lo que salió de hacerlos a la vez, para la próxima:
+- **Las clases privadas de nivel superior SÍ chocan entre archivos del mismo paquete** (generan un
+  `.class` por nombre); las `fun` y `const val` privadas no (van al facade del archivo). Un quinto
+  juego que declare un `Phase` o un `Slot` pelado rompe el build. Prefijar por juego.
+- El id de puntaje quedó pelado (`hide`, no `game_hide`) para no confundirlo con la ruta.
 
 ### 5.2 Interacciones táctiles
 
 | # | Qué | Del backlog | Paralelo |
 |---|---|---|---|
-| 5.2.1 | Reacción por zona: cabeza feliz, panza risa, cola molestia | #23 | `PetStage.kt` |
+| 5.2.1 | ✅ Reacción por zona: cabeza feliz, panza risa, cola molestia | #23 | `PetStage.kt` |
 | 5.2.2 | Pupilas que se dilatan al ver comida | #30 | `CreatureArt.kt` |
-| 5.2.3 | Pellizcar para zoom (modo foto) | #40 | `PetStage.kt` |
+| 5.2.3 | ✅ Pellizcar para zoom (modo foto) | #40 | `PetStage.kt` |
 | 5.2.4 | Sacudir el teléfono para despertarla | #41 | Sensor nuevo |
 | 5.2.5 | Soplar al micrófono para las velas | #42 | Permiso de micrófono 💭 |
 | 5.2.6 | Envejecimiento visual gradual dentro de cada etapa | #31 | `CreatureArt.kt` |
 
-⚠️ 5.2.1, 5.2.3 tocan `PetStage.kt`; 5.2.2, 5.2.6 tocan `CreatureArt.kt`. **Dos frentes, no seis.**
+⚠️ 5.2.2 y 5.2.6 siguen abiertos y **ambos tocan `CreatureArt.kt`**: un solo frente, en serie.
+
+Las zonas se calculan de la geometría dibujada (posición, radio de la etapa, `Morphology.bodyWidth`,
+genes de postura y cola), no de cajas en pantalla: una criatura sin cola no tiene zona de cola.
+La cola **no paga nada** — el castigo por tironearla es la caricia que no cobraste. Quedó un
+parámetro `onTugTail` con default vacío por si algún día se quiere que cueste; hoy nadie lo pasa.
 
 ### 5.3 Modos de render pendientes
 
 | # | Qué | Del backlog |
 |---|---|---|
-| 5.3.1 | Modo CRT: scanlines curvas, viñeta, sangrado | #8 |
-| 5.3.2 | Modo LCD verde de 1997, 4 tonos | #9 |
+| 5.3.1 | ✅ Modo CRT: scanlines curvas, viñeta, sangrado | #8 |
+| 5.3.2 | ✅ Modo LCD verde de 1997, 4 tonos | #9 |
 | 5.3.3 | Transición animada al cambiar de modo | #10 |
 
-Los tres viven en `PixelRenderer.kt`: **un solo frente**.
+5.3.3 (transición animada al cambiar de modo) sigue abierto y vive en `PixelRenderer.kt`.
+
+El enum se mudó al dominio porque es una preferencia **guardada**. Y el modo que reemplaza el
+color se queda con todo el acabado: atmósfera, luces apagadas y viñeta de sueño se saltean, porque
+corren *después* del blit a resolución de pantalla y le meterían un quinto y un sexto tono a una
+pantalla que existe para tener cuatro. La noche pasa a ser **exposición**, no oscuridad — una
+pantalla de cuatro tonos no tiene más oscuro adonde ir.
 
 ---
 
@@ -160,13 +177,15 @@ Los tres viven en `PixelRenderer.kt`: **un solo frente**.
 | # | Qué | Por qué sigue ahí |
 |---|---|---|
 | 6.1 | ~170 textos hardcodeados en inglés | Mover requiere decidir cómo entra `Context` a un dominio hoy puro, que es lo que lo hace testeable |
-| 6.2 | Sin tests de UI ni regresión visual | Es exactamente el agujero por donde se coló el pixelado feo |
+| 6.2 | Sin tests de UI ni regresión visual | Es exactamente el agujero por donde se coló el pixelado feo. **Se agrandó**: entraron ~5.000 líneas de UI nueva y nadie vio un solo píxel de ninguna |
+| 6.7 | Nada de lo nuevo se corrió ni se escuchó | Los cuatro juegos, las dos pantallas retro y las zonas táctiles están verificados por aritmética y por simulación en JVM, nunca por una pantalla. El dueto en particular: **no se escuchó una sola nota** |
+| 6.8 | `onTugTail` es un parámetro que nadie pasa | Costura deliberada por si tironear la cola debe costar algo. Hoy el castigo es la caricia no cobrada, que alcanza |
 | 6.3 | Cabeza del cuadrúpedo de frente sobre cuerpo de perfil | Arreglarlo pide una cabeza lateral aparte |
 | 6.4 | `stance` 0.30–0.55 se lee como un ocho | El rango menos lindo del barrido |
 | 6.5 | Log de decisiones no es lazy (hasta 40 filas) | Acotado hoy; si el tope crece, `LazyColumn` |
 | 6.6 | Ruta de red nunca ejecutada | Sin SDK acá; `post()`, timeouts y cancelación son razonados, no corridos |
 
-### 6.7 El bug que 6.6 dejó pasar — anotado porque la forma se repite
+### El bug que 6.6 dejó pasar — anotado porque la forma se repite
 
 Los tres throttles del cerebro remoto arrancaban en `Long.MIN_VALUE` y leían
 `pet.ageSeconds - lastX < gap`. Esa resta se desborda para cualquier edad y vuelve a un negativo
@@ -186,17 +205,18 @@ visible, porque su falla se parece demasiado a su éxito.
 
 ## 7. Orden sugerido
 
-**Ahora, en paralelo (cuatro frentes sin solapamiento):**
-1. Los cuatro minijuegos nuevos (§5.1) — cuatro archivos nuevos, cero conflicto
-2. Interacciones en `PetStage.kt` (§5.2.1, §5.2.3)
-3. Arte en `CreatureArt.kt` (§5.2.2, §5.2.6)
-4. Modos de render en `PixelRenderer.kt` (§5.3)
+La tanda de seis frentes en paralelo (§5.1 ×4, §5.2 en `PetStage`, §5.3 en `PixelRenderer`) está
+cerrada y verde en CI. Lo que queda:
+
+**Ahora, en paralelo (dos frentes sin solapamiento):**
+1. Arte en `CreatureArt.kt` (§5.2.2 pupilas, §5.2.6 envejecimiento) — **un solo frente**, los dos
+   items tocan el mismo archivo
+2. Transición al cambiar de modo de pantalla (§5.3.3) en `PixelRenderer.kt`
 
 **Después, en serie (tocan el mismo contrato):**
-5. Herramientas que actúan (§4.2.2) — cambia el contrato del proveedor
-6. Aprender de los propios planes (§4.2.4) — cruza `Errands` y `Lineage`
-7. Cadencia por intelecto (§4.2.3)
+3. Herramientas que actúan (§4.2.2) — cambia el contrato del proveedor, no se paraleliza
+4. Un modelo por rol (§4.2.6) — `MindConfig`, y toca el cliente
 
 **Bloqueado por decisión tuya:**
 - El proxy (§3.7.1) y si OpenClaw sirve como gateway (§3.7.2)
-- Permiso de micrófono (§5.2.5)
+- Permiso de micrófono (§5.2.5), sacudir el teléfono (§5.2.4) pide un sensor nuevo
