@@ -312,7 +312,11 @@ private fun poseFor(
     val fullW = bodyR * p.bodyWidth * widthMul
     val headHalfW = headR * p.bodyWidth * headWidth * widthMul
     val hidden = (headDx + headHalfW - trunkDx).coerceAtMost(headHalfW - headDx + trunkDx)
-    val trunkW = lerpF((hidden * 0.94f).coerceIn(0f, fullW), fullW, qMove)
+    // Squared, so the barrel comes out well after the head has started to move rather than
+    // alongside it. The difference is worth a curve: emerging together leaves a sliver of
+    // barrel showing beside the head, and a sliver is read as a doubled outline, not as a body.
+    val emerge = qMove * qMove
+    val trunkW = lerpF((hidden * 0.94f).coerceIn(0f, fullW), fullW, emerge)
 
     return Pose(
         quad = q,
@@ -587,7 +591,7 @@ fun DrawScope.drawCreature(
         if (pose != null) drawEars(headC, headR, p, pose, palette, frame)
         drawLimbs(bodyCenter, bodyR, p, palette, frame, back = false, pose = pose)
         drawFace(headC, headR, p, spec, palette, frame, pose, settled)
-        drawBranchMarks(headC, headR, p, spec, palette)
+        drawBranchMarks(headC, headR, p, spec, palette, turn = pose?.turn ?: 0f)
         spec.hatId?.let { drawHat(it, headC, headR, p, frame) }
         drawSweat(headC, headR, p, frame)
         if (spec.stage == LifeStage.ELDER) drawElderMarks(headC, headR, palette, greying)
@@ -1332,6 +1336,22 @@ private fun DrawScope.drawSpeciesFeatures(
 }
 
 /**
+ * Where one eye sits on a head that has turned [turn] of the way side-on, as an offset in x
+ * from the centre of the head.
+ *
+ * It lives out here rather than inside [drawFace] because the face is not the only thing that
+ * has to know: a pair of glasses drawn on the old symmetric centres would sit on a scholar's
+ * temple while its eyes were somewhere else entirely. One rule, every wearer.
+ */
+private fun eyeOffsetX(side: Float, spread: Float, headR: Float, turn: Float): Float =
+    side * spread * (if (side > 0f) lerpF(1f, 0.85f, turn) else lerpF(1f, 0.38f, turn)) +
+        headR * 0.20f * turn
+
+/** How much of its width the far eye has left; the near one keeps all of it. */
+private fun eyeNarrow(side: Float, turn: Float): Float =
+    if (side > 0f) 1f else lerpF(1f, 0.42f, turn)
+
+/**
  * The face: two eyes, two brows, the blush, and — through [drawMuzzle] — the snout and the
  * mouth that has to follow it.
  *
@@ -1389,20 +1409,13 @@ private fun DrawScope.drawFace(
         mouthY = tip.y + bodyR * 0.07f
     }
 
-    // Everything the turn does to one eye, as two numbers: where its centre goes, and how wide
-    // it still is. The far eye is the one carrying the foreshortening; the near one only drifts.
-    fun eyeX(side: Float) =
-        center.x + side * spread * (if (side > 0f) lerpF(1f, 0.85f, turn) else lerpF(1f, 0.38f, turn)) +
-            bodyR * 0.20f * turn
-    fun eyeSquash(side: Float) = if (side > 0f) 1f else lerpF(1f, 0.42f, turn)
-
     listOf(-1f, 1f).forEach { side ->
-        val ex = eyeX(side)
+        val ex = center.x + eyeOffsetX(side, spread, bodyR, turn)
         // Horizontal and vertical radii part company on a turned head: an eye seen at an angle
         // narrows without getting any shorter, so only the width really collapses.
-        val rx = r * eyeSquash(side)
+        val rx = r * eyeNarrow(side, turn)
         val ry = r * (if (side > 0f) 1f else lerpF(1f, 0.86f, turn))
-        val gx = gaze * eyeSquash(side)
+        val gx = gaze * eyeNarrow(side, turn)
         if (spec.mood == Mood.SLEEPING || open < 0.06f) {
             // Closed eyes: a calm downward arc.
             drawArc(
@@ -1495,10 +1508,12 @@ private fun DrawScope.drawFace(
         val grow = 0.80f + blush * 0.26f
         for (s in 0..1) {
             val side = if (s == 0) -1f else 1f
-            val bx = center.x + (eyeX(side) - center.x) * 1.55f
+            // The cheeks narrow with the eyes but barely travel with them: a cheek carried
+            // the whole way forward ends up painting the top of the snout pink.
+            val bx = center.x + side * spread * 1.55f * eyeNarrow(side, turn) + bodyR * 0.05f * turn
             val by = eyeY + r * 0.7f + bodyR * 0.06f
             for (i in 0..2) {
-                val k = (1f - i * 0.28f) * grow * eyeSquash(side)
+                val k = (1f - i * 0.28f) * grow * eyeNarrow(side, turn)
                 drawOval(
                     color = palette.blush.copy(alpha = (0.10f + i * 0.06f) * blush),
                     topLeft = Offset(bx - bodyR * 0.10f * k, by - bodyR * 0.06f * k),
@@ -1691,34 +1706,41 @@ private fun DrawScope.drawBranchMarks(
     p: Proportions,
     spec: CreatureSpec,
     palette: CreaturePalette,
+    turn: Float = 0f,
 ) {
     if (spec.stage.order < LifeStage.TEEN.order) return
-    val eyeY = center.y + bodyR * p.eyeHeight
+    val eyeY = center.y + bodyR * p.eyeHeight - bodyR * 0.10f * turn
     val spread = bodyR * p.eyeSpread
     val r = bodyR * p.eyeRadius * 3.2f
     val accent = tonesFor(palette.accent)
     when (spec.branch) {
         EvolutionBranch.SCHOLAR -> {
-            // Round glasses, with a highlight along the top of each lens.
+            // Round glasses, with a highlight along the top of each lens. They ride the eyes
+            // through the same two functions the eyes do, lens for lens, so a scholar that has
+            // gone down on all fours is still wearing them rather than carrying them.
+            val nearX = center.x + eyeOffsetX(1f, spread, bodyR, turn)
+            val farX = center.x + eyeOffsetX(-1f, spread, bodyR, turn)
             listOf(-1f, 1f).forEach { side ->
-                drawCircle(
+                val lx = if (side > 0f) nearX else farX
+                val lw = r * 1.15f * eyeNarrow(side, turn)
+                drawOval(
                     color = accent.mid,
-                    radius = r * 1.15f,
-                    center = Offset(center.x + side * spread, eyeY),
+                    topLeft = Offset(lx - lw, eyeY - r * 1.15f),
+                    size = Size(lw * 2f, r * 2.30f),
                     style = Stroke(width = band(bodyR, 0.035f)),
                 )
                 drawArc(
                     color = accent.rim.copy(alpha = 0.7f),
                     startAngle = 195f, sweepAngle = 70f, useCenter = false,
-                    topLeft = Offset(center.x + side * spread - r * 1.15f, eyeY - r * 1.15f),
-                    size = Size(r * 2.30f, r * 2.30f),
+                    topLeft = Offset(lx - lw, eyeY - r * 1.15f),
+                    size = Size(lw * 2f, r * 2.30f),
                     style = Stroke(width = band(bodyR, 0.02f), cap = StrokeCap.Round),
                 )
             }
             drawLine(
                 color = accent.mid,
-                start = Offset(center.x - spread + r * 1.1f, eyeY),
-                end = Offset(center.x + spread - r * 1.1f, eyeY),
+                start = Offset(farX + r * 1.1f * eyeNarrow(-1f, turn), eyeY),
+                end = Offset(nearX - r * 1.1f, eyeY),
                 strokeWidth = band(bodyR, 0.03f),
             )
         }
