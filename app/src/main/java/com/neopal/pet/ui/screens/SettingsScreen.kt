@@ -188,6 +188,107 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
             )
         }
 
+
+        Spacer(Modifier.height(pixelUnits(3)))
+        SettingsPanel(
+            "The creature's brain",
+            "Off by default. Everything else in NeoPal works with no network at all, and nothing " +
+                "here is needed to play — this only lets the creature talk back and think out loud.",
+            accent = NeoAccents.gold,
+        ) {
+            PixelToggle(
+                checked = config.mind.enabled,
+                onCheckedChange = { on -> viewModel.updateMind { it.copy(enabled = on) } },
+                label = "Give it somewhere to think",
+                accent = NeoAccents.gold,
+            )
+            Spacer(Modifier.height(pixelUnits(2)))
+            Text(
+                "Route: ${config.mind.routeLabel}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (config.mind.enabled) {
+                Spacer(Modifier.height(pixelUnits(3)))
+                // The player's own key wins over the shared service when both are set, because
+                // somebody who went to the trouble of pasting one meant to use it.
+                PixelTextWell(
+                    value = config.mind.apiKey,
+                    onValueChange = { v -> viewModel.updateMind { it.copy(apiKey = v.trim()) } },
+                    label = "Your own key (optional)",
+                    placeholder = "Leave empty to use the shared service",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(1)))
+                Text(
+                    "Stored on this device and sent only to the address below. It is never put " +
+                        "into anything the creature says, and never written to the save's diary.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(pixelUnits(3)))
+                PixelTextWell(
+                    value = config.mind.baseUrl,
+                    onValueChange = { v -> viewModel.updateMind { it.copy(baseUrl = v.trim()) } },
+                    label = "Endpoint",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(3)))
+                PixelTextWell(
+                    value = config.mind.model,
+                    onValueChange = { v -> viewModel.updateMind { it.copy(model = v.trim()) } },
+                    label = "Model",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(1)))
+                Text(
+                    "The default is a free model, so trying this costs nothing.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(pixelUnits(3)))
+                PixelTextWell(
+                    value = config.mind.proxyUrl,
+                    onValueChange = { v -> viewModel.updateMind { it.copy(proxyUrl = v.trim()) } },
+                    label = "Shared service (optional)",
+                    placeholder = "Used when no key of your own is set",
+                    accent = NeoAccents.gold,
+                )
+
+                Spacer(Modifier.height(pixelUnits(3)))
+                PixelToggle(
+                    checked = config.mind.conversation,
+                    onCheckedChange = { on -> viewModel.updateMind { it.copy(conversation = on) } },
+                    label = "Let it talk",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(2)))
+                PixelToggle(
+                    checked = config.mind.decidesActions,
+                    onCheckedChange = { on -> viewModel.updateMind { it.copy(decidesActions = on) } },
+                    label = "Let it choose what to do",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(2)))
+                PixelToggle(
+                    checked = config.mind.lineageLessons,
+                    onCheckedChange = { on -> viewModel.updateMind { it.copy(lineageLessons = on) } },
+                    label = "Let it draw lessons for its children",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(1)))
+                Text(
+                    "Children inherit lessons from their parent's life whether this is on or " +
+                        "off. This only changes who words them.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
         Spacer(Modifier.height(pixelUnits(3)))
         SettingsPanel("Reminders", "Whether NeoPal nudges you when a need runs low.") {
             PixelToggle(

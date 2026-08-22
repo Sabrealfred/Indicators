@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.data.PetRepository
+import com.neopal.pet.data.RemoteMindClient
 import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.ActionResult
 import com.neopal.pet.domain.Autonomy
@@ -85,10 +86,15 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * The remote brain, or the one that never answers.
      *
      * Held as the interface rather than the concrete client so the game is complete without one:
-     * with [NoMind] every call returns null, the local [com.neopal.pet.domain.Brain] answers
-     * instead, and nothing anywhere has to branch on whether a model is configured.
+     * when nothing is configured every call returns null, the local [com.neopal.pet.domain.Brain]
+     * answers instead, and nothing anywhere has to branch on whether a model is set up.
+     *
+     * The client reads the config through a lambda rather than being handed a copy, so a key
+     * pasted in settings takes effect on the next call instead of on the next launch. [NoMind]
+     * remains as the shape of "never answers", which is what the client already behaves like
+     * until a route exists.
      */
-    private var mind: MindProvider = NoMind
+    private var mind: MindProvider = RemoteMindClient { _ui.value.config.mind }
 
     /** One reply at a time; a second send would race the first. */
     private var chatJob: Job? = null
