@@ -47,6 +47,14 @@ data class Plan(
     val madeAtSeconds: Long,
     /** How many steps have been carried out. Never rewound. */
     val done: Int = 0,
+    /**
+     * The creature's care score when the plan was made, 0..1.
+     *
+     * Kept so the plan can be *graded* when it finishes rather than merely ticked off. Without a
+     * before, "did that help?" is unanswerable, and a creature that cannot answer it can only ever
+     * learn from what happened to its parents — never from anything it did itself.
+     */
+    val careAtStart: Float = 0f,
 ) {
     val remaining: List<PlanStep> get() = steps.drop(done)
     val isFinished: Boolean get() = done >= steps.size
@@ -166,6 +174,7 @@ object Errands {
             // Always starts unspent; a plan arriving with steps already marked done would let a
             // mind skip past the ones it did not want checked.
             done = 0,
+            careAtStart = state.stats.careScore,
         )
     }
 
@@ -181,12 +190,78 @@ object Errands {
         return plan.remaining.firstOrNull()
     }
 
-    /** Marks the head of the plan as carried out, whether or not it achieved much. */
-    fun advance(state: PetState): PetState {
+    /**
+     * Marks the head of the plan as carried out, and grades the plan when the last step lands.
+     *
+     * Grading is the point of the whole type carrying [Plan.careAtStart]. A creature that only ever
+     * learned from its parents' deaths could get wiser exactly once per generation; one that can
+     * tell whether its own afternoon went well learns from every afternoon. That is the difference
+     * between inheriting judgement and developing it.
+     *
+     * Only clear improvement teaches anything. Needs drift on their own, so a threshold below the
+     * noise would reward the creature for the passage of time and the lesson would mean nothing.
+     */
+    fun advance(state: PetState, events: MutableList<GameEvent>): PetState {
         val plan = state.plan ?: return state
         val moved = plan.copy(done = plan.done + 1)
-        return state.copy(plan = if (moved.isFinished) null else moved)
+        if (!moved.isFinished) return state.copy(plan = moved)
+
+        var s = state.copy(plan = null, plansFinished = state.plansFinished + 1)
+        val gained = s.stats.careScore - plan.careAtStart
+        if (gained < WORTH_LEARNING_FROM) return s
+
+        // Credited to what the plan actually spent its steps on. The commonest kind wins, because
+        // a plan is one intention rather than three separate ones, and splitting the credit three
+        // ways would make every lesson too weak to notice.
+        val kind = moved.steps
+            .mapNotNull { lessonKindFor(it.kind) }
+            .groupingBy { it }
+            .eachCount()
+            .maxByOrNull { it.value }
+            ?.key
+            ?: return s
+
+        val learned = Lesson(
+            kind = kind,
+            text = "That worked. ${plan.goal}",
+            // Deliberately weaker than a lesson bought with a parent's life. Experience should
+            // accumulate; a single good afternoon should not outweigh how the last one died.
+            strength = (gained * EXPERIENCE_SCALE).coerceIn(0f, MAX_EXPERIENCE_STRENGTH),
+            fromGeneration = s.generation,
+        )
+        Lineage.sanitise(learned)?.let {
+            s = s.copy(lessons = Lineage.inherit(s.lessons, listOf(it)))
+            events += GameEvent.LearnedFromExperience(it)
+        }
+        return s
     }
+
+    /** Which lesson an activity speaks to, or null when it teaches nothing in particular. */
+    private fun lessonKindFor(kind: ActivityKind): LessonKind? = when (kind) {
+        ActivityKind.EAT -> LessonKind.EAT_SOONER
+        ActivityKind.SLEEP -> LessonKind.REST_SOONER
+        ActivityKind.TIDY, ActivityKind.GROOM -> LessonKind.TIDY_SOONER
+        ActivityKind.MEDICATE -> LessonKind.GUARD_HEALTH
+        ActivityKind.STUDY -> LessonKind.STUDY_HARDER
+        ActivityKind.SOCIALISE, ActivityKind.COURT -> LessonKind.SEEK_COMPANY
+        ActivityKind.PLAY -> LessonKind.PLAY_MORE
+        ActivityKind.EXPLORE, ActivityKind.IDLE -> null
+    }
+
+    /**
+     * How much the care score has to rise across a plan before it counts as having worked.
+     * Below this the creature would be learning from the ordinary drift of its own needs.
+     */
+    const val WORTH_LEARNING_FROM = 0.05f
+
+    /** Turns a care improvement into a lesson strength. */
+    private const val EXPERIENCE_SCALE = 1.2f
+
+    /**
+     * Ceiling on a lesson learned from one afternoon. Well under what a parent's death teaches,
+     * so experience accumulates over many plans rather than arriving in one.
+     */
+    const val MAX_EXPERIENCE_STRENGTH = 0.22f
 
     /**
      * Drops a plan that cannot be continued.

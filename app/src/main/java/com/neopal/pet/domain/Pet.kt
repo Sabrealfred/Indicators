@@ -317,6 +317,8 @@ data class PetState(
      * a plan is not idle, it is simply deciding one thing at a time.
      */
     val plan: Plan? = null,
+    /** Errands carried through to the end. The creature's own record of following through. */
+    val plansFinished: Int = 0,
 
     val rngSeed: Long = 0L,
 ) {

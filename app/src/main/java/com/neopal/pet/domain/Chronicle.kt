@@ -120,6 +120,10 @@ object Chronicle {
         is GameEvent.ChildHatched ->
             "${event.child.name} hatched today. I know exactly how that feels." to ChronicleKind.MILESTONE
 
+        is GameEvent.LearnedFromExperience ->
+            "I worked something out for myself today: ${event.lesson.kind.displayName.lowercase()}." to
+                ChronicleKind.MILESTONE
+
         is GameEvent.Decided,
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,

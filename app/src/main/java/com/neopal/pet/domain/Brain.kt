@@ -139,7 +139,7 @@ object Brain {
                     random = random,
                     events = events,
                 )
-                if (started != null) return Errands.advance(started)
+                if (started != null) return Errands.advance(started, events)
             }
             // The step cannot be done. Abandon the plan rather than retrying it: a creature that
             // insists on lunch in front of an empty pantry is not persistent, it is stuck.

@@ -179,9 +179,99 @@ class ErrandsTest {
     @Test
     fun `advancing past the end never rewinds or overruns`() {
         val one = pet().copy(plan = plan(ActivityKind.PLAY, at = 0L))
-        val spent = Errands.advance(one)
+        val spent = Errands.advance(one, mutableListOf())
         assertNull(spent.plan)
-        assertEquals("advancing nothing is not an error", spent, Errands.advance(spent))
+        assertEquals("advancing nothing is not an error", spent, Errands.advance(spent, mutableListOf()))
+    }
+
+    @Test
+    fun `an errand that visibly helped teaches the creature something`() {
+        // Finished the last step, and the creature is measurably better off than when it started.
+        val before = pet(stats = Stats(satiety = 30f, happiness = 30f, energy = 30f, hygiene = 30f))
+        val improved = before.copy(
+            stats = Stats(satiety = 90f, happiness = 90f, energy = 90f, hygiene = 90f),
+            plan = Plan(
+                goal = "Sort myself out.",
+                steps = listOf(PlanStep(ActivityKind.EAT, "hungry")),
+                madeAtSeconds = before.ageSeconds,
+                careAtStart = before.stats.careScore,
+            ),
+        )
+        val events = mutableListOf<GameEvent>()
+        val after = Errands.advance(improved, events)
+
+        assertTrue("a plan that worked has to leave something behind", after.lessons.isNotEmpty())
+        assertEquals(LessonKind.EAT_SOONER, after.lessons.first().kind)
+        assertTrue(events.any { it is GameEvent.LearnedFromExperience })
+        assertEquals("and it counts as followed through", 1, after.plansFinished)
+    }
+
+    @Test
+    fun `an errand that changed nothing teaches nothing`() {
+        // Needs drift on their own. Learning from that would be learning from the passage of time.
+        val flat = pet().let {
+            it.copy(
+                plan = Plan(
+                    goal = "Potter about.",
+                    steps = listOf(PlanStep(ActivityKind.PLAY, "why not")),
+                    madeAtSeconds = it.ageSeconds,
+                    careAtStart = it.stats.careScore,
+                ),
+            )
+        }
+        val events = mutableListOf<GameEvent>()
+        val after = Errands.advance(flat, events)
+
+        assertTrue("no measurable gain means no lesson", after.lessons.isEmpty())
+        assertTrue(events.none { it is GameEvent.LearnedFromExperience })
+        assertEquals("but it still followed through", 1, after.plansFinished)
+    }
+
+    @Test
+    fun `one good afternoon never outweighs how a parent died`() {
+        val before = pet(stats = Stats(satiety = 10f, happiness = 10f, energy = 10f, hygiene = 10f))
+        val improved = before.copy(
+            stats = Stats(satiety = 100f, happiness = 100f, energy = 100f, hygiene = 100f),
+            plan = Plan(
+                goal = "Everything at once.",
+                steps = listOf(PlanStep(ActivityKind.EAT, "x")),
+                madeAtSeconds = before.ageSeconds,
+                careAtStart = before.stats.careScore,
+            ),
+        )
+        val after = Errands.advance(improved, mutableListOf())
+        val learned = after.lessons.single()
+        assertTrue(
+            "experience accumulates; it does not arrive in one afternoon",
+            learned.strength <= Errands.MAX_EXPERIENCE_STRENGTH,
+        )
+        val fromDeath = Lineage.distilLocally(
+            RunRecord(deathReason = DeathReason.STARVATION, lifespanSeconds = 3600L), 1,
+        ).first()
+        assertTrue("a parent's death still teaches harder", fromDeath.strength > learned.strength)
+    }
+
+    @Test
+    fun `only the middle of a plan is unfinished business`() {
+        // Two steps: the first must not grade the plan, the second must.
+        val two = pet().let {
+            it.copy(
+                stats = Stats(satiety = 95f, happiness = 95f, energy = 95f, hygiene = 95f),
+                plan = Plan(
+                    goal = "Two things.",
+                    steps = listOf(PlanStep(ActivityKind.EAT, "a"), PlanStep(ActivityKind.PLAY, "b")),
+                    madeAtSeconds = it.ageSeconds,
+                    careAtStart = 0f,
+                ),
+            )
+        }
+        val midway = Errands.advance(two, mutableListOf())
+        assertEquals("still going", 1, midway.plan?.done)
+        assertTrue("nothing learned halfway", midway.lessons.isEmpty())
+
+        val done = Errands.advance(midway, mutableListOf())
+        assertNull(done.plan)
+        assertTrue("graded at the end", done.lessons.isNotEmpty())
     }
 
     @Test

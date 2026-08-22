@@ -708,6 +708,11 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     showToast("${event.child.name} hatched.")
                 }
 
+                is GameEvent.LearnedFromExperience -> {
+                    play(Sfx.LEVEL_UP)
+                    showToast("Worked something out on its own.")
+                }
+
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
