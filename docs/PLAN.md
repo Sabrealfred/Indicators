@@ -145,13 +145,14 @@ Lo que salió de hacerlos a la vez, para la próxima:
 | # | Qué | Del backlog | Paralelo |
 |---|---|---|---|
 | 5.2.1 | ✅ Reacción por zona: cabeza feliz, panza risa, cola molestia | #23 | `PetStage.kt` |
-| 5.2.2 | Pupilas que se dilatan al ver comida | #30 | `CreatureArt.kt` |
+| 5.2.2 | ✅ Pupilas que se dilatan al ver comida | #30 | `CreatureArt.kt` |
 | 5.2.3 | ✅ Pellizcar para zoom (modo foto) | #40 | `PetStage.kt` |
 | 5.2.4 | Sacudir el teléfono para despertarla | #41 | Sensor nuevo |
 | 5.2.5 | Soplar al micrófono para las velas | #42 | Permiso de micrófono 💭 |
-| 5.2.6 | Envejecimiento visual gradual dentro de cada etapa | #31 | `CreatureArt.kt` |
+| 5.2.6 | ✅ Envejecimiento visual gradual dentro de cada etapa | #31 | `CreatureArt.kt` |
 
-⚠️ 5.2.2 y 5.2.6 siguen abiertos y **ambos tocan `CreatureArt.kt`**: un solo frente, en serie.
+Queda abierto **5.2.4** (sacudir el teléfono, pide un sensor nuevo) y **5.2.5** (soplar al
+micrófono, 💭 pide permiso).
 
 Las zonas se calculan de la geometría dibujada (posición, radio de la etapa, `Morphology.bodyWidth`,
 genes de postura y cola), no de cajas en pantalla: una criatura sin cola no tiene zona de cola.
@@ -164,9 +165,11 @@ parámetro `onTugTail` con default vacío por si algún día se quiere que cuest
 |---|---|---|
 | 5.3.1 | ✅ Modo CRT: scanlines curvas, viñeta, sangrado | #8 |
 | 5.3.2 | ✅ Modo LCD verde de 1997, 4 tonos | #9 |
-| 5.3.3 | Transición animada al cambiar de modo | #10 |
+| 5.3.3 | ✅ Transición animada al cambiar de modo | #10 |
 
-5.3.3 (transición animada al cambiar de modo) sigue abierto y vive en `PixelRenderer.kt`.
+El cambio de modo es un **ciclo de encendido**, no un fundido: la pantalla que se va muere como
+muere su hardware, todas se cruzan en la misma oscuridad, y la que llega despierta como despierta
+el suyo. Tres muertes y tres despertares en vez de nueve transiciones — y tubo→portátil sale gratis.
 
 El enum se mudó al dominio porque es una preferencia **guardada**. Y el modo que reemplaza el
 color se queda con todo el acabado: atmósfera, luces apagadas y viñeta de sueño se saltean, porque
@@ -181,11 +184,11 @@ pantalla de cuatro tonos no tiene más oscuro adonde ir.
 | # | Qué | Por qué sigue ahí |
 |---|---|---|
 | 6.1 | ~170 textos hardcodeados en inglés | Mover requiere decidir cómo entra `Context` a un dominio hoy puro, que es lo que lo hace testeable |
-| 6.2 | Sin tests de UI ni regresión visual | Es exactamente el agujero por donde se coló el pixelado feo. **Se agrandó**: entraron ~5.000 líneas de UI nueva y nadie vio un solo píxel de ninguna |
+| 6.2 | Sin tests de UI ni regresión visual | Sigue sin haberlos, pero **ya no es ciego**: hay un `DrawScope` de mentira que graba las llamadas de dibujo del `CreatureArt.kt` **real** y las rasteriza (`scratchpad/ag/`). Eso fue lo que diagnosticó el ocho de §6.4 — que resultó no ser un problema de forma. Merece entrar al repo y a CI |
 | 6.7 | Nada de lo nuevo se corrió ni se escuchó | Los cuatro juegos, las dos pantallas retro y las zonas táctiles están verificados por aritmética y por simulación en JVM, nunca por una pantalla. El dueto en particular: **no se escuchó una sola nota** |
 | 6.8 | `onTugTail` es un parámetro que nadie pasa | Costura deliberada por si tironear la cola debe costar algo. Hoy el castigo es la caricia no cobrada, que alcanza |
-| 6.3 | Cabeza del cuadrúpedo de frente sobre cuerpo de perfil | Arreglarlo pide una cabeza lateral aparte |
-| 6.4 | `stance` 0.30–0.55 se lee como un ocho | El rango menos lindo del barrido |
+| 6.3 | ~~Cabeza del cuadrúpedo de frente~~ | ✅ **arreglado** — `Pose.turn` gira la cabeza de verdad: el ojo lejano se escorza, el hocico gira con él, las orejas se pliegan sobre el cráneo y la boca corre por la mandíbula en vez de colgar del frente de la nariz |
+| 6.4 | ~~`stance` 0.30–0.55 se lee como un ocho~~ | ✅ **arreglado**, y no era un problema de forma: eran dos manchas del mismo tamaño una al lado de la otra, cada una trazando su propio contorno, así que el barril asomaba *afuera* de la cabeza — una línea clave duplicada leyéndose como un segundo cuerpo |
 | 6.5 | Log de decisiones no es lazy (hasta 40 filas) | Acotado hoy; si el tope crece, `LazyColumn` |
 | 6.6 | ~~Ruta de red nunca ejecutada~~ | ✅ **cerrada**. El cliente no tiene un solo import de Android, así que lo único que faltaba era algo del otro lado de un socket. 16 tests lo corren contra un servidor de mentira sobre `ServerSocket`: la clave viaja como header y en ningún otro lado, el 302 no se sigue, el 429 es un no callado, el cuerpo de error no llega a nadie, el timeout corta a tiempo |
 
@@ -221,10 +224,13 @@ visible, porque su falla se parece demasiado a su éxito.
 La tanda de seis frentes en paralelo (§5.1 ×4, §5.2 en `PetStage`, §5.3 en `PixelRenderer`) está
 cerrada y verde en CI. Lo que queda:
 
-**Ahora, en paralelo (dos frentes sin solapamiento):**
-1. Arte en `CreatureArt.kt` (§5.2.2 pupilas, §5.2.6 envejecimiento) — **un solo frente**, los dos
-   items tocan el mismo archivo
-2. Transición al cambiar de modo de pantalla (§5.3.3) en `PixelRenderer.kt`
+**Todo lo que estaba en curso cerró.** Lo único que queda de la lista original necesita
+decisiones tuyas o hardware que acá no hay.
+
+**Lo que yo elegiría hacer después, si seguimos:**
+1. Traer el rasterizador de `scratchpad/ag/` al repo y correrlo en CI (§6.2) — es lo más cerca de
+   un test visual que tuvo este proyecto, y ya encontró un bug real
+2. Los ~170 textos hardcodeados (§6.1)
 
 
 **Bloqueado por decisión tuya:**
