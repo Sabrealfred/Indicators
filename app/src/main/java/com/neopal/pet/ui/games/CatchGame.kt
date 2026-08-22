@@ -39,6 +39,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
 import com.neopal.pet.ui.PetViewModel
@@ -72,7 +73,7 @@ private data class FallingItem(
 /** Expanding ring plus a few sparks, drawn straight into the Canvas at the catch point. */
 private data class Burst(val x: Float, val y: Float, val color: Color, val seed: Float, var age: Float = 0f)
 
-private const val GAME_ID = "catch"
+private val GAME_ID = MiniGame.CATCH.id
 private const val BURST_LIFE = 0.45f
 private const val PET_Y = 0.80f
 private const val GOLDEN_AFTER = 15f

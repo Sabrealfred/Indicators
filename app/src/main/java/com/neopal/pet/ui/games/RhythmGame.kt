@@ -35,6 +35,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
 import kotlin.math.abs
@@ -269,4 +270,4 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     }
 }
 
-private const val GAME_ID = "rhythm"
+private val GAME_ID = MiniGame.RHYTHM.id

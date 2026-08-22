@@ -44,6 +44,12 @@ object Achievements {
                 s.satiety > 80f && s.happiness > 80f && s.energy > 80f && s.hygiene > 80f && s.health > 80f
         },
         Achievement("second_gen", "Legacy", "Start a second generation.", 40) { it.generation >= 2 },
+        // Deliberately "score in", not "win". Three of the seven cannot be lost — the duet has no
+        // wrong note by design — so a completion badge phrased as winning would be one nobody
+        // could ever finish.
+        Achievement("all_games", "Tried everything", "Score in all seven minigames.", 140) { st ->
+            MiniGame.playedCount(st) == MiniGame.entries.size
+        },
     )
 
     private val byId = all.associateBy { it.id }

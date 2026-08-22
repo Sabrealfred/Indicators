@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
@@ -282,4 +283,4 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 /** Later rounds sit a semitone or so higher, so the pressure is audible. */
 private fun keyLift(length: Int): Float = 1f + (length - 1) * 0.02f
 
-private const val GAME_ID = "memory"
+private val GAME_ID = MiniGame.MEMORY.id

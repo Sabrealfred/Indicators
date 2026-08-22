@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
 import com.neopal.pet.ui.PetViewModel
@@ -69,7 +70,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-private const val GAME_ID = "fetch"
+private val GAME_ID = MiniGame.FETCH.id
 
 // ---- session shape -------------------------------------------------------------------------
 private const val THROWS = 6

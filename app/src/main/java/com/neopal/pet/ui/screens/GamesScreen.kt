@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.R
 import com.neopal.pet.domain.CareActions
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.Routes
 import com.neopal.pet.ui.components.MinTouchTarget
@@ -84,7 +85,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Rhythm Tap",
             subtitle = "4 lanes · 30 s\nTiming drill — big mood, small bond, ~10 energy",
             accent = NeoColors.NeonCyan,
-            gameId = "rhythm",
+            gameId = MiniGame.RHYTHM.id,
             route = Routes.GAME_RHYTHM,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -101,7 +102,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Memory Match",
             subtitle = "6 rounds\nRecall drill — steady mood and bond, ~8 energy",
             accent = NeoColors.NeonPurple,
-            gameId = "memory",
+            gameId = MiniGame.MEMORY.id,
             route = Routes.GAME_MEMORY,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -120,7 +121,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Snack Catch",
             subtitle = "40 s · 3 lives\nReflex drill — best bond gain, ~12 energy",
             accent = NeoColors.NeonYellow,
-            gameId = "catch",
+            gameId = MiniGame.CATCH.id,
             route = Routes.GAME_CATCH,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -138,7 +139,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Hide and Seek",
             subtitle = "4 rounds · both sides\nPlayed with it, not against it — its genome hunts",
             accent = NeoColors.NeonGreen,
-            gameId = "hide",
+            gameId = MiniGame.HIDE.id,
             route = Routes.GAME_HIDE,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -166,7 +167,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Fetch",
             subtitle = "6 throws · 60 s\nIt learns your throw — and you can watch it guess",
             accent = NeoColors.NeonRed,
-            gameId = "fetch",
+            gameId = MiniGame.FETCH.id,
             route = Routes.GAME_FETCH,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -191,7 +192,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Duet",
             subtitle = "6 verses · no wrong note\nYou sing, it answers — nothing is being scored",
             accent = NeoColors.NeonPurple,
-            gameId = "duet",
+            gameId = MiniGame.DUET.id,
             route = Routes.GAME_DUET,
         ) {
             Canvas(Modifier.size(52.dp)) {
@@ -217,7 +218,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             title = "Shape Sorter",
             subtitle = "4 boards · 95 s\nIt can solve this one alone — if it is clever enough",
             accent = NeoColors.NeonCyan,
-            gameId = "puzzle",
+            gameId = MiniGame.PUZZLE.id,
             route = Routes.GAME_PUZZLE,
         ) {
             Canvas(Modifier.size(52.dp)) {

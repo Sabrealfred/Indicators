@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.domain.Personality
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoColors
@@ -865,4 +866,4 @@ private fun DrawScope.drawCreature(voice: Voice, singing: Boolean, clock: Float)
     )
 }
 
-private const val GAME_ID = "duet"
+private val GAME_ID = MiniGame.DUET.id

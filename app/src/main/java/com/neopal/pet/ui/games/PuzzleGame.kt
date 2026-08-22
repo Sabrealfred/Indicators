@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
@@ -152,7 +153,7 @@ private class Solver {
     }
 }
 
-private const val GAME_ID = "puzzle"
+private val GAME_ID = MiniGame.PUZZLE.id
 private const val TARGET_BOARDS = 4
 private const val DURATION = 95f
 private const val BOARD_PAUSE = 0.9f

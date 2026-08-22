@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.domain.MiniGame
 import com.neopal.pet.domain.Genome
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
@@ -66,7 +67,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-private const val GAME_ID = "hide"
+private val GAME_ID = MiniGame.HIDE.id
 
 /** Four rounds, roles swapping every round, so both halves of the game are always played. */
 private const val ROUNDS = 4
