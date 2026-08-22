@@ -768,6 +768,30 @@ class LoreTest {
     }
 
     @Test
+    fun `the diary opens differently for a creature that came out of the last one`() {
+        // The diary is the creature's own voice and knows nothing about lineages, but it does
+        // know whose child it is, so a founder's opening line on an heir would be a lie the
+        // player can check against the family screen.
+        val config = GameConfig.Default
+        val founder = Chronicle.record(pet(generation = 1), listOf(GameEvent.Hatched), config)
+        assertEquals("I opened my eyes. The first thing I saw was you.", founder.chronicle.single().text)
+
+        val child = Chronicle.record(heir(generation = 3), listOf(GameEvent.Hatched), config)
+        assertTrue(
+            "the heir's first line has to name the pet it came out of: ${child.chronicle.single().text}",
+            child.chronicle.single().text.contains("Gen2"),
+        )
+
+        // A parent list with no log behind it is not evidence, and gets the founder's line.
+        val unverified = Chronicle.record(
+            pet(generation = 3, parentNames = listOf("Ash")),
+            listOf(GameEvent.Hatched),
+            config,
+        )
+        assertEquals("I opened my eyes. The first thing I saw was you.", unverified.chronicle.single().text)
+    }
+
+    @Test
     fun `two names at the save's limit still fit a milestone card`() {
         // Both names come out of the save, so the sentence around them has to leave room for the
         // longest a name is allowed to be — twice.

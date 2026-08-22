@@ -366,7 +366,23 @@ object Lore {
      * heir is always the child of the run immediately before it, so matching further back would
      * only ever be a name collision agreeing with itself.
      */
-    fun descendsFromTheKeepersOwn(state: PetState): Boolean = parentRecord(state) != null
+    fun descendsFromTheKeepersOwn(state: PetState): Boolean = parentInTheRecord(state) != null
+
+    /**
+     * The run this creature came out of, or null when it did not come out of one.
+     *
+     * Public because the diary needs it too. A creature does not know what a lineage is, but it
+     * does know whose child it is — that is in [PetState.parentNames] — and the one thing only
+     * this file can check is whether that name belongs to somebody the keeper actually raised.
+     *
+     * Only the newest record is compared: an heir is always the child of the run immediately
+     * before it, so reaching further back could only ever match a repeated name.
+     */
+    fun parentInTheRecord(state: PetState): RunRecord? {
+        if (state.parentNames.isEmpty()) return null
+        val previous = state.previousGenerations.lastOrNull() ?: return null
+        return if (previous.name in state.parentNames) previous else null
+    }
 
     /**
      * The shape this creature has ended up with, or null while it still looks like the picture on
@@ -419,7 +435,7 @@ object Lore {
      * names at the limit still fit a milestone card.
      */
     fun descent(state: PetState): String? {
-        val parent = parentRecord(state) ?: return null
+        val parent = parentInTheRecord(state) ?: return null
         val older = oldestInheritedLesson(state)
             ?.takeIf { it.fromGeneration <= state.generation - 2 }
             ?.let { lesson -> state.previousGenerations.firstOrNull { it.generation == lesson.fromGeneration } }
@@ -480,17 +496,6 @@ object Lore {
             compareBy<Lesson> { it.fromGeneration }.thenByDescending { it.strength },
         )
 
-    /**
-     * The run this creature came out of, or null when it did not come out of one.
-     *
-     * Only the newest record is compared: an heir is always the child of the run immediately
-     * before it, so reaching further back could only ever match a repeated name.
-     */
-    private fun parentRecord(state: PetState): RunRecord? {
-        if (state.parentNames.isEmpty()) return null
-        val previous = state.previousGenerations.lastOrNull() ?: return null
-        return if (previous.name in state.parentNames) previous else null
-    }
 
     /** "One life" reads better than "1 lives", and the narrator does not print bad grammar. */
     private fun lives(count: Int): String = if (count == 1) "One life" else "$count lives"

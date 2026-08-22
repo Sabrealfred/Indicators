@@ -39,6 +39,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.domain.Lore
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.PixelButton
@@ -173,6 +174,20 @@ fun MemorialScreen(
             }
         }
         Spacer(Modifier.height(pixelUnits(3)))
+        // The narrator, once, in the one place where the line matters more than the life: the
+        // player is about to choose who continues. Descent first because it names somebody the
+        // player raised themselves, and Lore.standing only counts lives. One line, not a passage
+        // — this column is not scrollable and a phone in portrait has no room for a paragraph.
+        (Lore.descent(pet) ?: Lore.standing(pet))?.let { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.labelSmall,
+                color = NeoColors.OnDarkMuted,
+                textAlign = TextAlign.Center,
+                fontStyle = FontStyle.Italic,
+            )
+            Spacer(Modifier.height(pixelUnits(2)))
+        }
         Text(
             text = "${pet.mealsEaten} meals shared · ${pet.gamesWon} games won · ${pet.album.size} pictures kept",
             style = MaterialTheme.typography.labelSmall,

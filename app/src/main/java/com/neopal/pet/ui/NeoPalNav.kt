@@ -106,8 +106,11 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                 NewGameScreen(
                     isNextGeneration = ui.pet?.isDead == true,
                     generation = ui.pet?.generation ?: 1,
-                    onStart = { name, species ->
-                        if (ui.pet?.isDead == true) viewModel.startNextGeneration(name, species)
+                    // Only offered when the last life is over: these are its children, and they
+                    // are not candidates for anything while it is still using the tank.
+                    heirs = if (ui.pet?.isDead == true) viewModel.heirs() else emptyList(),
+                    onStart = { name, species, heirId ->
+                        if (ui.pet?.isDead == true) viewModel.startNextGeneration(name, species, heirId)
                         else viewModel.startNewGame(name, species)
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.NEW_GAME) { inclusive = true }
