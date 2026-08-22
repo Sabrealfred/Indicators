@@ -388,12 +388,17 @@ object Brain {
         // three have no skill of their own, so they have to say it themselves.
         val assisting = if (state.autonomy != Autonomy.FULL) "not while it is only assisting" else null
 
+        // A bored creature picks something off the shelf rather than playing nothing in
+        // particular. The choice is settled rather than rolled, because this runs once for the
+        // decision and again for the considerations screen, and a creature whose stated
+        // preference changed between two reads would be a screen arguing with itself.
+        val fancied = SoloPlay.choice(state)
         out += Option(
             kind = ActivityKind.PLAY,
             utility = (bored * (0.55f + 0.45f * g.vigor) * spare).coerceIn(0f, 1f),
             durationSeconds = PLAY_SECONDS,
-            target = null,
-            reason = "I was bored at ${pct(st.happiness)} and still had the legs for a game.",
+            target = fancied.id,
+            reason = SoloPlay.reason(state, fancied),
             blockedBy = assisting ?: if (st.energy < 25f) "too tired for it" else null,
         )
 
@@ -673,7 +678,9 @@ object Brain {
         ActivityKind.EAT ->
             if (activity.targetId == FORAGE_TARGET) "Found enough out there to get by." else "Licked the bowl clean."
         ActivityKind.SLEEP -> "Slept it off."
-        ActivityKind.PLAY -> "That was a good runaround."
+        ActivityKind.PLAY ->
+            activity.targetId?.let { MiniGame.byId(it) }?.let { SoloPlay.note(it) }
+                ?: "That was a good runaround."
         ActivityKind.GROOM -> "Much better."
         ActivityKind.TIDY -> "That is one mess fewer."
         ActivityKind.STUDY -> "Head is full."
