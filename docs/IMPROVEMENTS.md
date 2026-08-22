@@ -20,7 +20,7 @@ formas— salieron junto al #88. El detalle de cada uno está en `docs/PLAN.md` 
 | 7 | Outline de 1 px consistente en todo sprite (hoy el grosor varía con el tamaño) | 🔜 |
 | 8 | Modo CRT opcional: scanlines curvas, viñeta y sangrado de color | ✅ (Tube) |
 | 9 | Modo "LCD verde" retro: 4 tonos verdes, como un tamagotchi de 1997 | ✅ (Handheld) |
-| 10 | Transición animada al cambiar de modo (el mundo se pixela progresivamente) | 🔨 |
+| 10 | Transición animada al cambiar de modo (el mundo se pixela progresivamente) | ✅ (ciclo de encendido, no fundido) |
 | 11 | Cache de sprites: rasterizar cada pose una vez en vez de redibujar paths cada frame | 🔜 |
 | 12 | Medidor de FPS oculto en ajustes de desarrollador | 💡 |
 
@@ -45,7 +45,7 @@ formas— salieron junto al #88. El detalle de cada uno está en `docs/PLAN.md` 
 | 27 | Anillo de "aura" según la rama evolutiva (Athletic deja estela al moverse) | 💡 |
 | 28 | Mirada vertical: la criatura puede mirar arriba y abajo, no solo a los costados | ✅ |
 | 29 | Sudor cuando la energía está baja y tirita cuando está enferma | ✅ |
-| 30 | Pupilas que se dilatan al ver comida | 🔨 |
+| 30 | Pupilas que se dilatan al ver comida | ✅ |
 | 31 | Envejecimiento visual gradual dentro de cada etapa, no solo al cambiar de etapa | ✅ |
 | 32 | Accesorios que se mueven con el cuerpo (el gorro rebota al saltar) | ✅ |
 
