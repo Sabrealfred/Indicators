@@ -214,6 +214,17 @@ object Simulation {
             album = previous.album,
             chronicle = previous.chronicle,
             unlockedAchievements = previous.unlockedAchievements,
+            // Everything in this block belongs to the person holding the phone, not to the
+            // creature that happened to be alive while they earned it. A high score was set by
+            // the player's thumbs; the level is the one the game itself calls "keeper level";
+            // the streak counts days the player showed up, and a funeral is not a day skipped.
+            // Wiping them said the player's own history was the pet's property, which is also
+            // why "score in all seven minigames" could never be finished across two lives.
+            highScores = previous.highScores,
+            level = previous.level,
+            xp = previous.xp,
+            careStreakDays = previous.careStreakDays,
+            bestCareStreak = previous.bestCareStreak,
             inventory = previous.inventory.filterKeys { id ->
                 ItemCatalog[id]?.isCosmetic == true
             } + mapOf("snack_berry" to 3, "meal_bowl" to 2, "medicine" to 1),
