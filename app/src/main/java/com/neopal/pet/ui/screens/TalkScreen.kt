@@ -34,6 +34,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -48,11 +49,21 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.neopal.pet.R
+import com.neopal.pet.data.EarsState
+import com.neopal.pet.data.Heard
+import com.neopal.pet.data.SpeakerState
 import com.neopal.pet.domain.ChatTurn
+import com.neopal.pet.domain.CreatureVoice
+import com.neopal.pet.domain.MicOffer
+import com.neopal.pet.domain.MicPermission
+import com.neopal.pet.domain.MicSurface
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Simulation
+import com.neopal.pet.domain.TalkVoice
+import com.neopal.pet.domain.VoiceComposer
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.ui.components.MicButton
 import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.PixelBadge
@@ -60,9 +71,16 @@ import com.neopal.pet.ui.components.PixelBevel
 import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelPanel
 import com.neopal.pet.ui.components.PixelTextWell
+import com.neopal.pet.ui.components.VoiceNote
 import com.neopal.pet.ui.components.bevelSafePadding
+import com.neopal.pet.ui.components.heardNote
 import com.neopal.pet.ui.components.pixelSurface
 import com.neopal.pet.ui.components.pixelUnits
+import com.neopal.pet.ui.components.rememberCreatureEars
+import com.neopal.pet.ui.components.rememberCreatureSpeaker
+import com.neopal.pet.ui.components.rememberMicAsking
+import com.neopal.pet.ui.components.rememberRecogniserPresent
+import com.neopal.pet.ui.components.speakerNote
 
 /**
  * Longest thing the player can say in one go.
@@ -139,6 +157,32 @@ fun TalkScreen(
     var draft by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
 
+    // ---- the voice layer -----------------------------------------------------------------
+    //
+    // All four of these are inert until used. The speaker builds no engine until a line is
+    // actually spoken, the ears open no microphone until pressed, the permission is not asked
+    // for by any of them, and every decision about what appears on screen is taken by
+    // [MicSurface] and [TalkVoice], which are pure Kotlin with a test suite behind them.
+    val voice = ui.config.voice
+    val speaker = rememberCreatureSpeaker()
+    val ears = rememberCreatureEars()
+    val asking = rememberMicAsking(ears)
+    val recogniserPresent = rememberRecogniserPresent()
+    val earsState: EarsState by ears.state.collectAsState()
+    val speakerState: SpeakerState by speaker.state.collectAsState()
+
+    /** The last thing the microphone came back with that was not words. Cleared by the next try. */
+    var heard: String? by remember { mutableStateOf<String?>(null) }
+
+    /** True between pressing a microphone that has never been granted and the player's answer. */
+    var waitingOnPermission: Boolean by remember { mutableStateOf(false) }
+
+    // What this creature sounds like. Recomputed only when the creature changes, not on every
+    // recomposition of a screen that recomposes once a second with the clock.
+    val ownVoice: CreatureVoice = remember(pet.stage, pet.personality, pet.genome, pet.isSick) {
+        TalkVoice.voiceOf(pet)
+    }
+
     val newest = pet.chat.lastOrNull()
     // The thinking line is the last row while it is up, so it counts towards where the log ends.
     val tail = pet.chat.size + if (thinking) 1 else 0
@@ -147,6 +191,58 @@ fun TalkScreen(
     }
 
     val canSend = gate == TalkGate.READY && !thinking && draft.isNotBlank()
+
+    val micSurface = MicSurface.of(
+        listens = voice.listens,
+        recogniserPresent = recogniserPresent,
+        permission = asking.status,
+        listening = earsState.listening,
+        ready = gate == TalkGate.READY,
+    )
+
+    /**
+     * Opens the microphone and puts whatever comes back into the composer.
+     *
+     * Never sends. A recogniser mishears constantly, and the difference between a feature that
+     * mishears and one that is broken is entirely whether the player saw the sentence first.
+     */
+    fun listenNow() {
+        heard = null
+        ears.listen(voice.preferOnDevice) { outcome ->
+            heard = heardNote(outcome)
+            if (outcome is Heard.Words) {
+                draft = VoiceComposer.blend(draft, outcome.text, MaxMessageChars)
+            }
+        }
+    }
+
+    // The creature's newest reply, read out once — and only when the player asked for that. The
+    // key is seeded from whatever was already on screen when this screen opened, so walking back
+    // into the room does not make it repeat its last answer.
+    val newestReplyKey = TalkVoice.newestReplyKey(pet.chat)
+    var alreadySaid: String? by remember { mutableStateOf(newestReplyKey) }
+    LaunchedEffect(newestReplyKey, voice) {
+        val line = TalkVoice.replyToSpeak(pet.chat, voice, alreadySaid)
+        // Marked as said whether or not it was spoken: a line the player read on screen with the
+        // voice off is not one they want read to them the moment they switch the voice on.
+        if (newestReplyKey != null) alreadySaid = newestReplyKey
+        if (line != null) speaker.say(line, ownVoice, voice.volumeScale)
+    }
+
+    // The permission answer arrives long after the press that caused it. Carrying on into the
+    // microphone is the whole reason the player pressed it; a grant that leaves them looking at
+    // the same button, having to press it again, reads as the press not having worked.
+    LaunchedEffect(asking.status) {
+        if (!waitingOnPermission) return@LaunchedEffect
+        when (asking.status) {
+            MicPermission.GRANTED -> {
+                waitingOnPermission = false
+                listenNow()
+            }
+            MicPermission.REFUSED -> waitingOnPermission = false
+            MicPermission.UNASKED -> Unit
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -234,6 +330,27 @@ fun TalkScreen(
 
         Spacer(Modifier.height(pixelUnits(2)))
         if (gate == TalkGate.READY) {
+            VoiceStrip(
+                surface = micSurface,
+                level = if (earsState.listening) earsState.level else null,
+                mouthNote = speakerNote(speakerState, voice.speaks),
+                lastHeard = heard,
+                onMic = {
+                    when (micSurface.offer) {
+                        MicOffer.ASK -> {
+                            waitingOnPermission = true
+                            heard = null
+                            asking.ask()
+                        }
+                        MicOffer.LISTEN -> listenNow()
+                        // Giving up is silent. The player asked for the microphone to close and
+                        // does not need to be told that it did.
+                        MicOffer.STOP -> ears.cancel()
+                        MicOffer.HIDDEN -> Unit
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
             Composer(
                 draft = draft,
                 onDraftChange = { draft = it.take(MaxMessageChars) },
@@ -243,6 +360,10 @@ fun TalkScreen(
                 onSend = {
                     viewModel.say(draft)
                     draft = ""
+                    // Whatever the microphone last failed to catch is history the moment a
+                    // message goes; leaving it up puts "I did not hear anything" over a
+                    // sentence that was plainly heard.
+                    heard = null
                 },
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -451,6 +572,57 @@ private fun OpeningPanel(name: String, gate: TalkGate, modifier: Modifier = Modi
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+/**
+ * The row above the composer: the microphone, and the truth about it.
+ *
+ * It disappears completely when there is nothing to press and nothing to admit, which is the
+ * shipped default — the voice is off in both directions until a player switches it on, and a
+ * talking screen that permanently reserves a strip for a feature nobody enabled is a talking
+ * screen with less room for the conversation.
+ *
+ * Three separate sentences can land here and they are not interchangeable. [mouthNote] is about
+ * the creature's voice failing, [surface]'s own note is about the microphone not being on offer,
+ * and [lastHeard] is about the last attempt at listening. Collapsing them into one line would
+ * mean a device with no text-to-speech quietly stops explaining itself the moment something else
+ * goes wrong.
+ */
+@Composable
+private fun VoiceStrip(
+    surface: MicSurface,
+    level: Float?,
+    mouthNote: String?,
+    lastHeard: String?,
+    onMic: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val notes = listOfNotNull(surface.note, mouthNote, lastHeard)
+    if (!surface.actionable && notes.isEmpty()) return
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.heightIn(min = MinTouchTarget),
+    ) {
+        if (surface.actionable) {
+            MicButton(surface = surface, onPress = onMic)
+            Spacer(Modifier.width(pixelUnits(2)))
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            notes.forEachIndexed { index, note ->
+                if (index > 0) Spacer(Modifier.height(pixelUnits(1)))
+                VoiceNote(
+                    text = note,
+                    // The level rides on the first note, which while listening is the one that
+                    // says to go ahead and speak. A meter under a sentence about a missing
+                    // recogniser would be a meter for a microphone that is not open.
+                    level = if (index == 0) level else null,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(pixelUnits(2)))
 }
 
 /**

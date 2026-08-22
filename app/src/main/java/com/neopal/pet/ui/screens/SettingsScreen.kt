@@ -229,6 +229,15 @@ fun SettingsScreen(
         }
 
 
+        // Its own file: the only section of this screen that needs a speech engine in the
+        // composition, and the only one whose copy has to stay honest about hardware.
+        Spacer(Modifier.height(pixelUnits(3)))
+        VoiceSettingsPanel(
+            pet = ui.pet,
+            config = config.voice,
+            onChange = { voice -> viewModel.updateConfig { it.copy(voice = voice) } },
+        )
+
         Spacer(Modifier.height(pixelUnits(3)))
         SettingsPanel(
             "The creature's brain",
