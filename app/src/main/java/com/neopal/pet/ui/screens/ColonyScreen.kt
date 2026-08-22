@@ -1053,7 +1053,10 @@ private fun ChildPreviewBlock(
     val shiftPoints = (preview.houndlinessShift * 100f).roundToInt()
     val mine = (pet.genome.houndliness * 100f).roundToInt()
     val distance = (preview.parentDistance * 100f).roundToInt()
-    val floor = (Genome.MIN_USEFUL_DISTANCE * 100f).roundToInt()
+    val minApart = (Genome.MIN_USEFUL_DISTANCE * 100f).roundToInt()
+    // Tested against the raw float, not the rounded percentage: 0.058 rounds to 6, and colouring
+    // it as "fine" while the domain refuses it is the one thing this line must never do.
+    val tooClose = preview.parentDistance < Genome.MIN_USEFUL_DISTANCE
     val shiftAccent = when {
         shiftPoints > 1 -> NeoAccents.gold
         shiftPoints < -1 -> NeoAccents.cyan
@@ -1126,6 +1129,7 @@ private fun ChildPreviewBlock(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.width(pixelUnits(12)),
             )
             PixelBadge(
@@ -1145,10 +1149,10 @@ private fun ChildPreviewBlock(
 
         Spacer(Modifier.height(pixelUnits(1)))
         Text(
-            text = "Bloodlines $distance per cent apart. Below $floor per cent a pair only " +
+            text = "Bloodlines $distance per cent apart. Below $minApart per cent a pair only " +
                 "repeats itself and the match is refused.",
             style = MaterialTheme.typography.labelSmall,
-            color = if (distance < floor) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = if (tooClose) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (partner.species != pet.species) {
             Spacer(Modifier.height(pixelUnits(1)))
