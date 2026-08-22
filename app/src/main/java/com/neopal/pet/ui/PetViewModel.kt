@@ -887,7 +887,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val reclocked = before?.let { PetClock.reclock(it, previous, updated) }
         _ui.update { state -> state.copy(config = updated, pet = reclocked ?: state.pet) }
         viewModelScope.launch { repository.saveConfig(updated) }
-        if (reclocked != null && reclocked !== before) persist(reclocked, immediate = true)
+        if (reclocked != null && reclocked !== before) persist(reclocked, SaveUrgency.NOW)
     }
 
     suspend fun exportSave(): String = repository.exportSave()
