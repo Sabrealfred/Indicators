@@ -326,7 +326,9 @@ object CareActions {
 
     fun buy(state: PetState, itemId: String): ActionResult {
         val item = ItemCatalog[itemId] ?: return blocked(state, "Unknown item.")
-        if (item.isCosmetic && (state.inventory[itemId] ?: 0) > 0) {
+        // Durable, not cosmetic: a toy is never used up either, so a second copy is a coin sink
+        // that buys the player nothing at all.
+        if (item.isDurable && (state.inventory[itemId] ?: 0) > 0) {
             return blocked(state, "You already own ${item.name}.")
         }
         if (state.coins < item.price) return blocked(state, "Not enough coins.")

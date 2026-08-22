@@ -225,8 +225,12 @@ object Simulation {
             xp = previous.xp,
             careStreakDays = previous.careStreakDays,
             bestCareStreak = previous.bestCareStreak,
+            // Everything the player bought to keep stays in the house — hats, rooms and toys
+            // alike. Filtering on "cosmetic" instead dropped the toys, which are no more used
+            // up by a death than a hat is, and sent the player back to the shop to buy the same
+            // ball a second time. Food does not keep, so the new pet gets its own starter pack.
             inventory = previous.inventory.filterKeys { id ->
-                ItemCatalog[id]?.isCosmetic == true
+                ItemCatalog[id]?.isDurable == true
             } + mapOf("snack_berry" to 3, "meal_bowl" to 2, "medicine" to 1),
             // The social world outlives one pet. Everybody the last one knew is still out there,
             // now a stranger to this one — affinity resets, the acquaintance does not. The heir

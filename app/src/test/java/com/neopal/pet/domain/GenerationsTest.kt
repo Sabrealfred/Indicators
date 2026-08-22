@@ -220,6 +220,27 @@ class GenerationsTest {
         assertNull(next.deathReason)
     }
 
+    @Test
+    fun `a toy paid for once is not repossessed by the funeral`() {
+        val furnished = starved(hatched()).copy(
+            inventory = mapOf(
+                "hat_crown" to 1,
+                "room_beach" to 1,
+                "toy_ball" to 1,
+                "toy_drum" to 1,
+                "meal_stew" to 4,
+            ),
+        )
+        val next = Simulation.nextGeneration(furnished, "Second", Species.VOLT, furnished.lastTickMillis + 5_000)
+
+        assertEquals("a hat outlives its wearer", 1, next.inventory["hat_crown"])
+        assertEquals(1, next.inventory["room_beach"])
+        assertEquals("a ball is furniture, not a meal — nothing about it was used up", 1, next.inventory["toy_ball"])
+        assertEquals(1, next.inventory["toy_drum"])
+        assertEquals("food does not keep; the new pet gets its own starter pack", null, next.inventory["meal_stew"])
+        assertEquals(3, next.inventory["snack_berry"])
+    }
+
     private fun hatched(): PetState =
         Simulation.advance(Simulation.newGame("Test", Species.AQUA, start), start + 120_000, config).state
 

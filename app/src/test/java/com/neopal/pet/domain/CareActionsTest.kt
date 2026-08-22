@@ -55,6 +55,45 @@ class CareActionsTest {
     }
 
     @Test
+    fun `the shop never runs out of what it sells`() {
+        // Reported as "the shop will not restock; once bought out, inventory never returns".
+        // It does not reproduce, and this is the test that says so on purpose: the catalog has
+        // no stock at all, so a consumable can be bought as often as there are coins for it —
+        // including from an empty pantry, which is the case the report claims is stuck.
+        var state = pet().copy(
+            coins = 500,
+            inventory = emptyMap(),
+            // Nothing here is about achievements, and an unlock would pay coins into the sum.
+            unlockedAchievements = Achievements.all.map { it.id }.toSet(),
+        )
+        repeat(10) {
+            val result = CareActions.buy(state, "meal_bowl")
+            assertTrue("purchase ${it + 1} was refused", result.accepted)
+            state = result.state
+        }
+        assertEquals(10, state.inventory["meal_bowl"])
+        assertEquals(500 - 10 * ItemCatalog.require("meal_bowl").price, state.coins)
+
+        // And again after eating the lot: an empty shelf is the player's, never the shop's.
+        var eaten = state
+        repeat(10) { eaten = CareActions.feed(eaten.copy(stats = eaten.stats.copy(satiety = 0f)), "meal_bowl").state }
+        assertEquals(null, eaten.inventory["meal_bowl"])
+        assertTrue("nothing about being bought out stops the next purchase", CareActions.buy(eaten, "meal_bowl").accepted)
+    }
+
+    @Test
+    fun `a toy is bought once, like every other thing you keep`() {
+        val rich = pet().copy(coins = 500)
+        val owned = CareActions.buy(rich, "toy_ball")
+        assertTrue(owned.accepted)
+        assertEquals(1, owned.state.inventory["toy_ball"])
+
+        val again = CareActions.buy(owned.state, "toy_ball")
+        assertFalse("a toy is never used up, so a second one is a coin sink and nothing else", again.accepted)
+        assertEquals(owned.state.coins, again.state.coins)
+    }
+
+    @Test
     fun `winning a game pays more than losing`() {
         val won = CareActions.finishGame(pet(), won = true, score = 1f, gameName = "Test").state
         val lost = CareActions.finishGame(pet(), won = false, score = 0f, gameName = "Test").state
