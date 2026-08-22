@@ -404,6 +404,108 @@ class ColonyTest {
         assertTrue(taughtSkills(readyToPair()).isEmpty())
     }
 
+    // ---- growing up, moving out, and the cap ---------------------------------------------
+
+    /** A child that hatched at [born] and has lived in the room ever since. */
+    private fun kid(index: Int, born: Long = 0L, stage: LifeStage = LifeStage.BABY) = mira(
+        affinity = 88f,
+        relation = Relation.OFFSPRING,
+    ).copy(
+        id = "pal_kid_$index",
+        name = "Kid$index",
+        stage = stage,
+        metAtSeconds = born,
+        lastSeenSeconds = born,
+    )
+
+    /** As long as it takes this pet's own kind to get from newly hatched to grown. */
+    private val grownUp: Long = listOf(LifeStage.BABY, LifeStage.CHILD, LifeStage.TEEN)
+        .sumOf { Simulation.stageDuration(it, config) }
+
+    @Test
+    fun `a child grows up and moves out, and is still family afterwards`() {
+        val events = mutableListOf<GameEvent>()
+        val start = pet().copy(pals = listOf(kid(0, born = 10_000L)))
+
+        val tooSoon = Colony.tick(start.copy(ageSeconds = 10_000L + grownUp / 2), config, 60L, Random(1L), events)
+        assertTrue("a baby is not sent out into the world", tooSoon.pals.single().present)
+
+        val after = Colony.tick(start.copy(ageSeconds = 10_000L + grownUp + 60L), config, 60L, Random(1L), events)
+        val grown = after.pals.single()
+        assertTrue("a grown child does not live in its parent's room for ever", !grown.present)
+        assertEquals("it left because it grew up", LifeStage.ADULT, grown.stage)
+        assertEquals("family is still family once it has its own front door", Relation.OFFSPRING, grown.relation)
+        assertTrue("and nobody leaves the room silently", events.any { it is GameEvent.PalLeft })
+    }
+
+    @Test
+    fun `a household at the cap still keeps the child that hatches into it`() {
+        val brood = (0 until Colony.MAX_REMEMBERED_PALS).map { kid(it) }
+        val due = NestEgg(
+            id = "egg_due",
+            genome = Genome.fromList(List(Genome.GENE_COUNT) { 0.4f }),
+            species = Species.AQUA,
+            laidAtSeconds = 0L,
+            hatchesAtSeconds = 100_000L,
+            otherParentId = "pal_mira",
+            otherParentName = "Mira",
+        )
+        val events = mutableListOf<GameEvent>()
+        val state = pet().copy(pals = brood, nest = listOf(due), ageSeconds = 100_000L)
+
+        val after = Colony.tick(state, config, 60L, Random(5L), events)
+        val born = events.filterIsInstance<GameEvent.ChildHatched>().single().child
+
+        assertEquals("the roster is a cap, not a queue", Colony.MAX_REMEMBERED_PALS, after.pals.size)
+        assertTrue(
+            "the newest child must not be the one the cap throws away",
+            after.pals.any { it.id == born.id },
+        )
+    }
+
+    @Test
+    fun `a full household is a state the world carries on through, not a dead end`() {
+        // Twelve grown children, all long since moved out and long out of touch. Before, this was
+        // the end of the colony: strangers were refused because nobody was evictable, and one's
+        // own children were excluded from the returning pool, so nothing could ever happen again.
+        val brood = (0 until Colony.MAX_REMEMBERED_PALS).map {
+            kid(it, born = 0L, stage = LifeStage.ADULT).copy(affinity = 70f, present = false)
+        }
+        val events = mutableListOf<GameEvent>()
+        val start = pet().copy(pals = brood, ageSeconds = 400_000L)
+
+        run(start, seconds = 48 * 3600L, step = 60L, random = Random(77L), events = events)
+
+        val met = events.filterIsInstance<GameEvent.MetPal>().map { it.pal }
+        assertTrue(
+            "a grown child has to be able to come home for a visit",
+            met.any { it.id.startsWith("pal_kid_") },
+        )
+        assertTrue(
+            "and a child nobody has heard from in half a lifetime has to make room for a new face",
+            met.any { !it.id.startsWith("pal_kid_") },
+        )
+    }
+
+    @Test
+    fun `a pet cannot pair off with its own child`() {
+        // Reachable only now that children grow up: an offspring that reaches ADULT clears the
+        // age bar, and family starts at 88 fondness, which clears the trust bar on day one.
+        val grown = kid(0, born = 0L, stage = LifeStage.ADULT).copy(
+            present = true,
+            genome = Genome.fromList(List(Genome.GENE_COUNT) { 0.85f }),
+        )
+        val state = readyToPair().copy(pals = listOf(grown), ageSeconds = 400_000L)
+
+        val blocker = Colony.pairingBlocker(state, "pal_kid_0")
+        assertNotNull("pairing with your own child must be refused", blocker)
+        assertTrue("and the refusal must say why", blocker!!.endsWith("."))
+
+        val events = mutableListOf<GameEvent>()
+        assertEquals("a blocked pairing changes nothing", state, Colony.pair(state, "pal_kid_0", config, Random(1L), events))
+        assertTrue(events.isEmpty())
+    }
+
     /** Runs one pairing through to hatching and reports what the child came out knowing. */
     private fun taughtSkills(state: PetState): Set<Skill> {
         val events = mutableListOf<GameEvent>()
