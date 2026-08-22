@@ -14,6 +14,7 @@ import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.ActionResult
 import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.Brain
+import com.neopal.pet.domain.Cadence
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
@@ -177,7 +178,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val config = current.config
         if (!config.mind.usable || !config.mind.decidesActions || !mind.isReady) return
         if (reconsidering) return
-        if (pet.ageSeconds - lastReconsideredAtSeconds < gapFor(RECONSIDER_GAP_SECONDS, pet)) return
+        if (!dueFor(Cadence.RECONSIDER_SECONDS, lastReconsideredAtSeconds, pet)) return
 
         val options = Brain.considerations(pet, config)
         // Nothing to reconsider when there is no real alternative to the thing it just did.
@@ -226,7 +227,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         if (planning || pet.plan != null) return
         if (!pet.isMindAwake || pet.isSleeping || pet.isDead) return
         if (pet.autonomy != Autonomy.FULL) return
-        if (pet.ageSeconds - lastPlannedAtSeconds < gapFor(PLAN_GAP_SECONDS, pet)) return
+        if (!dueFor(Cadence.PLAN_SECONDS, lastPlannedAtSeconds, pet)) return
 
         val options = Brain.considerations(pet, config).filter { it.available }
         if (options.size < 2) return
@@ -250,51 +251,15 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /**
-     * "Has not happened yet", for the three throttles below.
-     *
-     * Not `Long.MIN_VALUE`, and the difference is not cosmetic. Every throttle here reads
-     * `pet.ageSeconds - lastX < gap`, and `ageSeconds - Long.MIN_VALUE` overflows straight back
-     * into a large negative number for any age at all — so the gap always appears unmet and the
-     * throttle blocks forever. The failure is invisible from the outside: no crash, no log, just
-     * a remote brain that is switched on, configured, reachable, and never once called. Halving
-     * the sentinel leaves the subtraction room to stay positive.
-     */
-    private val NEVER = Long.MIN_VALUE / 2
-
     /** True while a reconsideration is in flight, so they cannot pile up. */
     private var reconsidering = false
-    private var lastReconsideredAtSeconds = NEVER
+    private var lastReconsideredAtSeconds = Cadence.NEVER
     private var planning = false
-    private var lastPlannedAtSeconds = NEVER
+    private var lastPlannedAtSeconds = Cadence.NEVER
 
-    /**
-     * Pet seconds between errands. Longer than the reconsider gap because a plan is meant to be
-     * worked through rather than replaced: setting a new one every few minutes would mean the
-     * creature never finished an afternoon it started.
-     */
-    private val PLAN_GAP_SECONDS = 1_800L
-
-    /**
-     * How often a creature of this intellect stops to think, as a gap in pet seconds.
-     *
-     * A bright creature thinks more often than a newborn, which is the point — but the range is
-     * deliberately narrow, between 0.6x and 1.5x the base. The reason is not caution about how
-     * clever it is allowed to be: it is that every one of these is a request, most people will run
-     * this on a free tier, and a creature that thought twice as hard would spend the day's
-     * allowance by lunch and then think not at all. A narrow band is what keeps a clever creature
-     * clever all day rather than brilliant for an hour.
-     */
-    private fun gapFor(base: Long, pet: PetState): Long {
-        val scale = (1.5f - (pet.intellect.coerceIn(0f, 100f) / 100f) * 0.9f).coerceIn(0.6f, 1.5f)
-        return (base * scale).toLong()
-    }
-
-    /**
-     * Pet seconds between reconsiderations. Five minutes is frequent enough that a player watching
-     * for a while sees it happen, and rare enough that a free tier lasts the day.
-     */
-    private val RECONSIDER_GAP_SECONDS = 300L
+    /** Whether enough pet time has passed, at this creature's own pace. See [Cadence]. */
+    private fun dueFor(base: Long, lastAtSeconds: Long, pet: PetState): Boolean =
+        Cadence.due(pet.ageSeconds, lastAtSeconds, Cadence.gapFor(base, pet.intellect))
 
     // ---------------------------------------------------------------- lifecycle
 
@@ -623,7 +588,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val config = current.config
         if (!config.mind.usable || !config.mind.conversation || !mind.isReady) return
         if (_ui.value.thinking || pet.isSleeping || pet.isDead || !pet.isMindAwake) return
-        if (pet.ageSeconds - lastSpokeFirstAtSeconds < SPEAK_FIRST_GAP_SECONDS) return
+        if (!Cadence.due(pet.ageSeconds, lastSpokeFirstAtSeconds, Cadence.SPEAK_FIRST_SECONDS)) return
 
         lastSpokeFirstAtSeconds = pet.ageSeconds
         viewModelScope.launch {
@@ -656,13 +621,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         else -> null
     }
 
-    private var lastSpokeFirstAtSeconds = NEVER
-
-    /**
-     * Pet seconds between unprompted remarks. Long — over an hour — because the whole value of
-     * the creature speaking first is that it is rare enough to be worth reading.
-     */
-    private val SPEAK_FIRST_GAP_SECONDS = 4_000L
+    private var lastSpokeFirstAtSeconds = Cadence.NEVER
 
     /** Forgets the conversation. The creature's diary is untouched; this is only the talking. */
     fun clearChat() {
