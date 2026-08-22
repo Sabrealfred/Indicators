@@ -152,6 +152,12 @@ object Simulation {
     const val MAX_DECISION_LOG = 40
 
     /**
+     * How much conversation a save keeps. The whole state is one JSON blob rewritten on every
+     * tick, so an unbounded chat log would grow into the write and eventually stall it.
+     */
+    const val MAX_CHAT_TURNS = 40
+
+    /**
      * How many finished runs a save keeps. The save is one JSON blob rewritten on every tick, so
      * the history has to be bounded; eight is more past lives than a comparison can use and small
      * enough that the blob never grows into the write.
@@ -206,6 +212,16 @@ object Simulation {
             // knew how to teach, and nothing else — see [Skill.TEACH], which is the only route.
             skills = heir?.skills.orEmpty(),
             autonomy = previous.autonomy,
+            // What the line learned, though, does carry — and this is the one place it grows.
+            // Derived from the run that just ended rather than from a model, so a player who
+            // never sets up a remote brain still gets children wiser than their parents.
+            lessons = Lineage.inherit(
+                existing = previous.lessons,
+                fresh = Lineage.distilLocally(
+                    RunRecord.of(previous, nowMillis),
+                    previous.generation,
+                ).mapNotNull(Lineage::sanitise),
+            ),
         )
 
     /**

@@ -360,6 +360,30 @@ object Brain {
             reason = "Nothing wanted me, so I sat and watched the room.",
             blockedBy = null,
         )
+
+        // Everything the line has learned is applied here, in one place, rather than woven into
+        // each option's own arithmetic. Two reasons: every option gets the same treatment whether
+        // or not whoever wrote it remembered lessons existed, and the bias stays visible as a
+        // single step that can be turned off, read, and tested on its own.
+        //
+        // Multiplicative on purpose. A flat bonus would make a well-bred pet eat when it was not
+        // hungry, which reads as a bug; multiplying an existing want makes it eat *earlier*, which
+        // reads as having learned something from a parent that starved.
+        if (state.lessons.isEmpty()) return out
+        for (i in out.indices) {
+            val option = out[i]
+            val bias = Lineage.biasFor(state.lessons, option.kind)
+            if (bias != 1f) {
+                out[i] = Option(
+                    kind = option.kind,
+                    utility = (option.utility * bias).coerceIn(0f, 1f),
+                    durationSeconds = option.durationSeconds,
+                    target = option.target,
+                    reason = option.reason,
+                    blockedBy = option.blockedBy,
+                )
+            }
+        }
         return out
     }
 

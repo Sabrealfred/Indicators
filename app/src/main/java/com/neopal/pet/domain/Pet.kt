@@ -303,6 +303,16 @@ data class PetState(
     /** Names of this pet's own parents, for the family tree. Empty for a founder. */
     val parentNames: List<String> = emptyList(),
 
+    /**
+     * What this line has learned, inherited at each new generation.
+     *
+     * Derived from what actually happened to the parent, with or without a language model — a
+     * payoff gated behind pasting an API key is one most players would never see.
+     */
+    val lessons: List<Lesson> = emptyList(),
+    /** Conversation with the player, oldest first, bounded by [Simulation.MAX_CHAT_TURNS]. */
+    val chat: List<ChatTurn> = emptyList(),
+
     val rngSeed: Long = 0L,
 ) {
     val isEgg: Boolean get() = stage == LifeStage.EGG
@@ -420,6 +430,11 @@ data class GameConfig(
     val atmosphere: Float = 0.7f,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
+    /**
+     * The remote brain. Off by default and inert until a route is set, so the game is complete
+     * without it and nobody is asked to sign up for anything to play.
+     */
+    val mind: MindConfig = MindConfig(),
 ) {
     companion object {
         val Default = GameConfig()
