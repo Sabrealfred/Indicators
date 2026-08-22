@@ -32,6 +32,7 @@ import com.neopal.pet.ui.screens.SettingsScreen
 import com.neopal.pet.ui.screens.ShopScreen
 import com.neopal.pet.ui.screens.StatsScreen
 import com.neopal.pet.ui.screens.TalkScreen
+import com.neopal.pet.ui.screens.UpdateScreen
 import com.neopal.pet.ui.games.CatchGameScreen
 import com.neopal.pet.ui.games.DuetGameScreen
 import com.neopal.pet.ui.games.FetchGameScreen
@@ -62,6 +63,7 @@ object Routes {
     const val COLONY = "colony"
     const val TALK = "talk"
     const val SETTINGS = "settings"
+    const val UPDATE = "update"
     const val MEMORIAL = "memorial"
 }
 
@@ -70,6 +72,10 @@ object Routes {
 fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory)) {
     val navController = rememberNavController()
     val ui by viewModel.ui.collectAsState()
+    // Deliberately above the NavHost, so it is scoped to the activity rather than to the update
+    // route: created inside the route it would be cleared on every back press, and clearing it
+    // cancels a download in flight. See UpdateViewModel's own note.
+    val updateViewModel: UpdateViewModel = viewModel(factory = UpdateViewModel.Factory)
 
     Box(
         modifier = Modifier
@@ -165,7 +171,11 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                         viewModel.resetEverything()
                         navController.navigate(Routes.NEW_GAME) { popUpTo(Routes.HOME) { inclusive = true } }
                     },
+                    onOpenUpdates = { navController.navigate(Routes.UPDATE) },
                 )
+            }
+            composable(Routes.UPDATE) {
+                UpdateScreen(updateViewModel) { navController.popBackStack() }
             }
             composable(Routes.MEMORIAL) {
                 MemorialScreen(

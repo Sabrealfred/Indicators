@@ -73,7 +73,12 @@ private const val DisabledAlpha = 0.38f
 
 /** Look, sound, reminders, pace, tips, save import/export and reset — grouped by what they change. */
 @Composable
-fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame: () -> Unit) {
+fun SettingsScreen(
+    viewModel: PetViewModel,
+    onBack: () -> Unit,
+    onResetToNewGame: () -> Unit,
+    onOpenUpdates: () -> Unit,
+) {
     val ui by viewModel.ui.collectAsState()
     val config = ui.config
     val clipboard = LocalClipboardManager.current
@@ -531,6 +536,32 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
                 Spacer(Modifier.height(pixelUnits(2)))
                 Text(it, style = MaterialTheme.typography.labelSmall, color = NeoAccents.cyan)
             }
+        }
+
+        Spacer(Modifier.height(pixelUnits(3)))
+        // Directly above the danger zone on purpose: it is the other thing on this screen that
+        // can end with the save gone, if a build turns out to be signed with a different key.
+        SettingsPanel("App updates", "Where new builds come from, and whether there is one.") {
+            PixelButton(
+                onClick = onOpenUpdates,
+                accent = NeoAccents.cyan,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Check for updates",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(pixelUnits(2)))
+            Text(
+                "NeoPal installs from its own release page rather than a store, so it does not " +
+                    "update itself in the background. Nothing is downloaded or installed without " +
+                    "you asking for it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
