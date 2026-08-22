@@ -289,6 +289,7 @@ object Colony {
             hatchesAtSeconds = state.ageSeconds + incubationSeconds(config),
             otherParentId = pal.id,
             otherParentName = pal.name,
+            parentName = state.name,
         )
 
         // A pairing is a promotion whether or not affinity happened to cross the line during an
@@ -695,7 +696,9 @@ object Colony {
                 affinity = OFFSPRING_AFFINITY,
                 metAtSeconds = state.ageSeconds,
                 lastSeenSeconds = state.ageSeconds,
-                parentNames = listOf(state.name, egg.otherParentName),
+                // Whoever laid it, not whoever is standing in the room: an egg can outlive its
+                // parent, and the family tree is the one place that has to stay true to that.
+                parentNames = listOf(egg.parentName.ifBlank { state.name }, egg.otherParentName),
                 skills = taught,
                 present = true,
             )

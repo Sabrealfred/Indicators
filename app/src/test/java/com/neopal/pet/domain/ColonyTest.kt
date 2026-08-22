@@ -661,6 +661,59 @@ class ColonyTest {
         )
     }
 
+    // ---- the nest across a death --------------------------------------------------------
+
+    @Test
+    fun `an egg in the nest survives the death of the pet that laid it`() {
+        val events = mutableListOf<GameEvent>()
+        val laid = Colony.pair(readyToPair(), "pal_mira", config, Random(77L), events)
+        val egg = laid.nest.single()
+        val leftToGo = egg.hatchesAtSeconds - laid.ageSeconds
+        assertTrue("the egg must still be cooking when the parent dies", leftToGo > 0L)
+
+        val bereaved = laid.copy(isDead = true, deathReason = DeathReason.STARVATION)
+        val next = Simulation.nextGeneration(bereaved, "Second", Species.LEAF, 2_000_000L)
+
+        assertEquals("the nest is the household's, not the corpse's", 1, next.nest.size)
+        assertEquals(
+            "an egg keeps the time it had left rather than starting its incubation again",
+            leftToGo,
+            Colony.nextHatchInSeconds(next),
+        )
+        assertEquals(
+            "the same child, gene for gene — this is the line the player was breeding for",
+            egg.genome,
+            next.nest.single().genome,
+        )
+    }
+
+    @Test
+    fun `a carried egg hatches naming the parent that actually laid it`() {
+        val events = mutableListOf<GameEvent>()
+        val laid = Colony.pair(readyToPair(), "pal_mira", config, Random(78L), events)
+        val next = Simulation.nextGeneration(
+            laid.copy(isDead = true, deathReason = DeathReason.OLD_AGE),
+            "Second",
+            Species.LEAF,
+            2_000_000L,
+        )
+
+        val due = next.copy(
+            stage = LifeStage.ADULT,
+            ageSeconds = next.nest.single().hatchesAtSeconds + 30L,
+        )
+        val born = mutableListOf<GameEvent>()
+        val hatched = Colony.tick(due, config, 30L, Random(79L), born)
+
+        assertTrue("the egg must still hatch on the new pet's clock", hatched.nest.isEmpty())
+        val child = born.filterIsInstance<GameEvent.ChildHatched>().single().child
+        assertEquals(
+            "the child of a dead pet keeps its parents; 'Second' never met it",
+            listOf("Pip", "Mira"),
+            child.parentNames,
+        )
+    }
+
     private fun egg(index: Int) = NestEgg(
         id = "egg_$index",
         genome = Genome(),

@@ -234,6 +234,16 @@ object Simulation {
             pals = previous.pals
                 .filter { it.id != heir?.id }
                 .map { it.copy(affinity = 0f, present = false, relation = Relation.VISITOR) },
+            // An egg is the household's, not the dying creature's. Losing it at the funeral
+            // took away the one thing that could still come of the line the player had been
+            // breeding for, at the exact moment they had nothing else left of it. The timers
+            // are shifted onto the new pet's clock so the egg keeps the time it had left, and
+            // the name of the pet that laid it rides along on the egg so the child it becomes
+            // still knows whose it is.
+            nest = previous.nest.map { egg ->
+                egg.copy(parentName = egg.parentName.ifBlank { previous.name })
+                    .rebasedFrom(previous.ageSeconds)
+            },
             // Skills are not inherited. A child taught by its parent starts with what the parent
             // knew how to teach, and nothing else — see [Skill.TEACH], which is the only route.
             skills = heir?.skills.orEmpty(),
