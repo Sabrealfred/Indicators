@@ -36,6 +36,8 @@ import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetBrief
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Relation
+import com.neopal.pet.domain.SaveCadence
+import com.neopal.pet.domain.SaveUrgency
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.Skill
 import com.neopal.pet.domain.Species
@@ -114,6 +116,16 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     private var saveJob: Job? = null
+
+    /**
+     * The newest state that is not known to be on disk. Held here rather than captured by the
+     * save job so that cancelling a scheduled write cannot lose the change it was going to make.
+     */
+    private var pendingSave: PetState? = null
+
+    /** How often a write is allowed to happen at all. See [SaveCadence]. */
+    private val saveCadence = SaveCadence()
+
     /**
      * The foreground clock only runs while the screen is actually in front of someone. Left
      * running in the background it fed the simulation a stream of one-second ticks, which look
@@ -198,7 +210,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)
                 if (result.state != pet) {
                     _ui.update { it.copy(pet = result.state) }
-                    persist(result.state)
+                    // Every tick changes the state, if only its `lastTickMillis`, so this ran
+                    // once a second. It is the one caller whose state is derived rather than
+                    // authored — see [SaveUrgency.ROUTINE].
+                    persist(result.state, SaveUrgency.ROUTINE)
                 }
                 handleEvents(result.events, offline = false)
                 maybeReconsider(result.events)
@@ -327,7 +342,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val state = Simulation.newGame(name, species, System.currentTimeMillis())
         _ui.update { it.copy(pet = state, loading = false) }
         play(Sfx.CONFIRM)
-        persist(state, immediate = true)
+        persist(state, SaveUrgency.NOW)
     }
 
     /**
@@ -362,7 +377,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         forgetCadence()
         _ui.update { it.copy(pet = state) }
         play(Sfx.CONFIRM)
-        persist(state, immediate = true)
+        persist(state, SaveUrgency.NOW)
     }
 
     /**
@@ -381,11 +396,13 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
     fun resetEverything() {
         // Cancelled first, and that ordering is the whole fix. `persist` is a single-slot debounce
-        // with an 800ms delay and the clock loop refreshes it every second, so at almost any
-        // moment there is a write of the current pet already scheduled. Clearing the store
-        // without cancelling it lets that write land *after* the removal and put the save back —
-        // invisibly, because the screen has already moved on to the new-game screen.
+        // and the clock loop refreshes it, so at almost any moment there is a write of the
+        // current pet already scheduled. Clearing the store without cancelling it lets that
+        // write land *after* the removal and put the save back — invisibly, because the screen
+        // has already moved on to the new-game screen. The pending state has to be dropped as
+        // well as the job, now that it is held in a field rather than captured by the job.
         saveJob?.cancel()
+        pendingSave = null
         forgetCadence()
         viewModelScope.launch {
             repository.clear()
@@ -400,7 +417,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         // not: an entry in the shade about a pet the player is looking at is clutter.
         Notifier.onAppBackgrounded()
         _ui.value.pet?.let { pet ->
-            persist(pet, immediate = true)
+            // NOW, not the routine cadence. This is the one path that makes the new write rate
+            // safe: whatever the clock has been sitting on lands here, at the last instant the
+            // process is guaranteed to still be running.
+            persist(pet, SaveUrgency.NOW)
             // Forced, ignoring the interval. Going to the background is one of the two moments
             // the mirror exists for — the other is a death — because it is the last instant this
             // process is guaranteed to still be running. A mirror that is twenty minutes stale
@@ -431,7 +451,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val report = buildOfflineReport(pet, result.state, result.events)
         _ui.update { it.copy(pet = result.state, offlineReport = report ?: it.offlineReport) }
         handleEvents(result.events, offline = true)
-        persist(result.state, immediate = true)
+        persist(result.state, SaveUrgency.NOW)
     }
 
     fun dismissOfflineReport() = _ui.update { it.copy(offlineReport = null) }
@@ -559,7 +579,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         play(Sfx.CONFIRM)
         _ui.update { it.copy(pet = updated) }
         showToast(autonomy.description)
-        persist(updated, immediate = true)
+        persist(updated, SaveUrgency.NOW)
     }
 
     /** What the brain is weighing right now, winners and blocked options alike. */
@@ -618,7 +638,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val updated = Colony.pair(pet, palId, _ui.value.config, kotlin.random.Random(pet.rngSeed), events)
         _ui.update { it.copy(pet = updated) }
         handleEvents(events, offline = false)
-        persist(updated, immediate = true)
+        persist(updated, SaveUrgency.NOW)
     }
 
     /**
@@ -766,7 +786,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val cleared = pet.copy(chat = emptyList())
         play(Sfx.BACK)
         _ui.update { it.copy(pet = cleared) }
-        persist(cleared, immediate = true)
+        persist(cleared, SaveUrgency.NOW)
     }
 
     /** Longest thing the player can say in one go. Free models charge for every token of it. */
@@ -954,12 +974,26 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         if (_ui.value.config.soundEnabled) ChiptuneEngine.play(sfx)
     }
 
-    /** Debounced write so a burst of taps does not hammer the disk. */
-    private fun persist(state: PetState, immediate: Boolean = false) {
+    /**
+     * Writes the world down, at the rate [SaveCadence] allows.
+     *
+     * The state to be written lives in [pendingSave] rather than being captured by the job, so a
+     * write that is cancelled and replaced by a more urgent one does not drop the change it was
+     * carrying, and a write that starts late writes what is true now rather than what was true
+     * when it was scheduled.
+     */
+    private fun persist(state: PetState, urgency: SaveUrgency = SaveUrgency.SOON) {
+        pendingSave = state
+        val wait = saveCadence.waitFor(urgency, System.currentTimeMillis(), saveJob?.isActive == true)
+            ?: return
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
-            if (!immediate) delay(800)
-            repository.save(state)
+            if (wait > 0L) delay(wait)
+            val writing = pendingSave ?: return@launch
+            repository.save(writing)
+            saveCadence.written(System.currentTimeMillis())
+            // Only if nothing newer arrived while the write was in flight.
+            if (pendingSave === writing) pendingSave = null
         }
     }
 
