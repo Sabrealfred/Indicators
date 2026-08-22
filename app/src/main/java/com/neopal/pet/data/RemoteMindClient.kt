@@ -359,9 +359,31 @@ internal object MindWire {
     fun routeOf(config: MindConfig): Route? = when {
         !config.usable -> null
         config.apiKey.isNotBlank() && config.baseUrl.isNotBlank() ->
-            Route(chatEndpoint(config.baseUrl), config.apiKey.trim())
+            // The key route, and the only one that carries a secret, so it is the only one that
+            // insists on transport. A player who pastes an http endpoint here would otherwise
+            // send their bearer token in plain text to every hop in between.
+            chatEndpoint(config.baseUrl).takeIf { carriesSecretsSafely(it) }
+                ?.let { Route(it, config.apiKey.trim()) }
+        // The proxy route sends no secret at all, so http is allowed. That is not laxity: a
+        // self-hosted gateway on a home network has no certificate and refusing it would rule
+        // out the whole use case the proxyUrl field exists for.
         config.proxyUrl.isNotBlank() -> Route(chatEndpoint(config.proxyUrl), null)
         else -> null
+    }
+
+    /**
+     * Whether a bearer token may be sent to this endpoint.
+     *
+     * HTTPS, or loopback. Loopback is allowed because a request that never leaves the device
+     * cannot be intercepted on the way, and refusing it would rule out a gateway running on the
+     * phone itself.
+     */
+    fun carriesSecretsSafely(endpoint: String): Boolean {
+        val lower = endpoint.trim().lowercase()
+        if (lower.startsWith("https://")) return true
+        if (!lower.startsWith("http://")) return false
+        val host = lower.removePrefix("http://").substringBefore('/').substringBefore(':')
+        return host == "localhost" || host == "127.0.0.1" || host == "[::1]" || host == "::1"
     }
 
     /** Accepts either a base URL or a full completions URL, because players paste both. */

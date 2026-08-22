@@ -23,7 +23,8 @@ data class ChronicleEntry(
  */
 object Chronicle {
 
-    private const val MAX_ENTRIES = 120
+    /** Longest the diary gets. Public because [sanitised] has to hold an imported save to it too. */
+    const val MAX_ENTRIES = 120
 
     /** Folds every event of a tick into diary lines. Returns the state with the lines appended. */
     fun record(state: PetState, events: List<GameEvent>, config: GameConfig): PetState {

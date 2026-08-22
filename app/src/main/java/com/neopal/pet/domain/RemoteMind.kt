@@ -278,6 +278,17 @@ data class MindConfig(
     /** True when a job is being sent somewhere other than where the rest go. */
     val splitsModels: Boolean get() = quickModel.isNotBlank() && quickModel != model
 
+    /**
+     * Deliberately hand-written, so the key cannot be printed by accident.
+     *
+     * A data class generates a `toString` containing every field, which means one stray log line,
+     * one crash reporter, or one `"config is $config"` in a debug build is enough to put a
+     * player's key somewhere it can be read. There is no logging in this app today; this is what
+     * makes that permanently safe rather than currently true.
+     */
+    override fun toString(): String =
+        "MindConfig(enabled=$enabled, route=$routeLabel, model=$model, apiKey=${if (apiKey.isBlank()) "unset" else "set"})"
+
     /** Which route a call would take, for the settings screen to say so plainly. */
     val routeLabel: String
         get() = when {

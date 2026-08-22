@@ -1,4 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <!--
+        The save is included on purpose: losing a five-generation lineage to a reinstall is the
+        worst thing this app could do to somebody, and a lineage is not re-creatable.
+
+        The key is excluded on purpose, and it lives in its own file so that it can be. A key is
+        re-pasteable in ten seconds; it should not ride to a backup server or onto a device the
+        player transfers to. See PetRepository.
+    -->
     <include domain="file" path="datastore/" />
+    <exclude domain="file" path="datastore/neopal_secrets.preferences_pb" />
 </full-backup-content>

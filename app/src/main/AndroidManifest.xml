@@ -24,6 +24,13 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
+        <!--
+            minSdk is 24, and the "no cleartext by default" rule is enforced by platform code
+            that only exists from API 28. On 24 to 27 the default is still permissive, so a
+            player who pastes an http endpoint into settings would send their bearer token in
+            plain text. This attribute is honoured from API 23, which covers the gap.
+        -->
+        android:usesCleartextTraffic="false"
         android:theme="@style/Theme.NeoPal">
 
         <activity
