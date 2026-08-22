@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -81,6 +84,9 @@ fun MemorialScreen(
             .background(
                 Brush.verticalGradient(listOf(MemorialSky, MemorialDeep)),
             )
+            // Edge to edge: keep the content out of the status and gesture bars. The
+            // background is applied first on purpose, so it still bleeds under them.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(pixelUnits(6)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
