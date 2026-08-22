@@ -29,6 +29,9 @@ class LoreTest {
         skills: Set<Skill> = emptySet(),
         previous: List<RunRecord> = emptyList(),
         isDead: Boolean = false,
+        parentNames: List<String> = emptyList(),
+        ageSeconds: Long = 0L,
+        stageStartedSeconds: Long = 0L,
     ): PetState = PetState(
         name = "Pip",
         species = Species.LEAF,
@@ -41,7 +44,21 @@ class LoreTest {
         skills = skills,
         previousGenerations = previous,
         isDead = isDead,
+        parentNames = parentNames,
+        ageSeconds = ageSeconds,
+        stageStartedSeconds = stageStartedSeconds,
     )
+
+    /** An elder that has been one for [fraction] of the stage the simulation gives an elder. */
+    private fun elder(fraction: Float, isDead: Boolean = false): PetState {
+        val full = Simulation.stageDuration(LifeStage.ELDER, GameConfig.Default)
+        return pet(
+            stage = LifeStage.ELDER,
+            isDead = isDead,
+            ageSeconds = (full * fraction).toLong(),
+            stageStartedSeconds = 0L,
+        )
+    }
 
     private fun pal(
         id: String,
@@ -102,6 +119,20 @@ class LoreTest {
 
         Lore.momentFor(GameEvent.LearnedSkill(Skill.SELF_FEED), pet(skills = setOf(Skill.SELF_FEED)))
             ?.let { found += it }
+        Lore.momentFor(
+            GameEvent.LearnedSkill(Skill.TEACH),
+            pet(skills = setOf(Skill.SELF_FEED, Skill.TEACH)),
+        )?.let { found += it }
+
+        Lore.momentFor(GameEvent.Recovered, pet())?.let { found += it }
+
+        val caller = pal("v1")
+        Lore.momentFor(GameEvent.MetPal(caller), pet(pals = listOf(caller)))?.let { found += it }
+
+        Lore.lateLifeMoment(elder(0.9f))?.let { found += it }
+        Lore.legacyMoment(
+            pet(isDead = true, pals = listOf(pal("c9", Relation.OFFSPRING))),
+        )?.let { found += it }
 
         val friend = pal("f1", Relation.FRIEND, affinity = 80f)
         Lore.momentFor(GameEvent.Befriended(friend), pet(pals = listOf(friend)))?.let { found += it }
@@ -291,6 +322,80 @@ class LoreTest {
             Lore.momentFor(GameEvent.ChildHatched(child), pet()),
             Lore.momentFor(GameEvent.ChildHatched(child), pet(pals = listOf(child))),
         )
+    }
+
+    @Test
+    fun `only the first caller of a life is called the first`() {
+        val one = pal("v1")
+        val two = pal("v2")
+        assertEquals(LoreMoment.FIRST_CALLER, Lore.momentFor(GameEvent.MetPal(one), pet(pals = listOf(one))))
+        assertNull(Lore.momentFor(GameEvent.MetPal(two), pet(pals = listOf(one, two))))
+        // And it reads the same from the state before the pal was added, like every other first.
+        assertEquals(LoreMoment.FIRST_CALLER, Lore.momentFor(GameEvent.MetPal(one), pet()))
+    }
+
+    @Test
+    fun `teaching outranks being the first skill`() {
+        // TEACH sits near the top of the ladder so it is never really first, but the ordering has
+        // to be stated rather than relied on: it is the only skill that outlives the creature.
+        assertEquals(
+            LoreMoment.LEARNED_TO_TEACH,
+            Lore.momentFor(GameEvent.LearnedSkill(Skill.TEACH), pet(skills = setOf(Skill.TEACH))),
+        )
+        assertEquals(
+            LoreMoment.LEARNED_TO_TEACH,
+            Lore.momentFor(
+                GameEvent.LearnedSkill(Skill.TEACH),
+                pet(skills = setOf(Skill.SELF_FEED, Skill.TIDY_UP, Skill.TEACH)),
+            ),
+        )
+        // And the passage has to be true of the mechanic: teaching is what makes a child arrive
+        // knowing anything at all, so the two moments must not contradict each other.
+        assertTrue(Skill.TEACH.intellectRequired > Skill.SELF_FEED.intellectRequired)
+    }
+
+    @Test
+    fun `an elder is only called worn out once it has been one for a while`() {
+        assertNull("a fresh elder has not worn out yet", Lore.lateLifeMoment(elder(0.1f)))
+        assertEquals(LoreMoment.WEARING_OUT, Lore.lateLifeMoment(elder(0.6f)))
+        // A dead elder gets a memorial, not a bulletin about how it is getting on.
+        assertNull(Lore.lateLifeMoment(elder(0.9f, isDead = true)))
+        // And nothing younger is an elder, however long it has been in its stage.
+        assertNull(Lore.lateLifeMoment(pet(stage = LifeStage.ADULT, ageSeconds = 10_000_000L)))
+    }
+
+    @Test
+    fun `the elder line follows the pace the simulation is actually run at`() {
+        // A second opinion about how long an elder lasts would put the narrator and the death
+        // check on different calendars, so the threshold has to move with the config.
+        val quick = GameConfig.Default.copy(lifeSpeed = 8f)
+        val half = Simulation.stageDuration(LifeStage.ELDER, quick) / 2
+        val old = pet(stage = LifeStage.ELDER, ageSeconds = half + 1)
+        assertEquals(LoreMoment.WEARING_OUT, Lore.lateLifeMoment(old, quick))
+        assertNull("the same creature is young for its stage at the default pace", Lore.lateLifeMoment(old))
+    }
+
+    @Test
+    fun `a death only mentions children when there are children`() {
+        val child = pal("c1", Relation.OFFSPRING, affinity = 88f)
+        assertEquals(
+            LoreMoment.LINE_CONTINUES,
+            Lore.legacyMoment(pet(isDead = true, pals = listOf(child))),
+        )
+        assertNull(Lore.legacyMoment(pet(isDead = true, pals = listOf(pal("f1", Relation.FRIEND)))))
+        assertNull(Lore.legacyMoment(pet(isDead = true)))
+        // Not while it is still alive: the whole point of the line is what comes next.
+        assertNull(Lore.legacyMoment(pet(pals = listOf(child))))
+        // An egg in the nest is not a child in the room. It cannot be stood up in the tank.
+        assertNull(Lore.legacyMoment(pet(isDead = true, nest = listOf(egg("e1")))))
+    }
+
+    @Test
+    fun `a recovery is remarked on every time and a memorial is not a recovery`() {
+        assertEquals(LoreMoment.FEVER_BROKE, Lore.momentFor(GameEvent.Recovered, pet()))
+        assertEquals(LoreMoment.END_ILLNESS, Lore.momentFor(GameEvent.Died(DeathReason.ILLNESS), pet(isDead = true)))
+        // Getting ill is the nudge layer's business; the narrator only speaks about the outcome.
+        assertNull(Lore.momentFor(GameEvent.GotSick, pet()))
     }
 
     @Test

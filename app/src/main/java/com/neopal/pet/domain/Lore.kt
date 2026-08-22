@@ -33,6 +33,10 @@ package com.neopal.pet.domain
  *    lived long enough to learn [Skill.TEACH], which is the only route out of a life.
  *  - The world outlives the creature. [Simulation.nextGeneration] keeps every [Pal] and resets its
  *    affinity to zero: everyone the last one knew is still there, and none of them know this one.
+ *  - The lid covers absence, not illness. The offline health floor is skipped outright while the
+ *    creature is sick, which is why a fever is the failure that catches a careful keeper out.
+ *  - Age costs. An elder drains faster than an adult and carries a flat addition to the illness
+ *    risk that no amount of care takes off it.
  *
  * Every string is hardcoded, British, and free of exclamation marks. It must all work for a player
  * who never reads a word of it.
@@ -76,11 +80,23 @@ enum class LoreMoment(val voice: LoreVoice) {
     /** Adult to elder, where care stops building anything. */
     GROWN_OLD(LoreVoice.NARRATOR),
 
+    /** Well into the elder stage, where the body has started costing more than it did. */
+    WEARING_OUT(LoreVoice.NARRATOR),
+
+    /** [GameEvent.Recovered]: an illness that ended some way other than in a memorial. */
+    FEVER_BROKE(LoreVoice.NARRATOR),
+
     /** The first [Skill] learned in this life, which is the only way any of them are got. */
     LEARNED_UNAIDED(LoreVoice.NARRATOR),
 
+    /** [Skill.TEACH] specifically: the one thing a creature can learn that outlives it. */
+    LEARNED_TO_TEACH(LoreVoice.NARRATOR),
+
     /** [Autonomy] raised above [Autonomy.OFF]: the keeper hands the day over. */
     DAY_HANDED_OVER(LoreVoice.NARRATOR),
+
+    /** The very first caller this life ever gets, before any of it counts for anything. */
+    FIRST_CALLER(LoreVoice.NARRATOR),
 
     /** A visitor crossing [Pal.FRIEND_AT], which takes more than one visit by design. */
     FIRST_FRIEND(LoreVoice.NARRATOR),
@@ -120,6 +136,9 @@ enum class LoreMoment(val voice: LoreVoice) {
 
     /** [DeathReason.NEGLECT]. */
     END_NEGLECT(LoreVoice.NARRATOR),
+
+    /** A death with the creature's own children still in the room, which changes what comes next. */
+    LINE_CONTINUES(LoreVoice.NARRATOR),
 }
 
 /**
@@ -198,8 +217,25 @@ object Lore {
             else -> null
         }
 
-        is GameEvent.LearnedSkill ->
-            if ((state.skills - event.skill).isEmpty()) LoreMoment.LEARNED_UNAIDED else null
+        // Teaching outranks being the first, and would even if a creature somehow reached it
+        // first: it is the only skill whose effect is felt after the creature is dead, and being
+        // told "nothing taught it that" about the teaching skill would be the game missing its
+        // own point on the one occasion it matters.
+        is GameEvent.LearnedSkill -> when {
+            event.skill == Skill.TEACH -> LoreMoment.LEARNED_TO_TEACH
+            (state.skills - event.skill).isEmpty() -> LoreMoment.LEARNED_UNAIDED
+            else -> null
+        }
+
+        // Every recovery, not only the first. There is no counter of recoveries on the save to
+        // gate on, and inventing one would be a mechanic; the alternative — a second copy of the
+        // simulation's own "how long is too long to be ill" threshold — is the thing this file
+        // already refuses to do for the offline rules. Illness is rare enough that surviving one
+        // is worth a line each time it happens.
+        is GameEvent.Recovered -> LoreMoment.FEVER_BROKE
+
+        is GameEvent.MetPal ->
+            if (state.pals.none { it.id != event.pal.id }) LoreMoment.FIRST_CALLER else null
 
         is GameEvent.Befriended ->
             if (state.pals.none { it.id != event.pal.id && it.isFriend }) LoreMoment.FIRST_FRIEND else null
@@ -244,6 +280,34 @@ object Lore {
      */
     fun returnMoment(wasCaughtUp: Boolean, state: PetState): LoreMoment? =
         if (wasCaughtUp && !state.isDead && state.stage.isHatched) LoreMoment.HELD_WHILE_AWAY else null
+
+    /**
+     * The line for an elder that is well into being one, or null while it is merely old.
+     *
+     * Half the stage rather than the whole of it, because the whole of it is the memorial. This
+     * is the only moment in the file keyed to a clock, so it takes the same [GameConfig] the
+     * simulation measures the stage with — a second opinion about how long an elder lasts would
+     * put the narrator and the death check on different calendars.
+     */
+    fun lateLifeMoment(state: PetState, config: GameConfig = GameConfig.Default): LoreMoment? {
+        if (state.isDead || state.stage != LifeStage.ELDER) return null
+        val half = Simulation.stageDuration(LifeStage.ELDER, config) / 2
+        return if (state.secondsInStage >= half) LoreMoment.WEARING_OUT else null
+    }
+
+    /**
+     * Whether this death leaves anybody behind who could be the next one in the tank.
+     *
+     * Offspring are the only [Relation] that does not need affinity and does not go home, so a
+     * creature that bred has genuinely changed what generation N+1 can be: an heir carrying half
+     * its body, rather than another egg from the nursery. Nothing else on a memorial says so.
+     */
+    fun legacyMoment(state: PetState): LoreMoment? =
+        if (state.isDead && state.pals.any { it.relation == Relation.OFFSPRING }) {
+            LoreMoment.LINE_CONTINUES
+        } else {
+            null
+        }
 
     /** The memorial passage for [reason]. */
     fun endMoment(reason: DeathReason): LoreMoment = when (reason) {
@@ -371,14 +435,41 @@ object Lore {
             "Nothing is built after this. Feeding an elder buys the afternoon and nothing further, which is the plainest thing a keeper does.",
         )
 
+        // The elder rules said plainly: everything drains faster than it did at full size, and
+        // there is a flat addition to the illness risk that no amount of care removes.
+        LoreMoment.WEARING_OUT -> listOf(
+            "It empties quicker than it did at full size, and it goes down where it happens to be standing when it does.",
+            "Illness finds an elder far more readily too. Keeping it well narrows that, and does not close it.",
+        )
+
+        LoreMoment.FEVER_BROKE -> listOf(
+            "Over, this time. A fever breaks on its own only where there was health left to spare; otherwise somebody dosed it.",
+            "A shut lid holds a creature off the bottom. It does not hold off a fever, which is why this is the ending that catches keepers out.",
+        )
+
         LoreMoment.LEARNED_UNAIDED -> listOf(
             "Nothing taught it that.",
             "Nor will it pass down by itself. Skills reach a child only if this one lives long enough to learn how to teach.",
         )
 
+        // Teaching sits near the top of the ladder, so a creature only gets here by being kept
+        // alive and studying for most of a life. Worth saying out loud what that buys.
+        LoreMoment.LEARNED_TO_TEACH -> listOf(
+            "That one leaves. Everything else it worked out stops when it does.",
+            "What it can hand over is the easy end of what it knows, and only to something it hatched itself.",
+        )
+
         LoreMoment.DAY_HANDED_OVER -> listOf(
             "The day is its own from here. It will run it worse than you would, and that is what handing it over means.",
             "Nothing has been taken away from you. It has simply stopped waiting.",
+        )
+
+        // The first stranger. Visits are short and unprompted, and affinity only moves while the
+        // creature is actually spending the visit on somebody, so ignoring a caller costs the
+        // whole acquaintance rather than a step of it.
+        LoreMoment.FIRST_CALLER -> listOf(
+            "The first face in the tank that is not the keeper's. It let itself in and it will be gone within the quarter hour.",
+            "Whether it ever comes back is settled by what gets spent on it now.",
         )
 
         LoreMoment.FIRST_FRIEND -> listOf(
@@ -446,6 +537,14 @@ object Lore {
         LoreMoment.END_NEGLECT -> listOf(
             "It was on its own long enough to stop expecting otherwise.",
             "The next one in this line will go and find company. That is what it is given.",
+        )
+
+        // Said alongside a memorial rather than instead of one. Offspring are the only companions
+        // that do not go home, which is what makes them the one thing on the save that can be
+        // stood up in the tank next instead of a nursery egg.
+        LoreMoment.LINE_CONTINUES -> listOf(
+            "There are children in the room. One of them can be the next thing standing here, in place of whatever the nursery would have sent.",
+            "It is the only route the body has out of this life. The rest of what it was is the record and the pictures.",
         )
     }
 }
