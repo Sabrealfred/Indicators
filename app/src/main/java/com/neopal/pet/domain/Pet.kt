@@ -443,6 +443,11 @@ data class GameConfig(
      * for either should never be handed one.
      */
     val retroMode: RetroMode = RetroMode.NONE,
+    /**
+     * Whether the creature speaks aloud, and whether it listens. Silent both ways by default —
+     * nothing should start talking the first time somebody opens the app. See [CreatureVoice].
+     */
+    val voice: VoiceConfig = VoiceConfig(),
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
     /**
