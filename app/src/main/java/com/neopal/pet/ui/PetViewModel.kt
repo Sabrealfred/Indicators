@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.data.Notifier
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.data.RemoteMindClient
 import com.neopal.pet.domain.Achievement
@@ -371,6 +372,9 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     /** Called when the app leaves the screen, so the world is simulated as time away. */
     fun onPaused() {
         inForeground = false
+        // The creature is allowed to speak up again from here. While the app is on screen it is
+        // not: an entry in the shade about a pet the player is looking at is clutter.
+        Notifier.onAppBackgrounded()
         _ui.value.pet?.let { persist(it, immediate = true) }
         // The player just did something and the home screen is where they are going. Ordered
         // after the persist so the widget reads the pet it is about to draw, not the one before.
@@ -387,6 +391,9 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     /** Called when the app returns to the foreground so offline progress lands immediately. */
     fun onResumed() {
         inForeground = true
+        // Takes down whatever is pinned and clears the interruption budget. The player answered
+        // by coming back, whether or not they came back because of the notification.
+        Notifier.onAppOpened(getApplication<Application>())
         val current = _ui.value
         val pet = current.pet ?: return
         val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)

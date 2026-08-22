@@ -72,6 +72,16 @@ object Notifier {
     private const val KEY_LEDGER = "ledger"
 
     /**
+     * Whether the system permission dialog has been put in front of this player once.
+     *
+     * It exists because Android answers the second refusal for you, permanently and silently.
+     * An app that re-asks on every cold start therefore spends the player's two chances on
+     * launches they were not thinking about notifications at all, and the switch is then dead
+     * for the life of the install with nothing on screen to say so.
+     */
+    private const val KEY_ASKED = "permission_asked"
+
+    /**
      * True while the player is looking at the creature. Deliberately in memory only: if the
      * process died, the player is not looking at anything.
      */
@@ -134,7 +144,20 @@ object Notifier {
      * again by this app: the game is complete without any of this.
      */
     fun shouldRequestPermission(context: Context): Boolean =
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && permission(context) == NudgePermission.DENIED
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            permission(context) == NudgePermission.DENIED &&
+            !prefs(context).getBoolean(KEY_ASKED, false)
+
+    /**
+     * Records that the dialog was shown, whatever the player answered.
+     *
+     * Called on the way *in* to the request rather than on the way out, because the outcome we
+     * must not repeat is "shown", not "granted": a dialog the system silently swallowed still
+     * consumed a chance.
+     */
+    fun markPermissionAsked(context: Context) {
+        prefs(context).edit().putBoolean(KEY_ASKED, true).apply()
+    }
 
     // ---------------------------------------------------------------- the one call
 

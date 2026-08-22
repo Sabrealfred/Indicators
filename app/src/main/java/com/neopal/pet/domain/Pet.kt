@@ -448,6 +448,16 @@ data class GameConfig(
      * nothing should start talking the first time somebody opens the app. See [CreatureVoice].
      */
     val voice: VoiceConfig = VoiceConfig(),
+    /**
+     * How the creature is allowed to interrupt. [notificationsEnabled] is the master switch and
+     * this is the shape of what gets through when it is on — which of the "come and look"
+     * moments are worth a buzz, and the quiet window that nothing crosses.
+     *
+     * Kept here rather than in the notification code because it is a rule about the game, and
+     * because the quiet hours have to be readable by a pure function that can be tested without
+     * a phone attached.
+     */
+    val nudges: NudgeSettings = NudgeSettings(),
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
     /**

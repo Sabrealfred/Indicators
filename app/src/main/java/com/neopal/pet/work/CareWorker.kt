@@ -6,6 +6,7 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.neopal.pet.data.Notifier
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.widget.PetWidget
@@ -48,14 +49,25 @@ class CareWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val repo = PetRepository(applicationContext)
         val state = repo.currentState() ?: return Result.success()
         val config = repo.currentConfig()
-        if (!config.notificationsEnabled) return Result.success()
+
+        // No early return on notificationsEnabled. Notifier.consider is handed the switch and
+        // decides, because "off" is not the same as "do nothing": a notification already sitting
+        // in the shade has to be taken down, and only the code that posted it knows that.
 
         // Advanced into a local value and thrown away. This is a question — "would the creature
         // want me by now?" — and asking it must not change the answer.
-        val glimpse = Simulation.advance(state, System.currentTimeMillis(), config).state
-        Notifications.careMessage(glimpse)?.let { (title, text) ->
-            Notifications.notifyCare(applicationContext, title, text)
-        }
+        val glimpse = Simulation.advance(state, System.currentTimeMillis(), config)
+        // The events matter as much as the state. The jeopardy half of Nudges reads the pet as
+        // it is now; the "come and look" half — a hatching, an evolution, a child — happens at
+        // an instant and leaves no trace in the state afterwards. Dropping them, as this worker
+        // used to, made every milestone unnotifiable by construction.
+        Notifier.consider(
+            context = applicationContext,
+            state = glimpse.state,
+            events = glimpse.events,
+            config = config,
+            settings = config.nudges,
+        )
         return Result.success()
     }
 

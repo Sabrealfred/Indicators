@@ -1,7 +1,6 @@
 package com.neopal.pet
 
 import android.Manifest
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.neopal.pet.data.Notifier
 import com.neopal.pet.ui.NeoPalApp
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.theme.NeoPalTheme
@@ -47,9 +47,19 @@ class MainActivity : ComponentActivity() {
         viewModelRef?.onPaused()
     }
 
+    /**
+     * Asks once, on the first launch that could ask, and then never again.
+     *
+     * The previous version asked on every cold start. Android answers the second refusal for
+     * you — permanently, silently, with no dialog — so re-asking spends the player's two chances
+     * on launches where they were not thinking about notifications at all, and the switch is
+     * dead for the life of the install with nothing on screen to explain why. Notifier keeps the
+     * flag because Notifier is what will have to say "you turned this off in system settings"
+     * when the player later goes looking for it.
+     */
     private fun askForNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
+        if (!Notifier.shouldRequestPermission(this)) return
+        Notifier.markPermissionAsked(this)
+        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 }
