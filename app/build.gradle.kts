@@ -9,12 +9,43 @@ android {
     namespace = "com.neopal.pet"
     compileSdk = 35
 
+    // The versionCode every build carries.
+    //
+    // It has to increase for the in-app updater to mean anything: versionCode is the only
+    // number Android itself orders installs by, and a stream of builds that all say 1 is a
+    // stream the updater can only ever call "same". CI passes its run number, which is
+    // monotonic per repository and never reused. A local build with nothing set stays at 1,
+    // which is correct — a build made on this machine is not published and nothing should
+    // ever offer it as an update.
+    val buildNumber = (System.getenv("NEOPAL_VERSION_CODE") ?: "1").toIntOrNull() ?: 1
+
+    signingConfigs {
+        // A debug key that is committed to the repository, on purpose.
+        //
+        // Android refuses to install an update signed by a different key than the copy already
+        // on the device — that is the whole basis of app identity, and it is right. Gradle's
+        // default debug key is generated per machine, so every CI runner produced an APK with a
+        // different signature and "update" meant "uninstall first, losing everything". That is
+        // exactly the outcome this app exists to avoid.
+        //
+        // So the key lives here. It is not a secret and must never be treated as one: anyone
+        // with the repository has it, the password is in this file, and it signs nothing but
+        // debug builds under an applicationId ending in `.debug`. A release to Play would need
+        // a real key, kept out of the repository, and this one must never be used for it.
+        getByName("debug") {
+            storeFile = file("neopal-debug.keystore")
+            storePassword = "neopal-debug"
+            keyAlias = "neopal"
+            keyPassword = "neopal-debug"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.neopal.pet"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = buildNumber
+        versionName = "1.0.$buildNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
     }
@@ -23,6 +54,8 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            // Named explicitly rather than left to the default, which is the per-machine key.
+            signingConfig = signingConfigs.getByName("debug")
         }
         release {
             isMinifyEnabled = true
