@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -201,9 +202,25 @@ fun PetStage(
     val cfg by rememberUpdatedState(config)
     val particles = remember { ParticleSystem() }
     val pixelRenderer = remember(config.pixelHeight) { PixelRenderer(config.pixelHeight) }
+
+    // Which screen the player last actually saw. Saveable, and that is the entire point: the mode
+    // is only changeable in Settings, where no stage is composed, and coming back here builds a
+    // fresh renderer with no previous frame to compare against. Left to itself the renderer would
+    // never notice the change and the transition would never once play — the animation would be
+    // correct, tested, and invisible. Stored as the name rather than the enum so a value written
+    // by a newer build cannot crash an older one on restore.
+    var lastShownMode by rememberSaveable { mutableStateOf(config.retroMode.name) }
     val labels = remember { mutableStateListOf<FloatLabel>() }
 
     var time by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(config.retroMode, pixelRenderer) {
+        val previous = RetroMode.entries.firstOrNull { it.name == lastShownMode }
+        if (previous != null && previous != config.retroMode) {
+            pixelRenderer.beginSwitch(previous, time)
+        }
+        lastShownMode = config.retroMode.name
+    }
     var actionStart by remember { mutableFloatStateOf(-99f) }
     var currentAction by remember { mutableStateOf(PetAnimation.IDLE) }
     var lastBlink by remember { mutableFloatStateOf(0f) }
@@ -350,7 +367,18 @@ fun PetStage(
     val activeAction = if (progress >= 1f) PetAnimation.IDLE else currentAction
     val hatchProgress = if (state.isEgg) Simulation.stageProgress(state, config) else 0f
 
-    val frame = buildFrame(
+    // The eyes widen at whatever is actually in front of them. Derived here rather than carried
+    // as a new piece of state: a served item and an EAT in progress is already the whole of "it
+    // can see food", and it fades as the meal goes down.
+    fun withFoodFocus(f: CreatureFrame): CreatureFrame =
+        if (activeAction == PetAnimation.EAT && servedItemId != null) {
+            f.copy(foodFocus = 1f - progress * 0.55f)
+        } else {
+            f
+        }
+
+    val frame = withFoodFocus(
+        buildFrame(
         state = state,
         action = activeAction,
         progress = progress,
@@ -368,6 +396,7 @@ fun PetStage(
         hatLag = hatLag,
         touched = touched,
         touchProgress = ((time - touchedAt) / TOUCH_REACTION).coerceIn(0f, 1f),
+        ),
     )
 
     // The whole world in one lambda, so it can be drawn straight to the screen or through
@@ -416,6 +445,9 @@ fun PetStage(
                 // genomes existed carries the neutral starter one, which expresses as the shape
                 // this creature has always had — nobody's pet changes under them on upgrade.
                 morphology = state.morphology,
+                // How far through its current stage it is, so it settles across adulthood rather
+                // than looking identical for the whole of it and then snapping to the next shape.
+                stageProgress = Simulation.stageProgress(state, config),
             ),
             frame = frame,
         )
@@ -740,6 +772,10 @@ fun PetStage(
                             // room getting dimmer against a backlight that stays put. Lifting the
                             // exposure is what keeps a night scene off the bottom two tones.
                             exposure = if (config.retroMode == RetroMode.GREEN_LCD) 1f + 1.2f * night else 1f,
+                            // A negative clock means "no clock": nothing animates, but the mode
+                            // is still tracked, so turning motion back on does not fire a switch
+                            // that belongs to a change made ten minutes ago.
+                            time = if (config.reducedMotion) -1f else time,
                         )
                     } else {
                         world()
@@ -753,12 +789,18 @@ fun PetStage(
             // A smooth gradient laid over that is a fifth colour and a sixth, and it undoes the
             // one thing the mode exists to do. Its night, its lights-out and its sleep are all
             // carried by the exposure passed into the blit instead.
+            //
+            // Mid-switch it is neither screen's finish to own. `config.retroMode` names the mode
+            // being switched *to*, which is the wrong answer for the half of the transition still
+            // drawing the old one — a handheld dying under a smooth colour grade would pick up a
+            // fifth tone on its way out. The renderer knows which half it is drawing; ask it.
+            val switching = config.pixelMode && pixelRenderer.switching
             val ownsTheFinish = config.pixelMode && config.retroMode.replacesColour
-            if (config.pixelMode && !ownsTheFinish) {
+            if (config.pixelMode && !ownsTheFinish && !switching) {
                 if (state.lightsOff) drawLightsOutOverlay()
                 if (state.isSleeping) drawSleepVignette(0.8f)
             }
-            if (!ownsTheFinish) drawAtmosphere(night = night, strength = config.atmosphere)
+            if (!ownsTheFinish && !switching) drawAtmosphere(night = night, strength = config.atmosphere)
         }
 
         FloatingLabels(labels = labels, now = time)
