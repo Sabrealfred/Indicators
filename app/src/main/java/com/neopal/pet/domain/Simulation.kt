@@ -23,8 +23,16 @@ sealed interface GameEvent {
     // ---- the autonomous half -------------------------------------------------------------
     /** The brain committed to something. Carries its own reasoning so the log can show it. */
     data class Decided(val decision: Decision) : GameEvent
-    /** An activity the brain started has run its course. */
-    data class Finished(val kind: ActivityKind, val note: String) : GameEvent
+    /**
+     * An activity the brain started has run its course, and what the creature says about it.
+     *
+     * [startedAtSeconds] is the activity's own start, which is also the `atSeconds` of the
+     * [Decision] that chose it — the two are read from the same clock in the same commit. It is
+     * in the event because the kind alone cannot say *which* run of it ended: a creature that
+     * eats, finishes, and decides to eat again produces two identical-looking events, and the
+     * note belongs to the first one. See [Brain.recordOutcome].
+     */
+    data class Finished(val kind: ActivityKind, val startedAtSeconds: Long, val note: String) : GameEvent
     data class LearnedSkill(val skill: Skill) : GameEvent
     data class IntellectGrew(val from: Int, val to: Int) : GameEvent
     data class MetPal(val pal: Pal) : GameEvent
@@ -409,7 +417,12 @@ object Simulation {
         // isSleeping on, never off, and only offers a nap the cycle below would not immediately
         // undo; putting it after would let it settle the pet a step later than the cycle expects
         // and re-open exactly the fight this ordering exists to prevent.
+        val brainMark = events.size
         s = Brain.tick(s, config, dt, random, events)
+        // An activity that ended announces itself with the creature's own closing line; that line
+        // is folded into the decision it closes, here, from the events this tick produced. The
+        // index rather than a sublist because this loop runs up to two thousand times.
+        s = Brain.recordOutcome(s, events, brainMark)
         // Passive learning last, because it is the only one that cares whether the pet spent the
         // step asleep, and the two above are what decide that.
         s = Learning.observe(s, dt, events)

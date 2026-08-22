@@ -125,6 +125,8 @@ object Chronicle {
             "I worked something out for myself today: ${event.lesson.kind.displayName.lowercase()}." to
                 ChronicleKind.MILESTONE
 
+        // No diary line by design — Decided and Finished are the two halves of a decision-log
+        // entry (see Brain.recordOutcome) and the diary is for the firsts and the family.
         is GameEvent.Decided,
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,

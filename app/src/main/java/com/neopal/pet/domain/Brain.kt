@@ -114,7 +114,7 @@ object Brain {
             if (!stale && !activity.isOver(s.ageSeconds)) {
                 return run(s, activity, dt, random, events)
             }
-            events += GameEvent.Finished(activity.kind, closingNote(activity))
+            events += GameEvent.Finished(activity.kind, activity.startedAtSeconds, closingNote(activity))
             s = s.copy(activity = null)
         }
 
@@ -754,6 +754,42 @@ object Brain {
 
             else -> state
         }
+    }
+
+    /**
+     * Folds the closing note of every finished activity into the log line that chose it.
+     *
+     * This is what consumes [GameEvent.Finished]. The note is the only thing the event carries
+     * that no other state knows — the creature's own account of how it went — and until this
+     * existed it was composed on every finish and dropped: neither the toast handler nor the
+     * diary has a use for it, and both say so on purpose, because a pet that announces every
+     * tidy-up is a notification rather than a companion. The decision log is where the player
+     * goes *looking* for the running commentary, so that is where the second half of the
+     * sentence belongs.
+     *
+     * Matching is by [Activity.startedAtSeconds] against [Decision.atSeconds], not by kind:
+     * within one tick the brain can finish an activity and immediately commit to another of the
+     * same kind, and the note belongs to the one that ended. [from] is where this tick's events
+     * begin, so an event already folded in is never looked at again — and the `outcome == null`
+     * guard makes a second pass over the same event a no-op anyway.
+     *
+     * A finish with no matching line is normal and silently ignored: a second consecutive IDLE
+     * is deliberately not logged, and the log is capped, so old lines fall off the front.
+     */
+    fun recordOutcome(state: PetState, events: List<GameEvent>, from: Int = 0): PetState {
+        var s = state
+        for (i in from until events.size) {
+            val event = events[i]
+            if (event !is GameEvent.Finished) continue
+            val index = s.decisions.indexOfLast {
+                it.atSeconds == event.startedAtSeconds && it.kind == event.kind && it.outcome == null
+            }
+            if (index < 0) continue
+            val closed = s.decisions.toMutableList()
+            closed[index] = closed[index].copy(outcome = event.note)
+            s = s.copy(decisions = closed)
+        }
+        return s
     }
 
     /** What the pet has to say for itself as an activity runs out. */

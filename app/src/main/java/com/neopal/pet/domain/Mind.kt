@@ -67,6 +67,15 @@ data class Decision(
     val utility: Float,
     /** What it nearly did instead, for the log. Null when nothing else scored. */
     val runnerUp: ActivityKind? = null,
+    /**
+     * How it went, in the creature's voice — written when the activity this line chose ends.
+     *
+     * Null while the activity is still running, and null forever for a line whose activity was
+     * cut short by the player rather than finishing. A decision is a sentence with two halves
+     * ("I'm going to tidy up" / "that is one mess fewer") and the log used to print only the
+     * first: the second half was composed on every finish and thrown away.
+     */
+    val outcome: String? = null,
 )
 
 /**

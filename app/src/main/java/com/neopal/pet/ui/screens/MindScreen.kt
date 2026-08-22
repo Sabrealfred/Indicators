@@ -530,7 +530,11 @@ private fun DecisionRow(
     val accent = if (latest) NeoAccents.cyan else MaterialTheme.colorScheme.onSurfaceVariant
     val elapsed = ago(ageSeconds - decision.atSeconds)
     val runnerUp = decision.runnerUp?.let { "Nearly ${it.displayName} instead." }
+    // How it turned out, once it has. Null while the activity is still running, and null forever
+    // for one the player cut short — either way there is nothing yet for the creature to say.
+    val outcome = decision.outcome
     val readOut = "${titled(decision.kind)}, $elapsed. ${decision.reason} " +
+        (outcome?.let { "$it " } ?: "") +
         "Confidence ${percent(decision.utility)}." + (runnerUp?.let { " $it" } ?: "")
 
     Column(
@@ -564,6 +568,16 @@ private fun DecisionRow(
             maxLines = 4,
             overflow = TextOverflow.Ellipsis,
         )
+        // The other half of the same sentence: what came of it, in the same voice.
+        if (outcome != null) {
+            Text(
+                text = outcome,
+                style = MaterialTheme.typography.bodySmall,
+                color = NeoAccents.green,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (runnerUp != null) {
             Text(
                 text = runnerUp,

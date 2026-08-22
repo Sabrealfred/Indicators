@@ -215,6 +215,64 @@ class BrainTest {
     }
 
     @Test
+    fun `a finished activity's closing note lands on the decision that chose it`() {
+        val messy = pet(
+            autonomy = Autonomy.ASSIST,
+            skills = setOf(Skill.TIDY_UP),
+            stats = Stats(hygiene = 60f),
+            poops = 2,
+        )
+        val events = mutableListOf<GameEvent>()
+        val random = Random(7L)
+        var s = messy
+        // The step loop in miniature: age, tick, then fold *this tick's* events back into state,
+        // which is the seam GameEvent.Finished is consumed through.
+        repeat(40) {
+            s = s.copy(ageSeconds = s.ageSeconds + 1L)
+            val mark = events.size
+            s = Brain.tick(s, config, 1L, random, events)
+            s = Brain.recordOutcome(s, events, mark)
+        }
+
+        val tidy = events.filterIsInstance<GameEvent.Finished>().firstOrNull { it.kind == ActivityKind.TIDY }
+        assertNotNull("the test needs a tidy-up that ran its course", tidy)
+        val line = s.decisions.firstOrNull { it.atSeconds == tidy!!.startedAtSeconds }
+        assertNotNull("the tidy-up it announced has to be in the log", line)
+        assertEquals(
+            "the closing note belongs to the line whose activity ended",
+            tidy!!.note,
+            line!!.outcome,
+        )
+    }
+
+    @Test
+    fun `a closing note goes to the run that ended, not the next one of the same kind`() {
+        // The nasty case the start time is in the event for: two meals, one finish.
+        val twice = pet().copy(
+            decisions = listOf(
+                Decision(atSeconds = 100L, kind = ActivityKind.EAT, reason = "First helping.", utility = 0.7f),
+                Decision(atSeconds = 200L, kind = ActivityKind.EAT, reason = "Second helping.", utility = 0.6f),
+            ),
+        )
+        val closed = Brain.recordOutcome(
+            twice,
+            listOf(GameEvent.Finished(ActivityKind.EAT, 100L, "Licked the bowl clean.")),
+        )
+        assertEquals("Licked the bowl clean.", closed.decisions[0].outcome)
+        assertNull("the meal still going has nothing to say about itself yet", closed.decisions[1].outcome)
+    }
+
+    @Test
+    fun `a finish with no log line of its own leaves the log alone`() {
+        // A second consecutive idle is deliberately never logged, so its finish has no home.
+        val quiet = pet()
+        assertEquals(
+            quiet,
+            Brain.recordOutcome(quiet, listOf(GameEvent.Finished(ActivityKind.IDLE, 5L, "Right, what next."))),
+        )
+    }
+
+    @Test
     fun `two decisions are never taken back to back`() {
         val messy = pet(autonomy = Autonomy.ASSIST, skills = setOf(Skill.TIDY_UP), poops = 3)
         val log = drive(messy, ticks = 600, dt = 1L) { it.copy(poops = 3) }.decisions

@@ -916,6 +916,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     showToast("Worked something out on its own.")
                 }
 
+                // Deliberately silent *here*, not unhandled: Decided and Finished are the two
+                // halves of one log line and both are folded into the decision log in the
+                // domain (Brain.recordOutcome), which the Mind screen reads. A toast per
+                // finished tidy-up is the notification this app exists not to be.
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
