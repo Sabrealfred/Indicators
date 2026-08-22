@@ -16,30 +16,33 @@ import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.Brain
 import com.neopal.pet.domain.Cadence
 import com.neopal.pet.domain.CareActions
+import com.neopal.pet.domain.ChatTurn
+import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.Errands
-import com.neopal.pet.domain.ToolId
-import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
-import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Learning
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.MindProvider
-import com.neopal.pet.domain.NoMind
-import com.neopal.pet.domain.PetBrief
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
-import com.neopal.pet.domain.PetAnimation
-import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.NoMind
 import com.neopal.pet.domain.Pal
+import com.neopal.pet.domain.PetAnimation
+import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Relation
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.Skill
 import com.neopal.pet.domain.Species
 import com.neopal.pet.domain.StatDelta
+import com.neopal.pet.domain.ToolId
 import com.neopal.pet.domain.statDeltas
+import com.neopal.pet.widget.PetWidget
+import com.neopal.pet.widget.PetWidgetBridge
+import com.neopal.pet.widget.PetWidgetHost
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -116,7 +119,31 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     private var inForeground: Boolean = true
     private var toastJob: Job? = null
 
+    /**
+     * This view model's end of [PetWidgetBridge]. Held as a property rather than written inline
+     * so [onCleared] can check identity before clearing: on a configuration change the new view
+     * model installs itself before the old one is cleared, and a blind `host = null` there would
+     * disconnect the live one.
+     */
+    private val widgetHost = object : PetWidgetHost {
+        override fun petInHand(): PetState? = _ui.value.pet
+        override fun configInHand(): GameConfig = _ui.value.config
+
+        // Exactly the tail every other action gets: chronicle, deltas, toast, persist — and the
+        // blip. The creature chirping when it is fed from the home screen is the point of
+        // feeding it from the home screen.
+        override fun takeFromWidget(result: ActionResult) = runAction(Sfx.CONFIRM) { result }
+    }
+
     init {
+        // While this view model is alive it owns the pet, and a widget that wrote the save
+        // underneath it would have its work silently discarded the next time the app resumed
+        // and persisted its own copy. So the widget hands its taps here instead. Installed
+        // before the first load: a tap that arrives early finds a null pet and is refused,
+        // which is correct, whereas a tap that arrives before the bridge exists would be
+        // applied to the save behind the app's back.
+        PetWidgetBridge.host = widgetHost
+
         viewModelScope.launch {
             val config = repository.currentConfig()
             val saved = repository.currentState()
@@ -345,6 +372,16 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun onPaused() {
         inForeground = false
         _ui.value.pet?.let { persist(it, immediate = true) }
+        // The player just did something and the home screen is where they are going. Ordered
+        // after the persist so the widget reads the pet it is about to draw, not the one before.
+        PetWidget.refresh(getApplication<Application>())
+    }
+
+    override fun onCleared() {
+        // Nobody is holding the pet any more, so the widget goes back to writing the save
+        // itself. Leaving a stale host here would route taps into a view model that is gone.
+        if (PetWidgetBridge.host === widgetHost) PetWidgetBridge.host = null
+        super.onCleared()
     }
 
     /** Called when the app returns to the foreground so offline progress lands immediately. */

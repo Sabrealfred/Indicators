@@ -91,6 +91,27 @@
         </receiver>
 
         <!--
+            The home-screen creature. Exported because the platform is what delivers
+            APPWIDGET_UPDATE; nothing else is advertised, and the two intents the widget sends
+            itself are explicit and need no filter of their own.
+
+            Exported does mean another app could send the explicit care intent and feed the
+            pet. Everything crossing that boundary is re-validated against the save on arrival,
+            so nothing invalid can happen — but a stranger could spend a Sushi Set.
+        -->
+        <receiver
+            android:name=".widget.PetWidget"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pet_info" />
+        </receiver>
+
+        <!--
             Hands the downloaded APK to the installer as a content:// URI. A file:// URI would
             throw FileUriExposedException on anything from API 24 up, which is every device this
             app runs on.

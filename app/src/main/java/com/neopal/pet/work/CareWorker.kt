@@ -8,6 +8,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.domain.Simulation
+import com.neopal.pet.widget.PetWidget
 import java.util.concurrent.TimeUnit
 
 /**
@@ -38,6 +39,12 @@ import java.util.concurrent.TimeUnit
 class CareWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        // First, and deliberately above the notifications opt-out below: a widget somebody
+        // placed on their home screen is not a notification they switched off. This is the
+        // heartbeat that keeps the picture current — one binder call, and a no-op when no
+        // widget is placed.
+        PetWidget.refresh(applicationContext)
+
         val repo = PetRepository(applicationContext)
         val state = repo.currentState() ?: return Result.success()
         val config = repo.currentConfig()

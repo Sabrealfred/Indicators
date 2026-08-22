@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    updatePeriodMillis is 0 deliberately. The shortest period the system honours is half an hour,
+    and the widget does not need one: CareWorker already advances the save every fifteen minutes
+    and tells the widget, the app tells it when it goes to the background, and the widget books
+    one non-waking alarm of its own for the moment its picture would stop being true. A periodic
+    system update on top of that would cost battery to redraw a picture that has not changed.
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="70dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="2"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/widget_pet"
+    android:previewLayout="@layout/widget_pet"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen" />
