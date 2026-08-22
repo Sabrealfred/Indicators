@@ -23,8 +23,9 @@ Leyenda: **[✔]** implementado en este repo · **[○]** diseñado, pendiente d
 | 1.6 | Peso corporal dinámico: engorda al comer, adelgaza al jugar, y cambia la silueta dibujada | ✔ |
 | 1.7 | Muerte por inanición, enfermedad, negligencia o vejez, con pantalla memorial. Vida completa ≈ 2 días reales (ajustable: Slow/Normal/Fast/Demo) | ✔ |
 | 1.8 | Generaciones: al morir, la siguiente hereda monedas, cosméticos, logros y álbum | ✔ |
-| 1.9 | Cruce entre dos mascotas / herencia genética de colores | ○ |
+| 1.9 | Cruce entre dos mascotas con herencia genética real (ver §11) | ✔ |
 | 1.10 | Especies secretas desbloqueables por condiciones de crianza perfecta | ○ |
+| 1.11 | La siguiente generación puede ser **una cría propia**: arranca del genoma de ese hijo y recuerda a sus padres | ✔ |
 
 ## 2. Simulación de necesidades
 
@@ -159,12 +160,54 @@ Leyenda: **[✔]** implementado en este repo · **[○]** diseñado, pendiente d
 
 ---
 
+## 11. La mitad autónoma
+
+La mascota puede vivir su propio día: decidir, comer sola, estudiar, hacer amigos y tener crías.
+Está apagado por defecto — es una pregunta sobre el jugador, no sobre la mascota.
+
+| # | Feature | Estado |
+|---|---------|--------|
+| 11.1 | Tres niveles de autonomía: Manual, Asistido (sólo tareas propias) y Autónomo | ✔ |
+| 11.2 | Cerebro de utilidad: puntúa cada opción contra necesidades, genes y hora, y **se compromete** con la elección por un rato | ✔ |
+| 11.3 | Log de decisiones: qué eligió, por qué, con cuánta confianza y qué estuvo a punto de hacer en cambio | ✔ |
+| 11.4 | La capacidad se separa del permiso: sin la skill, la mascota quiere y no puede — y eso se ve | ✔ |
+| 11.5 | Comer solo consume inventario real; una comida propia vale exactamente lo mismo que una tuya | ✔ |
+| 11.6 | Despensa vacía = no come, salvo que sepa `FORAGE` (más lento, alimenta menos, no cuenta como comida servida) | ✔ |
+| 11.7 | Se acuesta sola de noche si aprendió a hacerlo, y nunca se despierta a sí misma | ✔ |
+| 11.8 | 10 skills en escalera, cada una con su compuerta de intelecto y su tiempo de estudio | ✔ |
+| 11.9 | Intelecto 0..100 que **satura**: acercarse a 100 cuesta cada vez más y no se alcanza desde abajo | ✔ |
+| 11.10 | Lecciones del jugador: valen más que estudiar solo, y se limitan por la energía de la mascota, no por un cooldown | ✔ |
+| 11.11 | Visitantes que llegan y se van, con nombres y genomas propios | ✔ |
+| 11.12 | Afinidad que crece por trato y decae por ausencia, con piso por vínculo — un amigo no se evapora en una noche | ✔ |
+| 11.13 | Cortejo y nido: huevo con genoma cruzado de ambos padres, con vista previa de la cría antes de decidir | ✔ |
+| 11.14 | Bloqueo por consanguinidad y por otras ocho razones, cada una con su frase concreta | ✔ |
+| 11.15 | Las crías heredan skills sólo si el padre aprendió `TEACH` | ✔ |
+
+### Genética
+
+| # | Feature | Estado |
+|---|---------|--------|
+| 11.16 | 14 genes continuos 0..1, heredados como un paquete: cuerpo y temperamento juntos | ✔ |
+| 11.17 | Cruce por gen: hereda de un padre, del otro, o el punto medio, más mutación | ✔ |
+| 11.18 | La silueta expresa el genoma: `stance` lleva de bípedo redondo a **cuadrúpedo**, más hocico, orejas y cola | ✔ |
+| 11.19 | Un bebé casi no expresa su genoma: la forma llega a lo largo de las etapas | ✔ |
+| 11.20 | El álbum guarda el genoma de cada foto, así que se ve cómo cambió la línea | ✔ |
+| 11.21 | Vista lateral real de la cabeza en modo cuadrúpedo (hoy es una trampa de tres cuartos) | ○ |
+| 11.22 | Pantallas de mente y colonia | ○ |
+
 ## Mapa de archivos
 
 ```
 app/src/main/java/com/neopal/pet/
 ├── domain/            # Reglas del juego, puras y testeables
 │   ├── Pet.kt         # Especies, etapas, ramas, stats, estado guardado, configuración
+│   ├── Genetics.kt    # Genoma de 14 genes, cruce, y la morfología que expresa el cuerpo
+│   ├── Mind.kt        # Vocabulario compartido: autonomía, actividad, decisión, skill, pal, huevo
+│   ├── Brain.kt       # Decisión por utilidad: puntúa, elige y se compromete
+│   ├── Colony.kt      # Visitantes, afinidad, cortejo, nido y crías
+│   ├── Learning.kt    # Intelecto que satura, sesiones de estudio y escalera de skills
+│   ├── Missions.kt    # Misiones diarias y racha de cuidado
+│   ├── Chronicle.kt   # El diario, escrito desde los mismos eventos que ve la UI
 │   ├── Items.kt       # Catálogo de 24 ítems
 │   ├── Achievements.kt# 24 logros con su condición
 │   ├── Simulation.kt  # Reloj, decaimiento, sueño, enfermedad, evolución, muerte, offline
