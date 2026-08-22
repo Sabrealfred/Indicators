@@ -1,6 +1,9 @@
 # 100 mejoras para NeoPal
 
-Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evaluar**
+Estado: **✅ hecho** · **🔨 en curso** · **🔜 siguiente** · **💡 idea a evaluar**
+
+Los tres juegos nuevos que no estaban en esta lista —Traer la pelota, Dueto y Rompecabezas de
+formas— salieron junto al #88. El detalle de cada uno está en `docs/PLAN.md` §5.
 
 ---
 
@@ -15,9 +18,9 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 5 | Dithering de Bayer en los degradados de cielo en vez de gradiente continuo | 🔜 |
 | 6 | Snap de posiciones al grid de píxel para que la criatura no "flote" entre subpíxeles | 🔜 |
 | 7 | Outline de 1 px consistente en todo sprite (hoy el grosor varía con el tamaño) | 🔜 |
-| 8 | Modo CRT opcional: scanlines curvas, viñeta y sangrado de color | 💡 |
-| 9 | Modo "LCD verde" retro: 4 tonos verdes, como un tamagotchi de 1997 | 💡 |
-| 10 | Transición animada al cambiar de modo (el mundo se pixela progresivamente) | 💡 |
+| 8 | Modo CRT opcional: scanlines curvas, viñeta y sangrado de color | ✅ (Tube) |
+| 9 | Modo "LCD verde" retro: 4 tonos verdes, como un tamagotchi de 1997 | ✅ (Handheld) |
+| 10 | Transición animada al cambiar de modo (el mundo se pixela progresivamente) | 🔨 |
 | 11 | Cache de sprites: rasterizar cada pose una vez en vez de redibujar paths cada frame | 🔜 |
 | 12 | Medidor de FPS oculto en ajustes de desarrollador | 💡 |
 
@@ -35,15 +38,15 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 20 | Cola con física de resorte que sigue al cuerpo con retardo | ✅ |
 | 21 | Sombra que se achica y aclara cuando salta | ✅ |
 | 22 | Poses idle secundarias: bostezo, rascarse y mirar al techo, cada ~9 s | ✅ (falta sentarse) |
-| 23 | Reacción al toque por zona: cabeza = feliz, panza = risa, cola = molestia | 💡 |
+| 23 | Reacción al toque por zona: cabeza = feliz, panza = risa, cola = molestia | ✅ (cabeza / panza / cola, con la cola sin pagar nada) |
 | 24 | Estirarse al despertar antes de volver al idle | ✅ |
 | 25 | La comida se ve y se achica bocado a bocado mientras come | ✅ |
 | 26 | Transición de evolución con silueta a contraluz antes del fogonazo | ✅ (fogonazo) 🔜 (silueta) |
 | 27 | Anillo de "aura" según la rama evolutiva (Athletic deja estela al moverse) | 💡 |
 | 28 | Mirada vertical: la criatura puede mirar arriba y abajo, no solo a los costados | ✅ |
 | 29 | Sudor cuando la energía está baja y tirita cuando está enferma | ✅ |
-| 30 | Pupilas que se dilatan al ver comida | 💡 |
-| 31 | Envejecimiento visual gradual dentro de cada etapa, no solo al cambiar de etapa | 💡 |
+| 30 | Pupilas que se dilatan al ver comida | 🔨 |
+| 31 | Envejecimiento visual gradual dentro de cada etapa, no solo al cambiar de etapa | ✅ |
 | 32 | Accesorios que se mueven con el cuerpo (el gorro rebota al saltar) | ✅ |
 
 ## C. Interacciones táctiles (33–48)
@@ -57,7 +60,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 37 | Mantener pulsado para sacar una foto | ✅ |
 | 38 | Arrastrar la comida desde la despensa hasta la boca | ✅ (a la escena, no a la boca) |
 | 39 | Arrastrar el jabón sobre el cuerpo para bañarla, frotando | ✅ |
-| 40 | Pellizcar para hacer zoom en la mascota (modo foto) | 💡 |
+| 40 | Pellizcar para hacer zoom en la mascota (modo foto) | ✅ (hasta 3x, con el encuadre pegado al grid) |
 | 41 | Sacudir el teléfono para despertarla (acelerómetro) | 💡 |
 | 42 | Soplar al micrófono para apagar las velas del cumpleaños | 💡 |
 | 43 | Números flotantes "+12 MOOD" en cada acción | ✅ |
@@ -125,7 +128,7 @@ Estado: **✅ hecho en esta tanda** · **🔜 siguiente** · **💡 idea a evalu
 | 85 | Tono que sube con la racha, para oír el combo | ✅ |
 | 86 | Memoria como melodía: cada pad tiene su nota | ✅ |
 | 87 | Multiplicador de racha, ítem dorado y vidas dibujadas como corazones | ✅ |
-| 88 | Cuarto juego cooperativo con la mascota (esconder y buscar) | 💡 |
+| 88 | Cuarto juego cooperativo con la mascota (esconder y buscar) | ✅ (Hide and Seek — ella esconde o busca según su genoma) |
 | 89 | Dificultad adaptativa según el historial del jugador | 💡 |
 | 90 | Repetición de la mejor partida en el álbum | 💡 |
 
