@@ -9,6 +9,24 @@ enum class PetAnimation {
     IDLE, EAT, HAPPY, PLAY, SLEEP, WAKE, CLEAN, HEAL, REFUSE, SCOLD, PRAISE, EVOLVE, HATCH, LEVEL_UP, DEAD
 }
 
+/**
+ * Whose hands did it.
+ *
+ * A care action changes two separate things and they were treated as one: the *world* (the tin
+ * empties, the mess is gone, the pet is no longer ill) and the *keeper's ledger* (experience, a
+ * level, a badge and its coins, a tick on today's mission). The world is a fact about what
+ * happened and belongs to whoever caused it. The ledger is a record of what the **player** did,
+ * and a creature that lets itself in at the pantry has not added a line to it.
+ *
+ * [SoloPlay] already says this for the minigames — a creature playing alone posts no score,
+ * because the high scores are the player's record of their own afternoons. This is the same rule
+ * with the same reason, applied to the rest of what a creature can do for itself.
+ *
+ * Only the actions [Brain] can reach take this parameter. Anything new that the brain learns to
+ * commit has to take it too, or the ledger leaks again.
+ */
+enum class Actor { KEEPER, CREATURE }
+
 /** Result of one player interaction: the new state, what to animate, and what to say. */
 data class ActionResult(
     val state: PetState,
@@ -30,14 +48,34 @@ object CareActions {
         toast: String?,
         events: MutableList<GameEvent>,
         accepted: Boolean = true,
+        by: Actor = Actor.KEEPER,
     ): ActionResult {
         // The moment a player scrubs a pet clean is the moment "get hygiene above 90" is true,
         // and it stops being true minutes later. Recording it here rather than waiting for the
         // next tick means the credit is never a race against the drain.
-        val (withAchievements, unlocked) = Achievements.evaluate(Missions.observe(state))
+        //
+        // Recorded for a creature's own care as well, and deliberately so. This is a high-water
+        // mark of what the pet's condition actually reached, and the tick loop raises it from the
+        // live stats a moment later whoever caused them — so gating it on the actor would not
+        // withhold the credit, it would only make it depend on which of the two ran first. What
+        // the gate below governs is the keeper's *ledger*: the repetition counters, the
+        // experience, and the awards.
+        val observed = Missions.observe(state)
+
+        // Awards are the keeper's. Nothing is lost by not evaluating them here for a creature:
+        // [Simulation.advance] evaluates the whole list every time the world moves, so the ones
+        // that read the pet's *condition* — bonded, well raised, every stat above eighty — still
+        // fire for a creature that looked after itself well. It is only the ones that count the
+        // player's own repetitions that stop advancing, which is the point.
+        if (by != Actor.KEEPER) return ActionResult(observed, animation, toast, events.toList(), accepted)
+        val (withAchievements, unlocked) = Achievements.evaluate(observed)
         unlocked.forEach { events += GameEvent.Unlocked(it) }
         return ActionResult(withAchievements, animation, toast, events.toList(), accepted)
     }
+
+    /** Experience is the keeper's level, so only the keeper's own actions pay into it. */
+    private fun credit(state: PetState, by: Actor, amount: Int, events: MutableList<GameEvent>): PetState =
+        if (by == Actor.KEEPER) Simulation.applyXp(state, amount, events) else state
 
     private fun blocked(state: PetState, toast: String): ActionResult =
         ActionResult(state, PetAnimation.REFUSE, toast, emptyList(), accepted = false)
@@ -52,7 +90,7 @@ object CareActions {
 
     // ---------------------------------------------------------------- feeding
 
-    fun feed(state: PetState, itemId: String): ActionResult {
+    fun feed(state: PetState, itemId: String, by: Actor = Actor.KEEPER): ActionResult {
         guard(state)?.let { return blocked(state, it) }
         val item = ItemCatalog[itemId] ?: return blocked(state, "Nothing to serve.")
         if (!item.isConsumable) return blocked(state, "${item.name} is not food.")
@@ -77,13 +115,16 @@ object CareActions {
                 bond = s.stats.bond + item.bond + 1f,
             ).coerced(),
             weightGrams = (s.weightGrams + item.weight).coerceIn(6f, 120f),
-            mealsEaten = s.mealsEaten + if (item.kind == ItemKind.MEAL) 1 else 0,
+            // "Meals served" — the record, the mission and the chef badge all read this. A meal
+            // the creature helped itself to still shows up on the scales, which is where a life
+            // of self-service ought to show up; it does not show up as something you did.
+            mealsEaten = s.mealsEaten + if (by == Actor.KEEPER && item.kind == ItemKind.MEAL) 1 else 0,
         )
-        s = Simulation.applyXp(s, if (item.kind == ItemKind.MEAL) 6 else 3, events)
-        return finish(s, PetAnimation.EAT, "${state.name} ate the ${item.name}.", events)
+        s = credit(s, by, if (item.kind == ItemKind.MEAL) 6 else 3, events)
+        return finish(s, PetAnimation.EAT, "${state.name} ate the ${item.name}.", events, by = by)
     }
 
-    fun useMedicine(state: PetState, itemId: String = "medicine"): ActionResult {
+    fun useMedicine(state: PetState, itemId: String = "medicine", by: Actor = Actor.KEEPER): ActionResult {
         if (state.isDead) return blocked(state, "Too late for medicine.")
         val item = ItemCatalog[itemId] ?: return blocked(state, "Unknown medicine.")
         if ((state.inventory[itemId] ?: 0) <= 0) return blocked(state, "You are out of ${item.name}.")
@@ -98,12 +139,15 @@ object CareActions {
                 happiness = s.stats.happiness + item.happiness,
             ).coerced(),
             isSick = if (cured) false else s.isSick,
-            medicineDoses = s.medicineDoses + if (cured) 1 else 0,
+            // Getting better is the world; "cures" is the nurse badge, and nursing is a thing one
+            // party does to another.
+            medicineDoses = s.medicineDoses + if (by == Actor.KEEPER && cured) 1 else 0,
         )
+        // The recovery itself is announced whoever swallowed the dose: it is news about the pet.
         if (cured) events += GameEvent.Recovered
-        s = Simulation.applyXp(s, 10, events)
+        s = credit(s, by, 10, events)
         val message = if (cured) "${state.name} is feeling better!" else "${state.name} needs another dose."
-        return finish(s, PetAnimation.HEAL, message, events)
+        return finish(s, PetAnimation.HEAL, message, events, by = by)
     }
 
     // ---------------------------------------------------------------- hygiene
@@ -128,21 +172,21 @@ object CareActions {
      * Removes one mess. Tapping a pile directly is more tactile than a menu button, and
      * scooping each one keeps the reward proportional to the effort.
      */
-    fun scoopPoop(state: PetState): ActionResult {
+    fun scoopPoop(state: PetState, by: Actor = Actor.KEEPER): ActionResult {
         if (state.poops <= 0) return blocked(state, "Nothing to scoop.")
         val events = mutableListOf<GameEvent>()
         var s = state.copy(
             poops = state.poops - 1,
-            cleanups = state.cleanups + 1,
+            cleanups = state.cleanups + if (by == Actor.KEEPER) 1 else 0,
             stats = state.stats.copy(
                 hygiene = state.stats.hygiene + 14f,
                 happiness = state.stats.happiness + 1.5f,
             ).coerced(),
         )
-        s = Simulation.applyXp(s, 2, events)
+        s = credit(s, by, 2, events)
         val left = s.poops
         val message = if (left == 0) "All clean!" else "$left left to scoop."
-        return finish(s, PetAnimation.CLEAN, message, events)
+        return finish(s, PetAnimation.CLEAN, message, events, by = by)
     }
 
     /** Swipe-up reaction: a little toss in the air. Costs a sliver of energy, pays in mood. */

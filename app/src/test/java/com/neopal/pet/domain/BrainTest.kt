@@ -139,7 +139,11 @@ class BrainTest {
 
         assertEquals(byHand.stats.satiety, after.stats.satiety, 0.001f)
         assertEquals(byHand.weightGrams, after.weightGrams, 0.001f)
-        assertEquals(byHand.mealsEaten, after.mealsEaten)
+        // "Exactly where" is about the *pet*, not about the keeper. The keeper's ledger — meals
+        // served, experience, badges — is the one thing a self-fed meal deliberately leaves alone;
+        // see [CareActions.Actor].
+        assertEquals("the record of meals served stays the keeper's", hungry.mealsEaten, after.mealsEaten)
+        assertEquals("and so does the keeper's experience", hungry.xp, after.xp)
         assertEquals("the meal came out of the tin", 1, after.inventory["meal_bowl"])
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.EAT, after.activity?.kind)
@@ -415,7 +419,7 @@ class BrainTest {
         val after = Brain.tick(ill, config, 1L, Random(11), events)
 
         assertFalse(after.isSick)
-        assertEquals(1, after.medicineDoses)
+        assertEquals("the cure is the pet's; 'cures given' is the keeper's", 0, after.medicineDoses)
         assertEquals("the dose is spent, exactly as a keeper's would be", 0, after.inventory["medicine"] ?: 0)
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.MEDICATE, after.activity?.kind)
@@ -441,7 +445,7 @@ class BrainTest {
         val after = Brain.tick(messy, config, 1L, Random(2), mutableListOf())
 
         assertEquals("a creature clears up at a creature's pace", 2, after.poops)
-        assertEquals(1, after.cleanups)
+        assertEquals("and clearing up after itself is not the keeper's cleanup count", 0, after.cleanups)
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.TIDY, after.activity?.kind)
     }

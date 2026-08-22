@@ -619,7 +619,7 @@ object Brain {
         when (option.kind) {
             ActivityKind.EAT -> if (option.target != FORAGE_TARGET) {
                 val itemId = option.target ?: return null
-                val result = CareActions.feed(s, itemId)
+                val result = CareActions.feed(s, itemId, Actor.CREATURE)
                 if (!result.accepted) return null
                 events += result.events
                 s = result.state
@@ -630,7 +630,7 @@ object Brain {
 
             ActivityKind.MEDICATE -> {
                 val itemId = option.target ?: return null
-                val result = CareActions.useMedicine(s, itemId)
+                val result = CareActions.useMedicine(s, itemId, Actor.CREATURE)
                 if (!result.accepted) return null
                 events += result.events
                 s = result.state.copy(selfCareActions = result.state.selfCareActions + 1)
@@ -639,7 +639,7 @@ object Brain {
             // One pile per stint. Clearing the whole room in a single thought is a keeper's
             // action; a creature tidying up should visibly take as long as the mess deserves.
             ActivityKind.TIDY -> {
-                val result = CareActions.scoopPoop(s)
+                val result = CareActions.scoopPoop(s, Actor.CREATURE)
                 if (!result.accepted) return null
                 events += result.events
                 s = result.state.copy(selfCareActions = result.state.selfCareActions + 1)

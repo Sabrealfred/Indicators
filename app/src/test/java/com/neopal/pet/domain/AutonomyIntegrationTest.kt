@@ -69,10 +69,12 @@ class AutonomyIntegrationTest {
         val hungry = keeper(stats = Stats(satiety = 18f, happiness = 70f, energy = 80f, hygiene = 90f))
         val after = live(hungry, 1_800)
 
-        assertTrue("it should have eaten something", after.mealsEaten > hungry.mealsEaten)
+        assertTrue("it should have eaten something", after.selfCareActions > hungry.selfCareActions)
         assertTrue("and the tin should have come out of the cupboard",
             (after.inventory["meal_bowl"] ?: 0) < (hungry.inventory["meal_bowl"] ?: 0))
         assertTrue("which is the point: it is no longer starving", after.stats.satiety > hungry.stats.satiety)
+        // See [CareActions.Actor]: the meal is real, the keeper's record of meals served is not.
+        assertEquals("nobody served it", hungry.mealsEaten, after.mealsEaten)
     }
 
     @Test
@@ -83,7 +85,7 @@ class AutonomyIntegrationTest {
         )
         val after = live(hungry, 1_800)
 
-        assertEquals("nothing was eaten", hungry.mealsEaten, after.mealsEaten)
+        assertEquals("nothing was eaten", hungry.selfCareActions, after.selfCareActions)
         assertEquals("the cupboard is untouched", hungry.inventory["meal_bowl"], after.inventory["meal_bowl"])
         assertTrue("and it is worse off than it started", after.stats.satiety < hungry.stats.satiety)
         assertNull("nothing was ever decided", after.activity)
