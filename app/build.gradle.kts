@@ -50,6 +50,24 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    testOptions {
+        unitTests {
+            // Lets the creature's art be drawn into a recorder on a plain JVM, which is what
+            // CreatureArtInvariantsTest does. Drawing a creature goes through `Path()`, and on a
+            // unit-test JVM that resolves to the stubbed `android.graphics.Path` — which throws
+            // on every call unless this is set.
+            //
+            // Without it those tests do not fail, they *skip*, and a suite that silently skips
+            // reads exactly like a suite that passes. That is the same shape as the two silent
+            // failures already recorded in docs/PLAN.md, and it is the reason this line is here
+            // rather than the tests being left to quietly do nothing.
+            //
+            // Safe for everything else: it can only turn a throw into a default, and no other
+            // test in this project touches `android.*` at all.
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {
