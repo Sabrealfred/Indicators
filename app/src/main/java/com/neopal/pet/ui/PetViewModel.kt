@@ -335,6 +335,42 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     play(Sfx.COIN)
                 }
                 is GameEvent.Message -> showToast(event.text)
+
+                // The autonomous half is loud by nature — it acts every few minutes, all day. Only
+                // the firsts get a toast; the running commentary belongs in the decision log, where
+                // the player goes looking for it rather than having it thrown at them.
+                is GameEvent.LearnedSkill -> {
+                    play(Sfx.LEVEL_UP)
+                    showToast("Learned to ${event.skill.displayName.lowercase()} without being asked.")
+                }
+                is GameEvent.MetPal -> {
+                    if (!offline) play(Sfx.SELECT)
+                    showToast("${event.pal.name} came by.")
+                }
+                is GameEvent.Befriended -> {
+                    play(Sfx.HAPPY)
+                    showToast("${event.pal.name} is a friend now.")
+                }
+                is GameEvent.Paired -> {
+                    play(Sfx.LEVEL_UP)
+                    showToast("${_ui.value.pet?.name ?: "Your pet"} and ${event.pal.name} paired off.")
+                }
+                is GameEvent.EggLaid -> {
+                    play(Sfx.CONFIRM)
+                    showToast("There's an egg in the nest.")
+                }
+                is GameEvent.ChildHatched -> {
+                    if (!offline) triggerAnimation(PetAnimation.HATCH)
+                    play(Sfx.HATCH)
+                    showToast("${event.child.name} hatched.")
+                }
+
+                is GameEvent.Decided,
+                is GameEvent.Finished,
+                is GameEvent.IntellectGrew,
+                is GameEvent.PalLeft,
+                -> Unit
+
                 is GameEvent.CareMistake, is GameEvent.FellAsleep, is GameEvent.WokeUp -> Unit
             }
         }
