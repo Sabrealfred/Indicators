@@ -774,7 +774,6 @@ private fun ConsiderationRow(consideration: Consideration, modifier: Modifier = 
                 color = if (consideration.available) accent else dimmedFor(accent, panel, 0.45f),
                 segments = 10,
                 height = pixelUnits(4),
-                modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(pixelUnits(1)))
             Text(
@@ -865,7 +864,6 @@ private fun LearningPanel(
             fraction = intellect / ceiling,
             color = accent,
             height = pixelUnits(5),
-            modifier = Modifier.fillMaxWidth(),
         )
 
         Spacer(Modifier.height(pixelUnits(2)))

@@ -36,9 +36,11 @@ import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CleaningServices
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingBag
@@ -87,6 +89,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.Item
@@ -227,6 +230,10 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
     // A finished mission is the only thing in this game that waits to be collected, so it gets
     // the dock's own badge rather than a strip of its own — the pet keeps every pixel it had.
     val collectable = viewModel.missions().count { it.claimable }
+    // True when the brain wanted something and could not have it for want of a skill. Anything
+    // else it is blocked on — an empty pantry, broad daylight — is not the player's cue to teach.
+    val wantsTeaching = pet.autonomy != Autonomy.OFF &&
+        viewModel.considerations().any { it.blockedBy == "not learned yet" }
     val actions = listOf(
         HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
         HomeAction("Clean", Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
@@ -236,6 +243,10 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
         HomeAction("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
         HomeAction("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
+        // The badge is the pet asking to be taught: an autonomous creature that wants something
+        // it never learned how to do is the one state this screen cannot show on its own.
+        HomeAction("Mind", Icons.Filled.Psychology, NeoColors.NeonCyan, badge = if (wantsTeaching) 1 else 0) { onOpen(Routes.MIND) },
+        HomeAction("Colony", Icons.Filled.Groups, NeoColors.NeonGreen, badge = pet.presentPals.size) { onOpen(Routes.COLONY) },
         HomeAction("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },
         HomeAction("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow) { onOpen(Routes.ALBUM) },
         HomeAction("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene) { onOpen(Routes.CHRONICLE) },
