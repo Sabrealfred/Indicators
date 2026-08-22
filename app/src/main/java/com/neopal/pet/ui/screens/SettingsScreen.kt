@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.NeoAccents
@@ -127,6 +128,34 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
                     "${config.pixelHeight}px tall buffer, upscaled with hard edges.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(pixelUnits(3)))
+                Text(
+                    "Screen — which machine you are pretending to hold.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(pixelUnits(2)))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(pixelUnits(2)),
+                    verticalArrangement = Arrangement.spacedBy(pixelUnits(1)),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    RetroMode.entries.forEach { mode ->
+                        PixelChip(
+                            label = mode.displayName,
+                            selected = config.retroMode == mode,
+                            onClick = { viewModel.updateConfig { it.copy(retroMode = mode) } },
+                            accent = NeoAccents.gold,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(pixelUnits(1)))
+                Text(
+                    config.retroMode.description,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -315,7 +344,10 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
                 valueLabel = "${(config.softFinish * 100).roundToInt()} percent",
                 valueRange = 0f..1f,
                 notches = 20,
-                enabled = config.pixelMode,
+                // The handheld reprints the frame in four flat tones, so a bloom would only add a
+                // fifth and a sixth. The slider is left visible and disabled rather than hidden,
+                // so the reason is discoverable instead of the control merely vanishing.
+                enabled = config.pixelMode && !config.retroMode.replacesColour,
                 accent = NeoAccents.cyan,
             )
             Spacer(Modifier.height(pixelUnits(1)))

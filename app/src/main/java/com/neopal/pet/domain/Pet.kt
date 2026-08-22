@@ -435,6 +435,14 @@ data class GameConfig(
     val softFinish: Float = 0.55f,
     /** Warm/cool colour grade and vignette over the finished frame, 0..1. */
     val atmosphere: Float = 0.7f,
+    /**
+     * Which screen to pretend to be looking at. See [RetroMode].
+     *
+     * Off by default. The tube and the handheld are strong looks — one eats every third row of a
+     * one-pixel outline, the other throws away colour outright — and a player who has not asked
+     * for either should never be handed one.
+     */
+    val retroMode: RetroMode = RetroMode.NONE,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
     /**

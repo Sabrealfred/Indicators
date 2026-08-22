@@ -15,46 +15,11 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
+import com.neopal.pet.domain.RetroMode
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
-
-/**
- * An optional filter laid over the finished frame.
- *
- * [NONE] is what every caller gets unless it says otherwise, and it draws exactly the frame the
- * renderer drew before these existed: one crisp blit, plus the soft finish. The other two are
- * stylisations the player turns on.
- *
- * Neither of them is allowed to move the art off its grid. The upscale stays a whole number and
- * nearest-neighbour in all three modes; the filters only ever paint *over* the blit, in whole
- * buffer pixels, or replace its colours one for one.
- */
-enum class RetroMode {
-
-    /** No filter. The default, and byte for byte the picture this class has always drawn. */
-    NONE,
-
-    /**
-     * A tube: scanlines that bow away from the middle of the glass, a stepped vignette, and a
-     * pixel of colour bleed either side of every edge.
-     *
-     * The scanlines and the vignette are baked into a mask the size of the *buffer*, so one
-     * scanline is one art pixel tall however dense the screen is. Drawn at device resolution
-     * they came out as hairlines that vanished entirely on a phone.
-     */
-    CRT,
-
-    /**
-     * A 1997 handheld: four shades of green and nothing else.
-     *
-     * The same discipline as [ColorRamp], taken to its limit. Colour is discarded outright — the
-     * filter reads brightness only, and reprints it in four flat tones — so this is a palette
-     * reduction rather than a green wash over the picture that is already there.
-     */
-    GREEN_LCD,
-}
 
 /**
  * Draws a scene into a small offscreen buffer and blows it back up with nearest-neighbour

@@ -61,6 +61,7 @@ import com.neopal.pet.domain.Mood
 import com.neopal.pet.domain.Morphology
 import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.StatDelta
@@ -729,7 +730,17 @@ fun PetStage(
             translate(dx + fx, dy + fy) {
                 scale(scaleX = zoomLevel, scaleY = zoomLevel, pivot = Offset.Zero) {
                     if (config.pixelMode) {
-                        pixelRenderer.render(this, block = { world() }, softness = config.softFinish)
+                        pixelRenderer.render(
+                            target = this,
+                            block = { world() },
+                            softness = config.softFinish,
+                            mode = config.retroMode,
+                            // The handheld has four tones and no darker to go, so night cannot be
+                            // drawn as shadow the way it is everywhere else — it has to be the
+                            // room getting dimmer against a backlight that stays put. Lifting the
+                            // exposure is what keeps a night scene off the bottom two tones.
+                            exposure = if (config.retroMode == RetroMode.GREEN_LCD) 1f + 1.2f * night else 1f,
+                        )
                     } else {
                         world()
                     }
@@ -737,11 +748,17 @@ fun PetStage(
             }
             // Atmosphere on top of the blit: gradients belong at screen resolution, where they
             // stay smooth, while the art underneath stays chunky.
-            if (config.pixelMode) {
+            //
+            // Except on the handheld, which has already reprinted the frame in four flat tones.
+            // A smooth gradient laid over that is a fifth colour and a sixth, and it undoes the
+            // one thing the mode exists to do. Its night, its lights-out and its sleep are all
+            // carried by the exposure passed into the blit instead.
+            val ownsTheFinish = config.pixelMode && config.retroMode.replacesColour
+            if (config.pixelMode && !ownsTheFinish) {
                 if (state.lightsOff) drawLightsOutOverlay()
                 if (state.isSleeping) drawSleepVignette(0.8f)
             }
-            drawAtmosphere(night = night, strength = config.atmosphere)
+            if (!ownsTheFinish) drawAtmosphere(night = night, strength = config.atmosphere)
         }
 
         FloatingLabels(labels = labels, now = time)
