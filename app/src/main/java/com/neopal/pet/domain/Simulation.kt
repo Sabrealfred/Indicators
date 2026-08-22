@@ -158,9 +158,32 @@ object Simulation {
      */
     const val MAX_REMEMBERED_GENERATIONS = 8
 
-    /** Restarts after a death, carrying the album, achievements, coins and generation forward. */
-    fun nextGeneration(previous: PetState, name: String, species: Species, nowMillis: Long): PetState =
-        newGame(name, species, nowMillis, seed = previous.rngSeed * 31 + nowMillis).copy(
+    /**
+     * Restarts after a death, carrying the album, achievements, coins and generation forward.
+     *
+     * Pass [heir] to continue the line through one of the pet's own offspring: the new run starts
+     * from that child's genome and remembers its parents. Without it the next pet is a founder,
+     * genetically unrelated to the one that just died — which is the right default, because a
+     * player who never bred anything has no line to continue.
+     */
+    fun nextGeneration(
+        previous: PetState,
+        name: String,
+        species: Species,
+        nowMillis: Long,
+        heir: Pal? = null,
+    ): PetState =
+        newGame(
+            name = name,
+            // An heir keeps its own species. Letting the picker override it would mean the child
+            // of two Leaf pets could hatch as an Ember, which throws away the only thing the
+            // player was breeding for.
+            species = heir?.species ?: species,
+            nowMillis = nowMillis,
+            seed = previous.rngSeed * 31 + nowMillis,
+            genome = heir?.genome,
+            parentNames = heir?.parentNames ?: emptyList(),
+        ).copy(
             generation = previous.generation + 1,
             // The run that is ending is sealed here and nowhere else: this is the one moment the
             // whole of it is still in hand.
@@ -173,6 +196,16 @@ object Simulation {
             inventory = previous.inventory.filterKeys { id ->
                 ItemCatalog[id]?.isCosmetic == true
             } + mapOf("snack_berry" to 3, "meal_bowl" to 2, "medicine" to 1),
+            // The social world outlives one pet. Everybody the last one knew is still out there,
+            // now a stranger to this one — affinity resets, the acquaintance does not. The heir
+            // itself is removed: it is standing here as the pet, not waiting in the wings.
+            pals = previous.pals
+                .filter { it.id != heir?.id }
+                .map { it.copy(affinity = 0f, present = false, relation = Relation.VISITOR) },
+            // Skills are not inherited. A child taught by its parent starts with what the parent
+            // knew how to teach, and nothing else — see [Skill.TEACH], which is the only route.
+            skills = heir?.skills.orEmpty(),
+            autonomy = previous.autonomy,
         )
 
     /**
