@@ -135,14 +135,10 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             pet = pet,
             onDismiss = { inspecting = null },
             onBuy = { viewModel.buy(item.id) },
-            onUse = {
-                when (item.kind) {
-                    ItemKind.HAT -> viewModel.equipHat(if (pet.equippedHat == item.id) null else item.id)
-                    ItemKind.ROOM -> viewModel.setRoom(item.id)
-                    ItemKind.MEDICINE -> viewModel.useMedicine(item.id)
-                    else -> viewModel.feed(item.id)
-                }
-            },
+            // One router, shared with the pantry sheet. This screen used to send soap to
+            // useMedicine, which applies health and happiness and not hygiene — so soap washed
+            // nothing and cured illness instead. See CareActions.use.
+            onUse = { viewModel.useItem(item.id) },
         )
     }
 }

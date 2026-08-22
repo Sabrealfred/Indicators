@@ -335,6 +335,34 @@ object CareActions {
         return finish(s, PetAnimation.HAPPY, "Bought ${item.name}.", events)
     }
 
+    /**
+     * Uses [itemId] for whatever it is actually for.
+     *
+     * One place decides, because the screens were each deciding separately and two of them were
+     * wrong. The pantry sheet listed every medicine the player owned and sent all of them to
+     * [feed] — so tapping the Pill said "Pip ate the Pill", consumed the only dose, and left the
+     * creature sick, on its way to dying of an illness the player believed they had treated. The
+     * shop sent Bubble Soap to [useMedicine], which applies health and happiness and *not*
+     * hygiene, so soap washed nothing and, because the cure test reduces to "is health already
+     * over 60" when the item heals nothing, a ten-coin bar of soap cured illness instead.
+     *
+     * Routing on the item's own effects rather than on its `kind` is what fixes both: soap is
+     * catalogued as MEDICINE and always will be, and a kind is a shelf category, not a verb.
+     */
+    fun use(state: PetState, itemId: String): ActionResult {
+        val item = ItemCatalog[itemId] ?: return blocked(state, "There is no such thing.")
+        return when {
+            item.kind == ItemKind.HAT -> equipHat(state, if (state.equippedHat == itemId) null else itemId)
+            item.kind == ItemKind.ROOM -> setRoom(state, itemId)
+            // Washing before curing: soap heals nothing, so a rule that asked about health first
+            // would send it down the medicine path again.
+            item.hygiene > 0f && item.health <= 0f -> bathe(state)
+            item.kind == ItemKind.MEDICINE -> useMedicine(state, itemId)
+            item.kind == ItemKind.MEAL || item.kind == ItemKind.SNACK -> feed(state, itemId)
+            else -> blocked(state, "${state.name} does not know what to do with the ${item.name}.")
+        }
+    }
+
     fun equipHat(state: PetState, hatId: String?): ActionResult {
         if (hatId != null && (state.inventory[hatId] ?: 0) <= 0) return blocked(state, "You do not own that yet.")
         val s = state.copy(equippedHat = hatId, stats = state.stats.copy(happiness = state.stats.happiness + 2f).coerced())

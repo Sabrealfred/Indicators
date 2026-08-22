@@ -271,21 +271,70 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     // ---------------------------------------------------------------- lifecycle
 
     fun startNewGame(name: String, species: Species) {
+        forgetCadence()
         val state = Simulation.newGame(name, species, System.currentTimeMillis())
         _ui.update { it.copy(pet = state, loading = false) }
         play(Sfx.CONFIRM)
         persist(state, immediate = true)
     }
 
-    fun startNextGeneration(name: String, species: Species) {
+    /**
+     * The creature's own children, offered as the next generation.
+     *
+     * Empty until it has actually bred, which is the point: the reward for courting, laying an
+     * egg and raising a child is that the child is who continues.
+     */
+    fun heirs(): List<Pal> =
+        _ui.value.pet?.pals.orEmpty().filter { it.relation == Relation.OFFSPRING }
+
+    /**
+     * Starts the next life, from [heirId] when one is named.
+     *
+     * The heir parameter is the whole of selective breeding. `Simulation.nextGeneration` has
+     * always accepted one — the child's genome carries over, its species, its parents' names, the
+     * skills it was taught — and nothing ever passed it, so every generation was an unrelated
+     * founder and the child a player had bred simply vanished when its parent died. The genetics
+     * worked perfectly right up to the moment they were supposed to pay off.
+     */
+    fun startNextGeneration(name: String, species: Species, heirId: String? = null) {
         val previous = _ui.value.pet ?: return startNewGame(name, species)
-        val state = Simulation.nextGeneration(previous, name, species, System.currentTimeMillis())
+        val heir = heirId?.let { id -> previous.pals.firstOrNull { it.id == id && it.relation == Relation.OFFSPRING } }
+        val state = Simulation.nextGeneration(
+            previous = previous,
+            name = name,
+            // An heir keeps its own species; picking one is not a choice about species.
+            species = heir?.species ?: species,
+            nowMillis = System.currentTimeMillis(),
+            heir = heir,
+        )
+        forgetCadence()
         _ui.update { it.copy(pet = state) }
         play(Sfx.CONFIRM)
         persist(state, immediate = true)
     }
 
+    /**
+     * Clears the remote-brain throttles at the start of a life.
+     *
+     * They are stamped in *pet* seconds, and a new generation starts back at zero. Carrying the
+     * previous creature's stamps forward meant `age - last` stayed negative for as long as that
+     * creature had lived — so a successor to a full life could not think, plan or speak for its
+     * entire childhood. Silent, naturally: identical to a creature that was never given a brain.
+     */
+    private fun forgetCadence() {
+        lastReconsideredAtSeconds = Cadence.NEVER
+        lastPlannedAtSeconds = Cadence.NEVER
+        lastSpokeFirstAtSeconds = Cadence.NEVER
+    }
+
     fun resetEverything() {
+        // Cancelled first, and that ordering is the whole fix. `persist` is a single-slot debounce
+        // with an 800ms delay and the clock loop refreshes it every second, so at almost any
+        // moment there is a write of the current pet already scheduled. Clearing the store
+        // without cancelling it lets that write land *after* the removal and put the save back —
+        // invisibly, because the screen has already moved on to the new-game screen.
+        saveJob?.cancel()
+        forgetCadence()
         viewModelScope.launch {
             repository.clear()
             _ui.update { it.copy(pet = null) }
@@ -371,6 +420,9 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun setRoom(roomId: String) = runAction(Sfx.CONFIRM) { CareActions.setRoom(it, roomId) }
     fun rename(name: String) = runAction(Sfx.CONFIRM) { CareActions.rename(it, name) }
     fun snapshot(title: String) = runAction(Sfx.CONFIRM) { CareActions.snapshot(it, title, System.currentTimeMillis()) }
+
+    /** Uses an item for what it is for; the routing lives in [CareActions.use], not here. */
+    fun useItem(itemId: String) = runAction(Sfx.CONFIRM) { CareActions.use(it, itemId) }
 
     fun finishGame(won: Boolean, score: Float, gameName: String, gameId: String, points: Int) =
         runAction(if (won) Sfx.LEVEL_UP else Sfx.GAME_MISS) {

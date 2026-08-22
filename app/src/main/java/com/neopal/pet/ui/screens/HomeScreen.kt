@@ -419,7 +419,9 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             FeedSheet(
                 pet = pet,
                 onFeed = { id ->
-                    viewModel.feed(id)
+                    // Not `feed`. The sheet lists medicines too, and feeding a pill consumed the
+                    // dose without curing anything. See CareActions.use.
+                    viewModel.useItem(id)
                     showFeedSheet = false
                 },
                 onShop = {

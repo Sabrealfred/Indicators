@@ -240,7 +240,13 @@ object Simulation {
         if (state.lastTickMillis == 0L) {
             return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
         }
-        val rawElapsed = ((nowMillis - state.lastTickMillis) / 1000L).coerceAtLeast(0L)
+        // A stamp in the future means the wall clock moved backwards — a manual date fix, an NTP
+        // correction, or the classic tamagotchi move of winding the clock forward to rush an
+        // evolution and then winding it back. Re-stamping is what makes that recoverable: leaving
+        // the future stamp alone froze the creature completely until real time caught up, and a
+        // player who moved the clock back an hour got an hour of nothing at all.
+        if (nowMillis < state.lastTickMillis) return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
+        val rawElapsed = (nowMillis - state.lastTickMillis) / 1000L
         if (rawElapsed <= 0L) return SimResult(state, emptyList())
         if (state.isDead) return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
 
@@ -279,7 +285,16 @@ object Simulation {
             remaining -= dt
         }
 
-        current = current.copy(lastTickMillis = nowMillis, rngSeed = random.nextLong())
+        // The remainder is carried, not dropped. `rawElapsed` is whole seconds, so stamping
+        // `nowMillis` threw away up to 999ms every tick — and the foreground loop's real period
+        // is always over 1000ms once a persist and an event dispatch are counted. Measured at a
+        // realistic 1040ms period that is 3.9% of the creature's life lost while you watch it,
+        // and it is unrecoverable, because the offline path measures from this same stamp.
+        val consumedMillis = rawElapsed * 1000L
+        current = current.copy(
+            lastTickMillis = state.lastTickMillis + consumedMillis,
+            rngSeed = random.nextLong(),
+        )
         // Missions close out here rather than in the step loop: a long absence crosses several
         // day boundaries at once, and only the final one is the day the player is looking at.
         current = Missions.rollOver(current, config, events)
@@ -408,20 +423,62 @@ object Simulation {
         return s
     }
 
+    /**
+     * Falling asleep and waking up, with the two conditions kept apart.
+     *
+     * They used to overlap, and the overlap was not a corner case — it was every night. A pet
+     * asleep in a dark room fills its tank in about an hour of a two-hour night, hits the "rested"
+     * threshold, wakes, and is immediately told by the *same* rule that it should be asleep. It
+     * then flips once per tick until dawn: one measured `advance` over two hours of absence
+     * emitted 1,687 sleep and wake events out of 1,694 total. A second region did the same in
+     * daylight — an exhausted pet in a lit room collapsed at energy 8, was woken by "it is bright
+     * and the lights are on", and collapsed again, pinned at 8 for as long as anyone watched.
+     *
+     * It also quietly wrecked the autonomous half. `isSleeping` flipping under the brain makes
+     * every committed activity stale on the following tick, so fifteen minutes of night produced
+     * fifty-seven identical decisions, all abandoned, hygiene *worse* than it started, and a
+     * decision log — the feature whose entire purpose is showing the creature's reasoning — full
+     * of the same abandoned grooming.
+     *
+     * So: a creature that wants the dark is never woken by being rested. It is only woken by the
+     * dark going away, and then only once it has enough energy to be worth waking for. The two
+     * energy thresholds are deliberately far apart; a single threshold is what oscillates.
+     */
     private fun handleSleepCycle(state: PetState, config: GameConfig, events: MutableList<GameEvent>): PetState {
         val night = isNight(state, config)
+        val wantsDark = night && state.lightsOff
         return when {
-            !state.isSleeping && (state.stats.energy <= 8f || (night && state.lightsOff)) -> {
+            !state.isSleeping && (state.stats.energy <= SLEEP_EXHAUSTED || wantsDark) -> {
                 events += GameEvent.FellAsleep
                 state.copy(isSleeping = true)
             }
-            state.isSleeping && (state.stats.energy >= 98f || (!night && !state.lightsOff)) -> {
+            // Never `energy >= something` on its own: that is the flip-flop. While the room is
+            // dark and it is night, the creature simply sleeps through, however full it is.
+            state.isSleeping && !wantsDark && state.stats.energy >= SLEEP_RESTED -> {
                 events += GameEvent.WokeUp
                 state.copy(isSleeping = false)
             }
             else -> state
         }
     }
+
+    /** Below this a creature drops where it stands, whatever the room is doing. */
+    private const val SLEEP_EXHAUSTED = 8f
+
+    /**
+     * Properly rested, and the only thing that ends a sleep the room is not already ending.
+     *
+     * It has to be far above [SLEEP_EXHAUSTED] or the daylight half of the oscillation comes
+     * back: wake at a hair over the collapse threshold and the creature collapses again seconds
+     * later. Ninety-eight is also what this always was — the defect was never the number, it was
+     * that the same condition could say "sleep" and "wake" at once.
+     *
+     * A first attempt used thirty-five, and the balance suite caught it: a creature that sleeps
+     * in a dark room during the day was getting a third of the rest it used to, and a keeper
+     * checking in every two hours could no longer keep it out of trouble. The measurement is
+     * worth more than the reasoning was.
+     */
+    private const val SLEEP_RESTED = 98f
 
     private fun handlePoop(state: PetState, dt: Long, random: Random, events: MutableList<GameEvent>): PetState {
         if (state.isSleeping || state.poops >= 6) return state
