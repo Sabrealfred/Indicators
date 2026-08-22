@@ -6,6 +6,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -36,15 +41,24 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.inset
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.audio.ChiptuneEngine
+import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
+import com.neopal.pet.domain.Morphology
 import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.ItemCatalog
@@ -71,6 +85,8 @@ import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
@@ -114,12 +130,36 @@ private data class FloatLabel(
 private const val LABEL_LIFETIME = 1.5f
 
 /**
+ * The part of the creature a touch landed on.
+ *
+ * Where a finger lands changes what it gets: the head is pleased to be stroked, the belly is
+ * ticklish, and the tail is nobody's handle.
+ */
+internal enum class TouchZone(
+    /** How the zone is named out loud, for the accessibility actions that stand in for a touch. */
+    val label: String,
+) {
+    HEAD("head"),
+    BELLY("tummy"),
+    TAIL("tail"),
+}
+
+/** How long a touch reaction plays before the creature settles back, in seconds. */
+private const val TOUCH_REACTION = 0.9f
+
+/** The furthest photo mode will magnify the scene. */
+private const val MAX_ZOOM = 3f
+
+/**
  * The animated window into the pet's world: background, creature, mess, particles, floating
  * feedback and the mood bubble. One frame loop drives everything, and in pixel mode the whole
  * scene is rendered at low resolution and upscaled so it reads as real pixel art.
  *
  * The scene is also the main input surface: tap to pet, double-tap to tickle, stroke to pet
- * continuously, swipe up to toss, long-press for a photo, and tap a mess to scoop it.
+ * continuously, swipe up to toss, long-press for a photo, pinch to frame one, and tap a mess to
+ * scoop it. A tap that lands on the creature is answered by the part it landed on — see
+ * [TouchZone] — and every one of those parts is reachable without aiming, through the
+ * accessibility actions this scene publishes.
  */
 @Composable
 fun PetStage(
@@ -137,6 +177,12 @@ fun PetStage(
     onLongPressPet: () -> Unit = {},
     onScoopPoop: () -> Unit = {},
     onSwipeUp: () -> Unit = {},
+    /**
+     * A tug on the tail. The reaction — the flinch, the glare, the sound and the withheld
+     * affection — is this scene's own; this is the seam for whatever the game decides a pulled
+     * tail should cost, and it stays a no-op until something is wired to it.
+     */
+    onTugTail: () -> Unit = {},
 ) {
     val haptics = LocalHapticFeedback.current
     // The frame loop and the gesture handlers outlive the composition that created them, so
@@ -148,6 +194,10 @@ fun PetStage(
     val onLongPress by rememberUpdatedState(onLongPressPet)
     val onScoop by rememberUpdatedState(onScoopPoop)
     val onFlick by rememberUpdatedState(onSwipeUp)
+    val onTailTug by rememberUpdatedState(onTugTail)
+    // Read from inside the gesture handlers as well, and for the same reason: a handler installed
+    // while sound was off must not go on believing that after the setting changes.
+    val cfg by rememberUpdatedState(config)
     val particles = remember { ParticleSystem() }
     val pixelRenderer = remember(config.pixelHeight) { PixelRenderer(config.pixelHeight) }
     val labels = remember { mutableStateListOf<FloatLabel>() }
@@ -179,6 +229,23 @@ fun PetStage(
     var hatLag by remember { mutableFloatStateOf(0f) }
     var hatVel by remember { mutableFloatStateOf(0f) }
     var lastWanderX by remember { mutableFloatStateOf(0.5f) }
+    // Which part of the creature was last touched, and when. The reaction is layered on top of
+    // whatever animation the ViewModel has going, so the two never fight over the same pose.
+    var touched by remember { mutableStateOf<TouchZone?>(null) }
+    var touchedAt by remember { mutableFloatStateOf(-99f) }
+    // Photo-mode framing. The scene is drawn scaled by [zoomLevel] with its top left at
+    // [frameX], [frameY]; every pointer position is mapped back through both before anything is
+    // hit-tested, so a zoomed creature is still poked where it looks like it is.
+    var zoomLevel by remember { mutableFloatStateOf(1f) }
+    var frameX by remember { mutableFloatStateOf(0f) }
+    var frameY by remember { mutableFloatStateOf(0f) }
+    // True from the moment a second finger lands until the next gesture starts. It is cleared on
+    // the *next* touch rather than on lift, so the tap and drag handlers still see it while they
+    // are deciding what the gesture that just ended was.
+    var pinching by remember { mutableStateOf(false) }
+    // The scene's size, kept for the accessibility zoom actions, which have no pointer to ask.
+    var stageWidth by remember { mutableFloatStateOf(0f) }
+    var stageHeight by remember { mutableFloatStateOf(0f) }
 
     // Frame loop: advance the clock, the particles, the blink and the screen shake.
     LaunchedEffect(Unit) {
@@ -298,6 +365,8 @@ fun PetStage(
         idleProgress = ((time - idlePoseStart) / idlePose.seconds).coerceIn(0f, 1f),
         tailLag = tailLag,
         hatLag = hatLag,
+        touched = touched,
+        touchProgress = ((time - touchedAt) / TOUCH_REACTION).coerceIn(0f, 1f),
     )
 
     // The whole world in one lambda, so it can be drawn straight to the screen or through
@@ -370,37 +439,191 @@ fun PetStage(
         if (state.isSleeping && !config.pixelMode) drawSleepVignette(0.8f)
     }
 
+    // One reaction, however it was asked for: a finger on a zone, or the accessibility action
+    // that stands in for one. [nx] and [ny] are normalised scene coordinates for the burst, so a
+    // touched zone sparks under the finger and an announced one sparks over the part itself.
+    //
+    // Everything this reads it reads through a state or a rememberUpdatedState delegate, because
+    // the gesture handlers and the semantics actions that call it both outlive the composition
+    // they were built in.
+    fun react(zone: TouchZone, nx: Float, ny: Float) {
+        touched = zone
+        touchedAt = time
+        when (zone) {
+            // Pleased. A stroke on the head is the affection this game already knows how to pay
+            // for, so it goes through the same call an ordinary tap has always made.
+            TouchZone.HEAD -> {
+                particles.emit(ParticleKind.HEART, nx, ny, 3)
+                if (cfg.soundEnabled) ChiptuneEngine.play(Sfx.HAPPY)
+                if (cfg.hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onTap()
+            }
+            // Ticklish. The double-tap tickle, reached with one finger in the right place: the
+            // same capped, cheap delight, so a tummy cannot be farmed any harder than before.
+            TouchZone.BELLY -> {
+                particles.emit(ParticleKind.NOTE, nx, ny, 4)
+                if (cfg.soundEnabled) ChiptuneEngine.play(Sfx.HAPPY, pitch = 1.18f)
+                if (cfg.hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onDoubleTap()
+            }
+            // Annoyed. The point of the tail is that it pays nothing: a player who pulls it gets
+            // a flinch and a glare instead of the happiness and bond a stroke would have earned.
+            TouchZone.TAIL -> {
+                particles.emit(ParticleKind.ANGER, nx, ny, 4)
+                if (cfg.soundEnabled) ChiptuneEngine.play(Sfx.DENY)
+                if (cfg.hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                onTailTug()
+            }
+        }
+    }
+
+    // Zoom about the middle of the scene, for the players who are not pinching: same clamp, same
+    // ceiling, so the framing cannot be walked anywhere a pinch could not have taken it.
+    fun frameAt(target: Float) {
+        val next = target.coerceIn(1f, MAX_ZOOM)
+        val applied = next / zoomLevel
+        val midX = stageWidth / 2f
+        val midY = stageHeight / 2f
+        frameX = clampFrame(midX - applied * (midX - frameX), stageWidth, next)
+        frameY = clampFrame(midY - applied * (midY - frameY), stageHeight, next)
+        zoomLevel = next
+    }
+
+    // The touch zones, said out loud. A zone that only exists for a finger that can find it is
+    // not a zone everybody has, so each one is an action too — with the same anchors the burst
+    // would have used, since there is no finger to spark under.
+    fun touchActions(of: PetState): List<CustomAccessibilityAction> {
+        if (!of.hasTouchZones()) {
+            return listOf(CustomAccessibilityAction("Pet ${of.name}") { onTap(); true })
+        }
+        return listOf(
+            CustomAccessibilityAction("Stroke the ${TouchZone.HEAD.label}") {
+                react(TouchZone.HEAD, wanderX, 0.52f)
+                true
+            },
+            CustomAccessibilityAction("Tickle the ${TouchZone.BELLY.label}") {
+                react(TouchZone.BELLY, wanderX, 0.62f)
+                true
+            },
+            CustomAccessibilityAction("Tug the ${TouchZone.TAIL.label}") {
+                react(TouchZone.TAIL, (wanderX - 0.12f).coerceIn(0f, 1f), 0.64f)
+                true
+            },
+        )
+    }
+
+    // Rebuilt only when the creature's identity changes, not on every frame this scene draws.
+    val readOut = remember(state.name, state.stage, state.species, state.isEgg) {
+        if (state.isEgg) {
+            "${state.name}'s egg."
+        } else {
+            "${state.name}, ${state.stage.displayName} ${state.species.displayName}. " +
+                "Touch its head to please it, its tummy to tickle it, or its tail to annoy it. " +
+                "Pinch to frame a photograph, then press and hold to take it."
+        }
+    }
+
     Box(modifier = modifier.clip(RoundedCornerShape(18.dp))) {
+        // Five gestures share this one surface, so the order they are settled in is written down
+        // rather than left to whichever detector happens to win a race:
+        //
+        //  1. Two fingers is always framing. The pinch loop is declared last, which makes it the
+        //     innermost pointer input and so the first to see each event; from the moment a
+        //     second finger lands it consumes every change, which cancels the tap detector and
+        //     the drag detector outright. It never looks at a single-finger event, so nothing
+        //     below it is weakened by its presence.
+        //  2. [pinching] is belt and braces for the same rule: it survives until the *next*
+        //     gesture begins, so the tap and drag handlers cannot mistake the end of a pinch for
+        //     a tap, a stroke or a toss even if an event reached them before it was consumed.
+        //  3. One finger keeps the precedence it always had: a mess, then a prop, then the
+        //     creature. Only the last of those three is new, and it is a fork inside the branch
+        //     that used to call onTap unconditionally, so nothing else moved.
+        //  4. Held still, one finger is still the photograph; moved, it is still a stroke, and a
+        //     stroke that goes far enough up is still a toss. Both detectors are untouched apart
+        //     from the [pinching] guard and mapping the pointer back through the framing.
+        //  5. Everything is hit-tested in scene coordinates, never in view coordinates, so zoom
+        //     cannot pull a target away from the thing the player can see.
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
+                .onSizeChanged {
+                    stageWidth = it.width.toFloat()
+                    stageHeight = it.height.toFloat()
+                }
+                // A zone you can only reach by touching an exact part of a small drawing is no
+                // zone at all for anyone driving this by screen reader, so all three are also
+                // actions — as are the photograph and the framing they were added alongside.
+                .semantics {
+                    contentDescription = readOut
+                    // The same offer a finger gets: the three zones while the creature can feel
+                    // them, and the plain whole-body pet the rest of the time, which is exactly
+                    // what a tap falls back to on an egg, a sleeper or a creature that is gone.
+                    customActions = touchActions(state) + listOf(
+                        CustomAccessibilityAction("Take a photograph") {
+                            onLongPress()
+                            true
+                        },
+                        CustomAccessibilityAction("Zoom in") {
+                            frameAt(zoomLevel * 1.4f)
+                            true
+                        },
+                        CustomAccessibilityAction("Zoom out") {
+                            frameAt(zoomLevel / 1.4f)
+                            true
+                        },
+                        CustomAccessibilityAction("Reset the framing") {
+                            frameAt(1f)
+                            true
+                        },
+                    )
+                }
                 .pointerInput(state.poops, state.isDead) {
                     detectTapGestures(
                         onTap = { position ->
-                            val w = size.width.toFloat()
-                            val h = size.height.toFloat()
-                            when {
-                                hitsPoop(position, w, h, live.poops) -> onScoop()
-                                // Furniture answers first: a finger on the lamp is not also a poke.
-                                else -> {
-                                    val prop = propAt(position, w, h, live.roomTheme, sceneParallax(time, pointerX))
-                                    if (prop != null) props = props.withTap(prop, time) else onTap()
+                            if (!pinching) {
+                                val w = size.width.toFloat()
+                                val h = size.height.toFloat()
+                                val scene = scenePoint(position, frameX, frameY, zoomLevel)
+                                when {
+                                    hitsPoop(scene, w, h, live.poops) -> onScoop()
+                                    // Furniture answers first: a finger on the lamp is not also a poke.
+                                    else -> {
+                                        val parallax = sceneParallax(time, pointerX)
+                                        val prop = propAt(scene, w, h, live.roomTheme, parallax)
+                                        if (prop != null) {
+                                            props = props.withTap(prop, time)
+                                        } else {
+                                            // Where you touched it decides what you get. A touch
+                                            // that missed the creature, or one it is in no state
+                                            // to feel, is the plain pet it has always been.
+                                            val zone = zoneAt(scene, w, h, wanderX, live)
+                                            if (zone == null) {
+                                                onTap()
+                                            } else {
+                                                react(zone, scene.x / w, scene.y / h)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         },
                         onDoubleTap = { position ->
                             // A quick second tap on a prop is still aimed at the prop. Without this
                             // the tap detector swallows both taps and tickles the pet instead.
-                            val prop = propAt(
-                                position,
-                                size.width.toFloat(),
-                                size.height.toFloat(),
-                                live.roomTheme,
-                                sceneParallax(time, pointerX),
-                            )
-                            if (prop != null) props = props.withTap(prop, time) else onDoubleTap()
+                            if (!pinching) {
+                                val prop = propAt(
+                                    scenePoint(position, frameX, frameY, zoomLevel),
+                                    size.width.toFloat(),
+                                    size.height.toFloat(),
+                                    live.roomTheme,
+                                    sceneParallax(time, pointerX),
+                                )
+                                if (prop != null) props = props.withTap(prop, time) else onDoubleTap()
+                            }
                         },
-                        onLongPress = { onLongPress() },
+                        // The photograph is of the creature's state, not of these pixels, so it
+                        // comes out the same whatever the scene is currently framed at.
+                        onLongPress = { if (!pinching) onLongPress() },
                     )
                 }
                 .pointerInput(state.isDead) {
@@ -410,47 +633,106 @@ fun PetStage(
                         onDragStart = {
                             travelled = 0f
                             verticalTravel = 0f
-                            isStroking = true
+                            isStroking = !pinching
                         },
                         onDragEnd = {
                             isStroking = false
                             // A flick upward tosses the pet; a sideways stroke is a long pet.
-                            if (verticalTravel < -size.height * 0.20f) onFlick()
-                            else if (travelled > size.width * 0.25f) onTap()
+                            if (!pinching) {
+                                if (verticalTravel < -size.height * 0.20f) onFlick()
+                                else if (travelled > size.width * 0.25f) onTap()
+                            }
                         },
                         onDragCancel = { isStroking = false },
                         onDrag = { change, dragAmount ->
-                            travelled += abs(dragAmount.x)
-                            verticalTravel += dragAmount.y
-                            pointerX = (change.position.x / size.width).coerceIn(0f, 1f)
-                            // Stroking sheds a slow trail of hearts.
-                            if (travelled % 60f < abs(dragAmount.x)) {
-                                particles.emit(
-                                    kind = ParticleKind.HEART,
-                                    x = pointerX,
-                                    y = (change.position.y / size.height).coerceIn(0f, 1f),
-                                    count = 1,
-                                )
+                            if (!pinching) {
+                                travelled += abs(dragAmount.x)
+                                verticalTravel += dragAmount.y
+                                val scene = scenePoint(change.position, frameX, frameY, zoomLevel)
+                                pointerX = (scene.x / size.width).coerceIn(0f, 1f)
+                                // Stroking sheds a slow trail of hearts.
+                                if (travelled % 60f < abs(dragAmount.x)) {
+                                    particles.emit(
+                                        kind = ParticleKind.HEART,
+                                        x = pointerX,
+                                        y = (scene.y / size.height).coerceIn(0f, 1f),
+                                        count = 1,
+                                    )
+                                }
                             }
                         },
                     )
+                }
+                .pointerInput(Unit) {
+                    // Framing, and nothing else. This loop watches every gesture but only acts on
+                    // — and only consumes — events with two or more fingers down, which is what
+                    // lets it sit on the same surface as four one-finger gestures without taking
+                    // a single one of them away.
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false)
+                        pinching = false
+                        var down = 0
+                        do {
+                            val event = awaitPointerEvent()
+                            down = 0
+                            for (index in event.changes.indices) {
+                                if (event.changes[index].pressed) down++
+                            }
+                            if (down >= 2) {
+                                pinching = true
+                                val spread = event.calculateZoom()
+                                val pan = event.calculatePan()
+                                val centroid = event.calculateCentroid(useCurrent = true)
+                                val next = (zoomLevel * spread).coerceIn(1f, MAX_ZOOM)
+                                // The granted factor, not the requested one: at the stops the
+                                // scene must stop moving too, or it slides out from under the
+                                // fingers that are no longer able to zoom it.
+                                val applied = next / zoomLevel
+                                val width = size.width.toFloat()
+                                val height = size.height.toFloat()
+                                frameX = clampFrame(
+                                    centroid.x + pan.x - applied * (centroid.x - frameX),
+                                    width,
+                                    next,
+                                )
+                                frameY = clampFrame(
+                                    centroid.y + pan.y - applied * (centroid.y - frameY),
+                                    height,
+                                    next,
+                                )
+                                zoomLevel = next
+                                for (index in event.changes.indices) event.changes[index].consume()
+                            }
+                        } while (down > 0)
+                    }
                 },
         ) {
             val amplitude = if (config.reducedMotion) 0f else shake * size.minDimension * 0.02f
             var dx = sin(time * 62f) * amplitude
             var dy = sin(time * 47f) * amplitude
+            // The framing offset travels with the shake so that both land on the same grid.
+            var fx = frameX
+            var fy = frameY
             if (config.pixelMode) {
                 // Shake in whole art pixels. A fractional offset re-samples every pixel in the
                 // image on every frame, which reads as buzzing rather than as a kick.
                 val block = PixelRenderer.scaleFor(size.height, config.pixelHeight).toFloat()
                 dx = (dx / block).roundToInt() * block
                 dy = (dy / block).roundToInt() * block
+                fx = (fx / block).roundToInt() * block
+                fy = (fy / block).roundToInt() * block
             }
-            translate(dx, dy) {
-                if (config.pixelMode) {
-                    pixelRenderer.render(this, block = { world() }, softness = config.softFinish)
-                } else {
-                    world()
+            // Photo-mode framing wraps the finished picture rather than the world inside it, so
+            // in pixel mode what grows is the art pixel: zooming in hands the player bigger
+            // honest blocks instead of a smooth guess at detail the buffer never held. At a zoom
+            // of 1 with nothing panned this is the identity, and the scene draws as it always did.
+            translate(dx + fx, dy + fy) {
+                scale(scaleX = zoomLevel, scaleY = zoomLevel, pivot = Offset.Zero) {
+                    if (config.pixelMode) {
+                        pixelRenderer.render(this, block = { world() }, softness = config.softFinish)
+                    } else {
+                        world()
+                    }
                 }
             }
             // Atmosphere on top of the blit: gradients belong at screen resolution, where they
@@ -542,6 +824,153 @@ private fun hitsPoop(position: Offset, width: Float, height: Float, poops: Int):
     return false
 }
 
+/**
+ * True while touching one part of the creature rather than another means anything at all.
+ *
+ * An egg has no parts to speak of, a sleeper should not be prodded awake by the tail, and the
+ * dead are past being tickled — so all three keep the plain whole-body tap they have always had.
+ */
+private fun PetState.hasTouchZones(): Boolean = !isEgg && !isDead && !isSleeping
+
+/**
+ * Undoes the photo-mode framing: a pointer position in view pixels, as the scene is drawn at
+ * [zoom] from [offsetX], [offsetY], read back as the position in the scene underneath it.
+ *
+ * [Offset] is a value class, so this hands back a pair of floats and allocates nothing.
+ */
+private fun scenePoint(position: Offset, offsetX: Float, offsetY: Float, zoom: Float): Offset =
+    Offset((position.x - offsetX) / zoom, (position.y - offsetY) / zoom)
+
+/**
+ * Holds the framed scene over the whole viewport. Without this a pan could drag the room off the
+ * side of the frame and leave the player looking at bare canvas.
+ */
+private fun clampFrame(offset: Float, extent: Float, zoom: Float): Float =
+    offset.coerceIn(extent - extent * zoom, 0f)
+
+/** Blends two numbers, for the anchors that ride the stance gene between two poses. */
+private fun mix(a: Float, b: Float, t: Float): Float = a + (b - a) * t
+
+/** True when a point lies inside the ellipse of half-extents [rx], [ry] centred on the offset. */
+private fun inEllipse(dx: Float, dy: Float, rx: Float, ry: Float): Boolean {
+    if (rx <= 0f || ry <= 0f) return false
+    val nx = dx / rx
+    val ny = dy / ry
+    return nx * nx + ny * ny <= 1f
+}
+
+/** Squared distance from a point to a line segment. Squared, so the hit test needs no root. */
+private fun distanceToSegmentSquared(
+    px: Float,
+    py: Float,
+    ax: Float,
+    ay: Float,
+    bx: Float,
+    by: Float,
+): Float {
+    val vx = bx - ax
+    val vy = by - ay
+    val lengthSquared = vx * vx + vy * vy
+    val along = ((px - ax) * vx + (py - ay) * vy)
+    val t = if (lengthSquared <= 0.0001f) 0f else (along / lengthSquared).coerceIn(0f, 1f)
+    val dx = px - (ax + vx * t)
+    val dy = py - (ay + vy * t)
+    return dx * dx + dy * dy
+}
+
+/**
+ * Which part of the creature is under [position], or null when the touch missed it — and null
+ * too for an egg, a sleeping creature or a dead one, so that all three keep answering a tap
+ * exactly as they always have.
+ *
+ * The zones are rebuilt from the numbers the creature is actually drawn from: where it has
+ * wandered to, the body radius its life stage has grown into, the width its weight, branch and
+ * build gene give it, and the stance, leg length and tail its genome expresses. Nothing here is a
+ * pixel box, so a hound's head stays out on the end of its neck while a blob's stays on top of
+ * its own belly, and neither has to be written down a second time when the silhouette changes.
+ *
+ * It runs on a finger-down and never in the draw path, and every value in it is a local float.
+ */
+private fun zoneAt(
+    position: Offset,
+    width: Float,
+    height: Float,
+    wanderX: Float,
+    state: PetState,
+): TouchZone? {
+    if (!state.hasTouchZones()) return null
+    val unit = min(width, height)
+    // Where the scene puts the creature, without the bob: two art pixels of breathing is far
+    // inside a fingertip, and reading it here would only make the zones twitch.
+    val cx = width * wanderX
+    val cy = height * 0.60f
+    // 0.30 of the short side at hatching and 0.34 grown, the run the drawn proportions take.
+    val growth = when (state.stage) {
+        LifeStage.EGG, LifeStage.BABY -> 0f
+        LifeStage.CHILD -> 0.25f
+        LifeStage.TEEN -> 0.5f
+        LifeStage.ADULT -> 1f
+        LifeStage.ELDER -> 0.5f
+    }
+    val bodyR = unit * (0.30f + 0.04f * growth)
+    val m = state.morphology
+    // Morphology.bodyWidth already carries the weight, the branch and the build gene — every
+    // ingredient of the drawn half-width bar a couple of per cent of per-stage trim, which is
+    // nothing against a fingertip.
+    val halfWidth = bodyR * m.bodyWidth
+    val quad = m.quadruped.coerceIn(0f, 1f)
+
+    // The four-legged crossfade, in the terms the art states it in: the barrel settles onto its
+    // legs, the head walks forward off the shoulder, and both ride the stance gene.
+    val groundY = cy + bodyR * 1.15f
+    val legs = bodyR * (0.20f + 0.62f * (m.legLength / Morphology.MAX_LEG).coerceIn(0f, 1f))
+    val trunkH = bodyR * mix(0.92f, 0.50f, quad)
+    val trunkTop = groundY - legs - trunkH * 0.98f
+    val trunkX = cx - bodyR * 0.30f * quad
+    val trunkY = cy + (trunkTop - cy) * quad
+    val headX = cx + bodyR * 0.66f * quad
+    val headY = cy + (trunkTop - bodyR * 0.20f - cy) * quad
+    val headR = bodyR * (1f - 0.30f * quad)
+
+    // A fingertip is wider than a pixel, so both blobs are tested a little larger than drawn.
+    val slop = 1.15f
+    val head = inEllipse(position.x - headX, position.y - headY, headR * m.bodyWidth * slop, headR * slop)
+    val belly = inEllipse(position.x - trunkX, position.y - trunkY, halfWidth * slop, trunkH * slop)
+    if (head || belly) {
+        // Standing upright the head *is* the body: one blob, with the face drawn across its top
+        // and the belly patch across its bottom, so height alone decides and the split follows
+        // the drawing rather than inventing a boundary of its own. On all fours the two have
+        // come apart and each answers for itself — except where they still overlap across the
+        // shoulder, where height is the tie-break again.
+        val oneBlob = quad < 0.25f
+        return when {
+            oneBlob || (head && belly) ->
+                if (position.y <= headY + headR * 0.05f) TouchZone.HEAD else TouchZone.BELLY
+            head -> TouchZone.HEAD
+            else -> TouchZone.BELLY
+        }
+    }
+
+    // The tail, as the segment it is drawn along. A creature whose tail gene is spent down to
+    // nothing has no tail drawn, and so has no tail to pull: the art and the zone agree.
+    val tailUnits = 2f * m.tailLength
+    if (tailUnits <= 0.01f) return null
+    // The wag is left out on purpose. It is the frame's, not the body's, and a target that
+    // swings with it would be a target that has to be chased.
+    val baseX = mix(cx - halfWidth * 0.85f, trunkX - halfWidth * 0.88f, quad)
+    val baseY = mix(cy + bodyR * 0.45f, trunkY - trunkH * 0.34f, quad)
+    val reach = bodyR * 0.42f
+    val tail = distanceToSegmentSquared(
+        position.x,
+        position.y,
+        baseX,
+        baseY,
+        baseX - bodyR * tailUnits,
+        baseY - bodyR * tailUnits * 0.5f,
+    )
+    return if (tail <= reach * reach) TouchZone.TAIL else null
+}
+
 @Composable
 private fun BoxScope.FloatingLabels(labels: List<FloatLabel>, now: Float) {
     labels.forEach { label ->
@@ -581,6 +1010,8 @@ private fun buildFrame(
     idleProgress: Float = 0f,
     tailLag: Float = 0f,
     hatLag: Float = 0f,
+    touched: TouchZone? = null,
+    touchProgress: Float = 1f,
 ): CreatureFrame {
     val motion = if (reducedMotion) 0.35f else 1f
     val blink = if (blinkPhase > 0f) {
@@ -674,7 +1105,7 @@ private fun buildFrame(
     }
 
     val p = progress
-    return when (action) {
+    val posed = when (action) {
         PetAnimation.IDLE -> frame
         PetAnimation.EAT -> frame.copy(
             mouthOpen = pingPong(p * 6f, 1f),
@@ -769,6 +1200,50 @@ private fun buildFrame(
             flash = if (p > 0.85f) (p - 0.85f) * 6f else 0f,
         )
         PetAnimation.DEAD -> frame.copy(eyeOpen = 0f, lean = 18f * p, bobY = 0.06f * p)
+    }
+    // Last word to the finger: whatever the creature was already doing, being touched somewhere
+    // particular shows on top of it rather than replacing it.
+    return posed.withTouch(touched, touchProgress, motion)
+}
+
+/**
+ * The reaction to being touched in one place, layered over the pose the creature already had.
+ *
+ * Each zone answers in its own currency. The head half-closes its eyes and leans into the hand,
+ * the belly screws its eyes shut and wriggles, and the tail flinches away and glares back over
+ * the shoulder at whoever just pulled it. All three fade out across the reaction, and all three
+ * scale their motion, so a player who has asked for less of it gets a smaller version of the
+ * same expression rather than none of it.
+ */
+private fun CreatureFrame.withTouch(zone: TouchZone?, progress: Float, motion: Float): CreatureFrame {
+    if (zone == null || progress >= 1f) return this
+    val arc = sin(progress * PI.toFloat())
+    val fade = 1f - progress
+    return when (zone) {
+        TouchZone.HEAD -> copy(
+            eyeOpen = eyeOpen * (1f - 0.75f * arc),
+            mouthOpen = max(mouthOpen, 0.30f * arc),
+            blush = (blush + 0.35f * arc).coerceAtMost(1f),
+            bobY = bobY - 0.012f * arc * motion,
+            lean = lean + sin(progress * 9f) * 2.5f * fade * motion,
+        )
+        TouchZone.BELLY -> copy(
+            eyeOpen = eyeOpen * (1f - 0.80f * arc),
+            mouthOpen = max(mouthOpen, 0.85f * arc),
+            blush = (blush + 0.20f * arc).coerceAtMost(1f),
+            squash = squash * (1f + 0.05f * sin(progress * 26f) * fade * motion),
+            lean = lean + sin(progress * 30f) * 7f * fade * motion,
+            armSwing = armSwing + sin(progress * 34f) * 0.8f * fade * motion,
+        )
+        TouchZone.TAIL -> copy(
+            eyeOpen = eyeOpen * (1f - 0.55f * arc),
+            mouthOpen = max(mouthOpen, 0.18f * arc),
+            // Looking back down its own side at the hand, not out at the room.
+            gaze = mix(gaze, -1f, arc),
+            lean = lean + 9f * fade * motion,
+            bobY = bobY - 0.020f * arc * motion,
+            tailSwing = tailSwing + sin(progress * 40f) * 1.2f * fade,
+        )
     }
 }
 
