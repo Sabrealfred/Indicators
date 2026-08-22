@@ -251,6 +251,13 @@ object Colony {
      *
      * The child's genome is rolled here and stored on the egg rather than at hatching, so a
      * player who liked the roll cannot lose it by closing the app — see [NestEgg].
+     *
+     * Each egg is rolled from its own stream, not from [random] directly. The only seed a caller
+     * has to hand is [PetState.rngSeed], and that moves only when [Simulation.advance] runs a
+     * step — which it declines to do until the wall clock has crossed a whole second. Two eggs
+     * laid in one sitting were therefore rolled from the same seed over the same two parents and
+     * came out gene for gene identical: a clutch of twins nobody bred for, in the one part of
+     * the game whose entire point is that a child is a roll of the dice.
      */
     fun pair(
         state: PetState,
@@ -264,12 +271,20 @@ object Colony {
         if (index < 0) return state
         val pal = state.pals[index]
 
+        // Every term is a fact about the state or the caller's own seed, so a test that fixes
+        // both still pins the child exactly — the fix is per-egg entropy, not unpredictability.
+        // What the twins do not share is how many eggs were already in the nest.
+        val eggSeed = random.nextLong() * 0x9E3779B97F4A7C15uL.toLong() +
+            (state.nest.size + 1L) * 0x2545F4914F6CDD1DuL.toLong() +
+            palId.hashCode().toLong()
+        val eggRandom = Random(eggSeed)
+
         val egg = NestEgg(
             id = "egg_${state.generation}_${state.ageSeconds}_${state.nest.size}",
-            genome = Genome.breed(state.genome, pal.genome, random),
+            genome = Genome.breed(state.genome, pal.genome, eggRandom),
             // Either parent's family can carry, so a line can change species without changing
             // its genes. Species drives the palette; the genome drives the shape.
-            species = if (random.nextBoolean()) state.species else pal.species,
+            species = if (eggRandom.nextBoolean()) state.species else pal.species,
             laidAtSeconds = state.ageSeconds,
             hatchesAtSeconds = state.ageSeconds + incubationSeconds(config),
             otherParentId = pal.id,
@@ -283,7 +298,12 @@ object Colony {
         pals[index] = promoted(pal, events)
 
         events += GameEvent.EggLaid(egg)
-        return state.copy(pals = pals, nest = state.nest + egg)
+        // The seed moves on the way out as well. The salt above is what makes a clutch different
+        // from itself; this is what stops the *next* thing to read PetState.rngSeed inside the
+        // same second from replaying a stream that has already been spent. Anything that
+        // consumes randomness and hands back a state should leave a fresh seed behind, or the
+        // second-resolution clock decides how random the game is.
+        return state.copy(pals = pals, nest = state.nest + egg, rngSeed = eggRandom.nextLong())
     }
 
     /**

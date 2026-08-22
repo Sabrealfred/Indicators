@@ -365,6 +365,49 @@ class ColonyTest {
         assertEquals("The nest is already full.", Colony.pairingBlocker(state, "pal_mira"))
     }
 
+    @Test
+    fun `two eggs laid in the same second are not identical twins`() {
+        // The only seed the app has to hand is PetState.rngSeed, and that moves only when
+        // Simulation.advance runs a step — which it refuses to do until the wall clock has
+        // crossed a whole second. A player who fills the nest in one sitting therefore hands
+        // pair() the same Random over the same parents twice.
+        val events = mutableListOf<GameEvent>()
+        val first = Colony.pair(readyToPair(), "pal_mira", config, Random(SAME_SECOND), events)
+        val second = Colony.pair(first, "pal_mira", config, Random(SAME_SECOND), events)
+
+        assertEquals("both eggs have to actually be laid", 2, second.nest.size)
+        val (older, younger) = second.nest
+        assertTrue("two eggs are two eggs", older.id != younger.id)
+        assertTrue(
+            "a clutch of two must not be one genome copied: ${older.genome}",
+            older.genome != younger.genome,
+        )
+        assertTrue(
+            "and the state must not hand the next caller the same stream again",
+            second.rngSeed != readyToPair().rngSeed,
+        )
+    }
+
+    @Test
+    fun `an egg is still exactly pinned by the seed it was rolled from`() {
+        // The other half of the same rule: entropy per egg must not mean a genome nobody can
+        // predict. Same state, same seed, same child — twice, and different from another seed.
+        val once = Colony.pair(readyToPair(), "pal_mira", config, Random(21L), mutableListOf())
+        val again = Colony.pair(readyToPair(), "pal_mira", config, Random(21L), mutableListOf())
+        val elsewhere = Colony.pair(readyToPair(), "pal_mira", config, Random(22L), mutableListOf())
+
+        assertEquals(once.nest.single().genome, again.nest.single().genome)
+        assertEquals(once.nest.single().species, again.nest.single().species)
+        assertEquals(once.rngSeed, again.rngSeed)
+        assertTrue(
+            "a different seed has to be a different child, or the seed is not what decides it",
+            once.nest.single().genome != elsewhere.nest.single().genome,
+        )
+    }
+
+    /** One second of wall clock, in the only form the pairing screen ever sees it. */
+    private val SAME_SECOND = 4_242L
+
     // ---- hatching -----------------------------------------------------------------------
 
     @Test
