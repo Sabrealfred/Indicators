@@ -3,7 +3,7 @@
 # AGP does not write a v1 JAR signature for minSdk 24+, so there is no META-INF/*.RSA to read.
 # The certificate lives in the APK Signing Block, which sits immediately before the ZIP central
 # directory: [uint64 size][id-value pairs][uint64 size]["APK Sig Block 42"].
-import struct, sys, subprocess, os
+import struct, sys, subprocess, tempfile, os
 
 path = sys.argv[1]
 data = open(path, "rb").read()
@@ -44,14 +44,18 @@ def first_cert(scheme_value):
     certs_seq = certs[4:4 + u32(certs, 0)]
     return certs_seq[4:4 + u32(certs_seq, 0)]
 
-for pid in (0x7109871a, 0xf05368c0):
-    if pid not in found:
-        continue
-    der = first_cert(found[pid])
-    out = f"cert-{names[pid]}.der"
-    open(out, "wb").write(der)
-    print(f"\n=== {names[pid]} signer certificate ===")
-    r = subprocess.run(["keytool", "-printcert", "-file", out], capture_output=True, text=True)
-    for line in r.stdout.splitlines():
-        if any(k in line for k in ("Owner:", "SHA256:", "Valid from:", "Signature algorithm")):
-            print(line.strip())
+# keytool reads a file rather than stdin, so the DER has to land somewhere — but it lands in a
+# temporary directory that is cleaned up, not in whatever directory this was run from. The first
+# version wrote cert-v2.der into the repository root and left it there.
+with tempfile.TemporaryDirectory() as tmp:
+    for pid in (0x7109871a, 0xf05368c0):
+        if pid not in found:
+            continue
+        out = os.path.join(tmp, f"cert-{names[pid]}.der")
+        with open(out, "wb") as handle:
+            handle.write(first_cert(found[pid]))
+        print(f"\n=== {names[pid]} signer certificate ===")
+        r = subprocess.run(["keytool", "-printcert", "-file", out], capture_output=True, text=True)
+        for line in r.stdout.splitlines():
+            if any(k in line for k in ("Owner:", "SHA256:", "Valid from:", "Signature algorithm")):
+                print(line.strip())
