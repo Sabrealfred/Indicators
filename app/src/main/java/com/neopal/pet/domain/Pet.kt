@@ -112,6 +112,15 @@ data class AlbumEntry(
     val roomTheme: String,
     val petAgeSeconds: Long,
     val capturedAtMillis: Long,
+    /**
+     * The shape the creature was wearing when the picture was taken.
+     *
+     * Photographs are the only record of what a lineage looked like on the way. Without this an
+     * album of four generations shows four identical silhouettes, and the whole point of breeding
+     * for a shape is that you can look back and see it change. Defaults to the neutral genome, so
+     * pictures taken before this existed still render exactly as they always did.
+     */
+    val genome: Genome = Genome(),
 )
 
 /**

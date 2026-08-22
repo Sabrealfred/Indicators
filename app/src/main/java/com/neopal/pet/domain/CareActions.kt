@@ -368,6 +368,7 @@ object CareActions {
             roomTheme = state.roomTheme,
             petAgeSeconds = state.ageSeconds,
             capturedAtMillis = nowMillis,
+            genome = state.genome,
         )
         val events = mutableListOf<GameEvent>()
         val s = state.copy(album = trimAlbum(state.album + entry))

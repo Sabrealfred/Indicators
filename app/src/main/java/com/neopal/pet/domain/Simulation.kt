@@ -525,6 +525,7 @@ object Simulation {
                 roomTheme = state.roomTheme,
                 petAgeSeconds = state.ageSeconds,
                 capturedAtMillis = state.lastTickMillis,
+                genome = state.genome,
             ),
         )
     }

@@ -342,6 +342,10 @@ fun PetStage(
                 mood = state.mood,
                 hatId = state.equippedHat,
                 weightGrams = state.weightGrams,
+                // The one place the genome becomes something you can look at. A save from before
+                // genomes existed carries the neutral starter one, which expresses as the shape
+                // this creature has always had — nobody's pet changes under them on upgrade.
+                morphology = state.morphology,
             ),
             frame = frame,
         )

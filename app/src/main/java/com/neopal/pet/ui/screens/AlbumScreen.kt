@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.neopal.pet.R
 import com.neopal.pet.domain.AlbumEntry
 import com.neopal.pet.domain.Mood
+import com.neopal.pet.domain.Morphology
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.art.CreatureFrame
 import com.neopal.pet.ui.art.CreatureSpec
@@ -179,6 +180,8 @@ private fun AlbumCard(entry: AlbumEntry, fresh: Boolean) {
                         branch = entry.branch,
                         mood = Mood.HAPPY,
                         hatId = entry.hatId,
+                        // What the creature looked like that day, not what it looks like now.
+                        morphology = Morphology.of(entry.genome, entry.stage, entry.branch),
                     ),
                     frame = CreatureFrame(mouthOpen = 0.35f),
                 )
