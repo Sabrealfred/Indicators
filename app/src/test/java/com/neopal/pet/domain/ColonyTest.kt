@@ -104,6 +104,88 @@ class ColonyTest {
         assertEquals("names must not collide", strangers.map { it.name }.distinct().size, strangers.size)
     }
 
+    // ---- company: what the world does without anybody deciding to --------------------------
+
+    @Test
+    fun `time in the same room moves fondness on its own, and slower than a visit spent together`() {
+        // Autonomy is OFF and no skill is known, because neither is the gate: going over to say
+        // hello is the creature's move and needs both, but being in the room while somebody else
+        // is in it is the world continuing and needs neither.
+        val start = pet().copy(
+            autonomy = Autonomy.OFF,
+            skills = emptySet(),
+            pals = listOf(mira(affinity = 0f, relation = Relation.VISITOR)),
+        )
+        val events = mutableListOf<GameEvent>()
+
+        val kept = Colony.tick(start.copy(ageSeconds = start.ageSeconds + 300L), config, 300L, Random(1L), events)
+        val ambient = kept.pals.single().affinity
+        assertTrue("five minutes of company has to count for something: $ambient", ambient > 0f)
+
+        var spent = start
+        repeat(30) {
+            spent = spent.copy(ageSeconds = spent.ageSeconds + 10L)
+            spent = Colony.interact(spent, "pal_mira", ActivityKind.SOCIALISE, 10L, Random(1L), events)
+        }
+        assertTrue(
+            "and it must not be worth as much as choosing to spend the visit with them: " +
+                "$ambient vs ${spent.pals.single().affinity}",
+            ambient < spent.pals.single().affinity,
+        )
+    }
+
+    @Test
+    fun `nobody keeps company with a pet that is asleep, dead, sulking or still an egg`() {
+        val here = mira(affinity = 10f, relation = Relation.VISITOR)
+        val base = pet().copy(pals = listOf(here))
+        val cases = mapOf(
+            "asleep" to base.copy(isSleeping = true),
+            "dead" to base.copy(isDead = true),
+            "sulking" to base.copy(stats = base.stats.copy(happiness = 4f)),
+            "an egg" to base.copy(stage = LifeStage.EGG),
+        )
+        cases.forEach { (why, state) ->
+            val events = mutableListOf<GameEvent>()
+            val after = Colony.tick(state.copy(ageSeconds = state.ageSeconds + 300L), config, 300L, Random(2L), events)
+            assertEquals(
+                "a pet that is $why is not keeping anybody company",
+                10f,
+                after.pals.single().affinity,
+                0.0001f,
+            )
+        }
+    }
+
+    @Test
+    fun `keeping each other company is enough to reach a friendship, and it is announced once`() {
+        // Repeat visits rather than one impossible sitting: the pal is seen again every step, the
+        // way a companion who keeps coming back would be, and the run is long enough to cross 50.
+        var state = pet().copy(
+            autonomy = Autonomy.OFF,
+            skills = emptySet(),
+            pals = listOf(mira(affinity = 0f, relation = Relation.VISITOR)),
+        )
+        val events = mutableListOf<GameEvent>()
+        var steps = 0
+        // Stopped a little past the line rather than run for a fixed span, so the test is about
+        // reaching a friendship and not about how far past courting a long run happens to land.
+        while (state.pals.single().affinity < Pal.FRIEND_AT + 4f && steps < 2_000) {
+            state = state.copy(ageSeconds = state.ageSeconds + 30L)
+            state = state.copy(pals = state.pals.map { it.copy(lastSeenSeconds = state.ageSeconds) })
+            state = Colony.tick(state, config, 30L, Random(3L), events)
+            steps++
+        }
+
+        val pal = state.pals.single { it.id == "pal_mira" }
+        assertTrue("company alone has to be able to make a friend: ${pal.affinity}", pal.isFriend)
+        assertEquals(Relation.FRIEND, pal.relation)
+        assertEquals(
+            "an announcement that re-fires at the boundary is the classic bug here",
+            1,
+            events.filterIsInstance<GameEvent.Befriended>().count { it.pal.id == "pal_mira" },
+        )
+    }
+
     // ---- affinity and the once-only events ----------------------------------------------
 
     @Test

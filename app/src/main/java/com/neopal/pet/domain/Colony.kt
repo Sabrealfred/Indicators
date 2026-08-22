@@ -103,6 +103,22 @@ object Colony {
      */
     private const val AFFINITY_PER_SECOND = 0.030f
 
+    /**
+     * Affinity gained per second simply by being in the room together, before temperament and
+     * rapport. Three tenths of [AFFINITY_PER_SECOND]: about six visits to a friendship instead
+     * of two.
+     *
+     * This is the difference between company and a visit. Going over to somebody is an act the
+     * creature performs — it needs the skill, and it needs the player's permission to act at
+     * all — but two creatures in one room grow used to each other whether or not either of them
+     * decided to, and that is not a thing autonomy has any business gating. Without it the only
+     * road to a friendship ran through [Brain]'s SOCIALISE activity, which needs FULL autonomy,
+     * which is not the default: every visitor a default player ever saw arrived at nothing and
+     * left at nothing, and the entire colony downstream of the number — courting, the nest, the
+     * offspring, the lineage — was unreachable in the shipped configuration.
+     */
+    private const val COMPANY_PER_SECOND = AFFINITY_PER_SECOND * 0.30f
+
     /** Affinity lost per hour apart. A fortnight of silence loses an acquaintance entirely. */
     private const val DECAY_PER_HOUR = 2.5f
 
@@ -131,11 +147,12 @@ object Colony {
     // -------------------------------------------------------------------------------------
 
     /**
-     * Visitors arriving and leaving, affinity decay, eggs ripening.
+     * Visitors arriving and leaving, company, affinity decay, eggs ripening.
      *
      * Runs whatever [PetState.autonomy] says, because none of it is a decision the pet makes.
-     * Somebody knocking at the door is not an act of will, and an egg does not wait for
-     * permission to hatch — gating this on autonomy would mean a player on Manual never sees the
+     * Somebody knocking at the door is not an act of will, an egg does not wait for permission
+     * to hatch, and two creatures sharing a room grow used to each other without either of them
+     * choosing to — gating any of it on autonomy would mean a player on Manual never sees the
      * feature exist at all.
      *
      * Expects [PetState.ageSeconds] to have already advanced by [dt] this step, which is how
@@ -153,6 +170,8 @@ object Colony {
         var s = state
         s = departures(s, events)
         s = decayAffinity(s, dt)
+        // Before arrivals, so nobody is paid for a step they spent somewhere else.
+        s = company(s, dt, events)
         s = arrivals(s, dt, random, events)
         s = hatchEggs(s, random, events)
         return capRemembered(s, events)
@@ -387,7 +406,39 @@ object Colony {
         Relation.OFFSPRING, Relation.PARENT -> FAMILY_FLOOR
     }
 
-    /** Time apart cools an acquaintance. Company does not: that is what [interact] is for. */
+    /**
+     * Fondness earned by everybody currently in the room, at [COMPANY_PER_SECOND].
+     *
+     * Takes no [Random]: the ordinary passage of time in company is not a die roll, and keeping
+     * it deterministic means it cannot shift the visitor stream — the same seed still builds the
+     * same world.
+     *
+     * The pet has to actually be there for it: asleep, dead, sulking or not yet old enough to
+     * have noticed anybody is nobody's company. Whoever the creature has *chosen* to spend the
+     * step with is skipped, because [interact] is about to pay them at the full rate and paying
+     * them here as well would credit the same second twice.
+     */
+    private fun company(state: PetState, dt: Long, events: MutableList<GameEvent>): PetState {
+        if (state.isDead || state.isSleeping || !state.isMindAwake || state.isSulking) return state
+        if (state.pals.none { it.present }) return state
+        val activity = state.activity
+        val engaged = if (activity?.kind == ActivityKind.SOCIALISE || activity?.kind == ActivityKind.COURT) {
+            activity.targetId
+        } else {
+            null
+        }
+        var changed = false
+        val pals = state.pals.map { pal ->
+            if (!pal.present || pal.id == engaged || pal.affinity >= 100f) return@map pal
+            val gain = COMPANY_PER_SECOND * dt * warmth(state) * rapport(state.personality, pal.personality)
+            if (gain <= 0f) return@map pal
+            changed = true
+            promoted(pal.copy(affinity = (pal.affinity + gain).coerceIn(0f, 100f)), events)
+        }
+        return if (changed) state.copy(pals = pals) else state
+    }
+
+    /** Time apart cools an acquaintance. Company is [company]'s and [interact]'s business. */
     private fun decayAffinity(state: PetState, dt: Long): PetState {
         if (state.pals.isEmpty()) return state
         val loss = DECAY_PER_HOUR * (dt / 3600f)

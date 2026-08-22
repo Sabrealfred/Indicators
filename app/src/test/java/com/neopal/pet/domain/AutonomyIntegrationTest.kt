@@ -193,4 +193,43 @@ class AutonomyIntegrationTest {
         assertNull("a baby decides nothing", after.activity)
         assertTrue("and learns nothing on its own", after.skills.isEmpty())
     }
+
+    /**
+     * A companion standing in the room, fond of nobody yet.
+     *
+     * Genetically far from [keeper]'s flat genome on purpose, so that nothing downstream of this
+     * fixture is ever really being blocked by the bloodline rule.
+     */
+    private fun moss(at: Long) = Pal(
+        id = "pal_moss",
+        name = "Moss",
+        species = Species.AQUA,
+        genome = Genome.fromList(List(Genome.GENE_COUNT) { 0.85f }),
+        personality = Personality.CALM,
+        stage = LifeStage.ADULT,
+        relation = Relation.VISITOR,
+        affinity = 0f,
+        metAtSeconds = at,
+        lastSeenSeconds = at,
+        present = true,
+    )
+
+    @Test
+    fun `company counts while the player is driving`() {
+        // The whole colony hangs off one number: fondness. Friendship, courting, an egg and a
+        // child are all thresholds on it. Fondness used to move only inside the creature's own
+        // SOCIALISE activity — which is a decision, which needs FULL autonomy, which is not the
+        // default — so the default player got visitors who arrived at nothing, left at nothing,
+        // and a colony that could never once do anything. Skills are empty here too: standing in
+        // a room somebody else is standing in is not an act the creature performs.
+        val manual = keeper(autonomy = Autonomy.OFF, skills = emptySet()).let {
+            it.copy(intellect = 5f, pals = listOf(moss(it.ageSeconds)))
+        }
+
+        val after = live(manual, 600)
+        val pal = after.pals.single { it.id == "pal_moss" }
+
+        assertTrue("ten minutes in the same room has to count for something", pal.affinity > 0f)
+        assertNull("and none of it is the creature deciding anything", after.activity)
+    }
 }
