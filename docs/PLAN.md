@@ -24,7 +24,7 @@ Tres reglas, aprendidas rompiendo CI cuatro veces en esta rama:
 | Script | Qué prueba | Qué **no** prueba |
 |---|---|---|
 | `scratchpad/dtest.sh` | Compila el dominio y corre su suite | Nada de UI ni de red |
-| `scratchpad/mindtest.sh` | Dominio + cliente remoto + sus tests | La ruta de red real |
+| `scratchpad/mindtest.sh` | Dominio + cliente remoto + sus tests, **incluida la ruta de red** contra un servidor de mentira | Un servicio real: nadie tocó OpenRouter todavía |
 | `scratchpad/uicheck.sh` | Frontend de todo el source set contra línea base | **No es un build**; sin SDK de Android |
 | `scratchpad/xmlcheck.sh` | Que todo XML parsee | Semántica del manifiesto |
 
@@ -81,7 +81,7 @@ Límites conocidos de `uicheck.sh`, para que nadie lo lea como semáforo:
 |---|---|---|
 | 3.7.1 | Proxy hospedado | Hay campo `proxyUrl` y funciona; falta levantar el servicio. Decisión tuya: Lambda, Cloudflare Worker, o un gateway de OpenClaw/Hermes |
 | 3.7.2 | ¿Habla OpenClaw formato chat-completions? | **Sin verificar.** Su documentación no lo dice. Si sí, `proxyUrl` apunta ahí sin tocar código |
-| 3.7.3 | Prosa en vez de JSON | El cliente exige JSON. Un modelo gratis que conteste en prosa queda descartado y el chat *parece* muerto. Sólo se sabe probando |
+| 3.7.3 | ~~Prosa en vez de JSON~~ | ✅ **probado**. Un servidor de mentira devolviendo prosa se rechaza limpio: sin crash, sin texto sin parsear en pantalla, la criatura simplemente no dice nada. Sigue siendo cierto que un modelo así **parece** mudo — pero ahora sabemos que falla bien, no que rompe |
 
 ---
 
@@ -108,7 +108,7 @@ iguales y conviene no tocarlas en bloque.
 | 4.2.3 | ~~Cadencia fija~~ | ✅ **hecho** — la cadencia escala con el intelecto, en banda estrecha (0.6x–1.5x) para que un tier gratis dure el día |
 | 4.2.4 | ~~Nunca aprende de sí misma~~ | ✅ **hecho** — cada plan se compara contra el cuidado con el que empezó; una mejora clara deja lección, topeada por debajo de lo que enseña una muerte |
 | 4.2.5 | ~~Nunca inicia conversación~~ | ✅ **hecho** — habla sola sólo en primeras veces y puntos de quiebre (crecer, aprender una skill, hacer un amigo, emparejarse, una cría, curarse, sacar una lección propia). Nada de comidas: una criatura que comenta cada plato es una notificación |
-| 4.2.6 | Un solo modelo para todo | Modelo chico para decidir, grande para conversar y planificar | `MindConfig` |
+| 4.2.6 | ~~Un solo modelo para todo~~ | ✅ **hecho** — `MindRole` con cuatro trabajos; modelo chico opcional sólo para decidir, y el presupuesto de tokens sigue al trabajo. En blanco = exactamente lo de hoy |
 
 ---
 
@@ -183,7 +183,7 @@ pantalla de cuatro tonos no tiene más oscuro adonde ir.
 | 6.3 | Cabeza del cuadrúpedo de frente sobre cuerpo de perfil | Arreglarlo pide una cabeza lateral aparte |
 | 6.4 | `stance` 0.30–0.55 se lee como un ocho | El rango menos lindo del barrido |
 | 6.5 | Log de decisiones no es lazy (hasta 40 filas) | Acotado hoy; si el tope crece, `LazyColumn` |
-| 6.6 | Ruta de red nunca ejecutada | Sin SDK acá; `post()`, timeouts y cancelación son razonados, no corridos |
+| 6.6 | ~~Ruta de red nunca ejecutada~~ | ✅ **cerrada**. El cliente no tiene un solo import de Android, así que lo único que faltaba era algo del otro lado de un socket. 16 tests lo corren contra un servidor de mentira sobre `ServerSocket`: la clave viaja como header y en ningún otro lado, el 302 no se sigue, el 429 es un no callado, el cuerpo de error no llega a nadie, el timeout corta a tiempo |
 
 ### El bug que 6.6 dejó pasar — anotado porque la forma se repite
 
@@ -215,7 +215,6 @@ cerrada y verde en CI. Lo que queda:
 
 **Después, en serie (tocan el mismo contrato):**
 3. Herramientas que actúan (§4.2.2) — cambia el contrato del proveedor, no se paraleliza
-4. Un modelo por rol (§4.2.6) — `MindConfig`, y toca el cliente
 
 **Bloqueado por decisión tuya:**
 - El proxy (§3.7.1) y si OpenClaw sirve como gateway (§3.7.2)
