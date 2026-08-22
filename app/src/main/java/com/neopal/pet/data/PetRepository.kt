@@ -48,11 +48,30 @@ class PetRepository(context: Context) {
         isLenient = true
     }
 
+    /**
+     * The save, or null when there has never been one.
+     *
+     * A blob that is *present but unreadable* is deliberately not null here, because null means
+     * "new player" to everything above and the app would offer onboarding and then overwrite the
+     * only copy. `ignoreUnknownKeys` covers unknown *keys*, not unknown enum *values* — one
+     * `RetroMode` or `Species` from a newer build makes the whole blob throw — so a sideloaded
+     * older APK, a Play rollback, or a save carried between two devices on different versions
+     * could destroy a lineage in one launch. The unreadable blob is kept aside instead.
+     */
     val stateFlow: Flow<PetState?> = store.data.map { prefs ->
         prefs[KEY_STATE]?.let { raw ->
-            runCatching { json.decodeFromString(PetState.serializer(), raw) }.getOrNull()
+            runCatching { json.decodeFromString(PetState.serializer(), raw) }
+                .onFailure { unreadable = raw }
+                .getOrNull()
+                ?.also { unreadable = null }
         }
     }
+
+    /**
+     * The last blob that would not decode, if any. Held so [save] can refuse to bury it.
+     */
+    @Volatile
+    private var unreadable: String? = null
 
     /**
      * Settings, with the key put back on afterwards.
@@ -74,9 +93,32 @@ class PetRepository(context: Context) {
 
     suspend fun currentConfig(): GameConfig = configFlow.first()
 
+    /**
+     * Writes the save, and cannot throw.
+     *
+     * Two guards, both of which existed as crashes before.
+     *
+     * The encode is not allowed to fail. This `Json` does not set
+     * `allowSpecialFloatingPointValues`, so a single `NaN` anywhere in the tree throws — and
+     * because the save is one blob, that kills the *whole* write, permanently, on every
+     * subsequent attempt. `persist` launches this bare into `viewModelScope`, so the throw landed
+     * uncaught on the main thread. Sanitising first removes the NaN rather than discovering it.
+     *
+     * And a save that could not be read is not overwritten. Burying an unreadable blob under a
+     * fresh one turns "this build cannot open your save" into "your creature is gone".
+     */
     suspend fun save(state: PetState) {
-        val encoded = json.encodeToString(PetState.serializer(), state)
+        if (unreadable != null) return
+        val encoded = runCatching {
+            json.encodeToString(PetState.serializer(), state.sanitised())
+        }.getOrNull() ?: return
         store.edit { it[KEY_STATE] = encoded }
+    }
+
+    /** True when there is a save on disk this build cannot read. The UI must not offer a new game. */
+    suspend fun hasUnreadableSave(): Boolean {
+        stateFlow.first()
+        return unreadable != null
     }
 
     suspend fun saveConfig(config: GameConfig) {

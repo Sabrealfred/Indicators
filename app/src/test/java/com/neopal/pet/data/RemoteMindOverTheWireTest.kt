@@ -14,6 +14,7 @@ import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.Species
 import com.neopal.pet.domain.ToolId
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -220,6 +221,28 @@ class RemoteMindOverTheWireTest {
             val tookMillis = (System.nanoTime() - started) / 1_000_000
             assertNull("a hung service must not hang the creature", reply)
             assertTrue("gave up after ${tookMillis}ms, which is not giving up", tookMillis < 4_000)
+        }
+    }
+
+    @Test
+    fun `a server that dribbles is abandoned, and does not latch the creature`() {
+        // The bug this pins: cancellation was registered with `invokeOnCompletion`, which fires
+        // when a job *completes* — and a job blocked in a socket read cannot complete, so the
+        // disconnect that would end the read was waiting on the read. The existing timeout test
+        // could not catch it, because a silent server trips the JDK's read timeout and never
+        // reaches the coroutine machinery at all. This one keeps writing, which resets that
+        // timeout forever, and is the realistic case: OpenRouter sends keep-alive lines.
+        StubMindServer { StubMindServer.Reply(dribbleGapMillis = 30L) }.use { server ->
+            val started = System.nanoTime()
+            val reply = runBlocking {
+                withTimeoutOrNull(9_000L) { clientFor(server, timeoutMillis = 900L).speak(brief, emptyList(), "hi") }
+            }
+            val tookMillis = (System.nanoTime() - started) / 1_000_000
+            assertNull("a dribbling service must not be waited on forever", reply)
+            assertTrue(
+                "gave up after ${tookMillis}ms against a 900ms budget, which is not giving up",
+                tookMillis < 8_000,
+            )
         }
     }
 

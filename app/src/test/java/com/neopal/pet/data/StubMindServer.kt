@@ -38,6 +38,15 @@ class StubMindServer(private val reply: (Received) -> Reply) : AutoCloseable {
         val extraHeaders: Map<String, String> = emptyMap(),
         /** Held this long before answering, to exercise the client's own timeout. */
         val delayMillis: Long = 0L,
+        /**
+         * Sends the headers, then one byte every [dribbleGapMillis] and never finishes.
+         *
+         * A *silent* server trips the JDK's own read timeout, which is why it could never catch
+         * the cancellation deadlock: the coroutine machinery is never reached. A server that
+         * keeps writing resets that timeout forever, and it is the realistic case — OpenRouter
+         * emits keep-alive comment lines during a slow request.
+         */
+        val dribbleGapMillis: Long = 0L,
     )
 
     private val socket = ServerSocket(0)
@@ -97,6 +106,21 @@ class StubMindServer(private val reply: (Received) -> Reply) : AutoCloseable {
                     val answer = reply(request)
                     if (answer.delayMillis > 0) Thread.sleep(answer.delayMillis)
 
+                    if (answer.dribbleGapMillis > 0) {
+                        // Content-Length promises far more than will ever arrive, so the client
+                        // stays in `read` while bytes keep trickling and no timeout fires.
+                        val head = "HTTP/1.1 200 X\r\nContent-Type: application/json\r\n" +
+                            "Content-Length: 1000000\r\n\r\n"
+                        val out = client.getOutputStream()
+                        out.write(head.toByteArray(Charsets.UTF_8))
+                        out.flush()
+                        while (!socket.isClosed) {
+                            out.write(' '.code)
+                            out.flush()
+                            Thread.sleep(answer.dribbleGapMillis)
+                        }
+                        return@use
+                    }
                     val replyBytes = answer.body.toByteArray(Charsets.UTF_8)
                     val replyHead = buildString {
                         append("HTTP/1.1 ${answer.status} X\r\n")

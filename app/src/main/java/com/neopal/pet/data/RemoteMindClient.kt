@@ -20,9 +20,7 @@ import com.neopal.pet.domain.RunRecord
 import com.neopal.pet.domain.ToolId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.DisposableHandle
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
@@ -62,7 +60,15 @@ import kotlin.coroutines.coroutineContext
  */
 class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvider {
 
-    override val isReady: Boolean get() = configProvider().usable
+    /**
+     * Asked before every call, and it has to agree with [MindWire.routeOf] or it is a liar.
+     *
+     * `usable` only asks whether a key *or* a proxy is set; the key route additionally needs a
+     * base URL, and that field is a free text box a player can empty in one gesture. When they
+     * did, this said yes, `routeOf` said no, no socket was ever opened, and the settings screen
+     * went on reporting "Your own key" while the creature was permanently mute.
+     */
+    override val isReady: Boolean get() = MindWire.routeOf(configProvider()) != null
 
     /**
      * The creature answers, in its own voice.
@@ -185,65 +191,93 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
         val route = MindWire.routeOf(config) ?: return null
         val body = MindWire.requestBody(config, messages, role)
         val budget = config.timeoutMillis.coerceIn(MindWire.MIN_TIMEOUT_MILLIS, MindWire.MAX_TIMEOUT_MILLIS)
-        val raw = withTimeoutOrNull(budget) {
-            withContext(Dispatchers.IO) { post(route, body, config.timeoutMillis) }
-        } ?: return null
-        return MindWire.extractContent(raw)
-    }
-
-    private suspend fun post(route: MindWire.Route, body: String, timeoutMillis: Long): String? {
-        val timeout = timeoutMillis.coerceIn(MindWire.MIN_TIMEOUT_MILLIS, MindWire.MAX_TIMEOUT_MILLIS).toInt()
-        var connection: HttpURLConnection? = null
-        // A blocked socket read does not notice a cancelled coroutine, so cancellation is wired
-        // to the one thing that does interrupt it: closing the connection underneath the read.
-        var onCancel: DisposableHandle? = null
-        return try {
-            val open = URL(route.endpoint).openConnection()
-            val http = open as? HttpURLConnection ?: return null
-            connection = http
-            onCancel = coroutineContext[Job]?.invokeOnCompletion { runCatching { http.disconnect() } }
-
-            http.requestMethod = "POST"
-            http.connectTimeout = timeout
-            http.readTimeout = timeout
-            http.doOutput = true
-            // Redirects are refused rather than followed, because following one would re-send the
-            // player's key to whatever host the first one nominated.
-            http.instanceFollowRedirects = false
-            http.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-            http.setRequestProperty("Accept", "application/json")
-            // Sent only as a header, never as part of any prompt or body, and never logged.
-            route.bearer?.let { http.setRequestProperty("Authorization", "Bearer $it") }
-            // OpenRouter attributes free-tier traffic by these and rejects some requests without
-            // them. They name the app and nothing about the player.
-            http.setRequestProperty("HTTP-Referer", MindWire.APP_URL)
-            http.setRequestProperty("X-Title", MindWire.APP_NAME)
-
-            http.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-
-            val code = http.responseCode
-            if (code !in 200..299) {
-                // The error body is drained and dropped rather than surfaced. It is written by a
-                // service we do not control, it can echo the request, and anything returned here
-                // could end up on the player's screen.
-                runCatching { http.errorStream?.use { it.readBytes() } }
-                return null
+        // The parse is inside the timeout and off the main thread, and both matter. `extractJson`
+        // is a brace matcher that restarts its scan at every failed opener, so it is quadratic in
+        // the number of openers: a reply that is 131,072 open braces measured at 8.7 seconds, and
+        // it used to run on the caller's dispatcher, which for all four callers is the main
+        // thread. That is an ANR from one hostile reply. Under the timeout it is bounded; off the
+        // main thread it cannot freeze the app even while it is bounded.
+        return withTimeoutOrNull(budget) {
+            withContext(Dispatchers.IO) {
+                post(route, body, config.timeoutMillis)?.let { MindWire.extractContent(it) }
             }
-            val text = http.inputStream.use { readCapped(it) }
-            coroutineContext.ensureActive()
-            text
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (ignored: Throwable) {
-            // Deliberately total. Every distinction this could draw — unknown host, refused
-            // connection, bad certificate, malformed URL the player typed into settings — leads
-            // to the same place: the local brain answers and the game carries on.
-            null
-        } finally {
-            onCancel?.dispose()
-            runCatching { connection?.disconnect() }
         }
     }
+
+    /**
+     * One request, and a cancellation that can actually reach it.
+     *
+     * `suspendCancellableCoroutine` rather than a completion handler, because that is the only
+     * hook that runs *while* the job is being cancelled. The previous version registered
+     * `invokeOnCompletion`, which fires when a job completes — and a job blocked in a socket read
+     * cannot complete, so the disconnect that would have ended the read was waiting on the read.
+     * A deadlock by construction, and the comment sitting over it claimed the opposite.
+     *
+     * The failure needs a server that dribbles rather than one that goes silent, which is why the
+     * existing timeout test never caught it: a silent server trips the JDK's own read timeout and
+     * never exercises the coroutine machinery at all. Dribbling is not exotic — OpenRouter emits
+     * keep-alive comment lines during a slow request. Measured symptom: a request still running
+     * twenty-five seconds into a 1.5-second budget, `thinking` latched on for the rest of the
+     * process, and the remote brain silently off with the local one covering for it.
+     *
+     * Called from `Dispatchers.IO`, so blocking inside the block is deliberate.
+     */
+    private suspend fun post(route: MindWire.Route, body: String, timeoutMillis: Long): String? =
+        suspendCancellableCoroutine { continuation ->
+            val timeout = timeoutMillis.coerceIn(MindWire.MIN_TIMEOUT_MILLIS, MindWire.MAX_TIMEOUT_MILLIS).toInt()
+            var connection: HttpURLConnection? = null
+            try {
+                val open = URL(route.endpoint).openConnection()
+                val http = open as? HttpURLConnection
+                if (http == null) {
+                    continuation.resume(null) { _, _, _ -> }
+                    return@suspendCancellableCoroutine
+                }
+                connection = http
+                // Closing the connection is the one thing that ends a blocked read. Registered
+                // before the first byte moves, so there is no window where a cancel is dropped.
+                continuation.invokeOnCancellation { runCatching { http.disconnect() } }
+
+                http.requestMethod = "POST"
+                http.connectTimeout = timeout
+                http.readTimeout = timeout
+                http.doOutput = true
+                // Redirects are refused rather than followed, because following one would re-send
+                // the player's key to whatever host the first one nominated.
+                http.instanceFollowRedirects = false
+                http.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                http.setRequestProperty("Accept", "application/json")
+                // Sent only as a header, never as part of any prompt or body, and never logged.
+                route.bearer?.let { http.setRequestProperty("Authorization", "Bearer $it") }
+                // OpenRouter attributes free-tier traffic by these and rejects some requests
+                // without them. They name the app and nothing about the player.
+                http.setRequestProperty("HTTP-Referer", MindWire.APP_URL)
+                http.setRequestProperty("X-Title", MindWire.APP_NAME)
+
+                http.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+
+                val code = http.responseCode
+                val answer = if (code !in 200..299) {
+                    // The error body is drained and dropped rather than surfaced. It is written
+                    // by a service we do not control, it can echo the request, and anything
+                    // returned here could end up on the player's screen.
+                    runCatching { http.errorStream?.use { it.readBytes() } }
+                    null
+                } else {
+                    http.inputStream.use { readCapped(it) }
+                }
+                continuation.resume(answer) { _, _, _ -> }
+            } catch (ignored: Throwable) {
+                // Deliberately total. Every distinction this could draw — unknown host, refused
+                // connection, bad certificate, malformed URL the player typed into settings, or
+                // the stream being closed out from under us by a cancellation — leads to the same
+                // place: the local brain answers and the game carries on. Resuming after a cancel
+                // is a no-op, so the cancelled case needs no special handling here.
+                runCatching { continuation.resume(null) { _, _, _ -> } }
+            } finally {
+                runCatching { connection?.disconnect() }
+            }
+        }
 
     /**
      * Reads at most [MindWire.MAX_RESPONSE_CHARS] and abandons the rest.
@@ -739,7 +773,7 @@ internal object MindWire {
         // A pick with no explanation still stands; the option's own wording is a true account of
         // why it was on the list, and a decision log with a blank line in it is worse than one
         // that quietly falls back to the local phrasing.
-        val reason = obj.text("reason")?.trim()?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() }
+        val reason = obj.text("reason")?.let { flatten(it) }?.take(MAX_REASON_CHARS)?.takeIf { it.isNotEmpty() }
             ?: option.reason
         return MindChoice(index = index, reason = reason)
     }
@@ -764,7 +798,7 @@ internal object MindWire {
             val entry = element as? JsonObject ?: continue
             val name = entry.text("kind")?.trim() ?: continue
             val kind = LessonKind.entries.firstOrNull { it.name == name } ?: continue
-            val text = entry.text("text") ?: entry.text("lesson") ?: continue
+            val text = (entry.text("text") ?: entry.text("lesson"))?.let { flatten(it) } ?: continue
             val strength = (entry["strength"] as? JsonPrimitive)?.floatOrNull ?: DEFAULT_STRENGTH
             val lesson = Lineage.sanitise(
                 Lesson(kind = kind, text = text, strength = strength, fromGeneration = generation),
@@ -804,7 +838,7 @@ internal object MindWire {
             // A step with no stated reason still stands, and it borrows the goal's words. The
             // reason is shown to the player as the creature's own account of itself, and "because
             // of what I am trying to do" is true, in voice, and better than a blank row.
-            val why = (entry.text("why") ?: entry.text("reason"))?.trim()?.takeIf { it.isNotEmpty() } ?: goal
+            val why = (entry.text("why") ?: entry.text("reason"))?.let { flatten(it) }?.takeIf { it.isNotEmpty() } ?: goal
             steps += PlanStep(kind = kind, why = why)
         }
         if (steps.isEmpty()) return null
@@ -844,6 +878,20 @@ internal object MindWire {
         }
         return null
     }
+
+    /**
+     * Flattens a string the model wrote before it is stored.
+     *
+     * Everything from a model is untrusted, and these strings do not merely reach the screen —
+     * `Decision.reason` and `Lesson.text` are written back into a *later* prompt as plain lines
+     * of a bulleted list. A reason containing a newline can therefore forge a line of the
+     * harness's own scaffolding, indistinguishable from the real ones, and carry an instruction
+     * across turns. Collapsing whitespace removes the only tool it has to do that, and it also
+     * keeps a reason to the one line the decision log is laid out for.
+     */
+    fun flatten(raw: String): String = raw.replace(WHITESPACE, " ").trim()
+
+    private val WHITESPACE = Regex("\\s+")
 
     /** Drops fence markers so the scanner is not distracted by the language tag. */
     private fun stripFences(raw: String): String = raw.replace(FENCE, " ")
