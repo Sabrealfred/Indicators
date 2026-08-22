@@ -11,15 +11,23 @@ import com.neopal.pet.audio.Sfx
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.ActionResult
+import com.neopal.pet.domain.Autonomy
+import com.neopal.pet.domain.Brain
 import com.neopal.pet.domain.CareActions
+import com.neopal.pet.domain.Colony
+import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
+import com.neopal.pet.domain.Learning
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
 import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.Pal
+import com.neopal.pet.domain.Relation
 import com.neopal.pet.domain.Simulation
+import com.neopal.pet.domain.Skill
 import com.neopal.pet.domain.Species
 import com.neopal.pet.domain.StatDelta
 import com.neopal.pet.domain.statDeltas
@@ -251,6 +259,108 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         showToast("$label complete — +${reward.coins} coins")
         handleEvents(events, offline = false)
         persist(updated)
+    }
+
+    // ---------------------------------------------------------------- the autonomous half
+
+    /**
+     * Hands the creature more or less of its own day.
+     *
+     * Not a [CareActions] action: it changes nothing about the pet, only about who is allowed to
+     * decide for it. Persisted immediately, because a player who sets this and closes the app has
+     * made exactly the kind of choice that must survive being closed.
+     */
+    fun setAutonomy(autonomy: Autonomy) {
+        val pet = _ui.value.pet ?: return
+        if (pet.autonomy == autonomy) return
+        val updated = pet.copy(
+            autonomy = autonomy,
+            // Dropping to a level that no longer permits what it is doing would otherwise leave
+            // the pet stuck mid-activity with nothing able to end it.
+            activity = if (autonomy == Autonomy.OFF) null else pet.activity,
+        )
+        play(Sfx.CONFIRM)
+        _ui.update { it.copy(pet = updated) }
+        showToast(autonomy.description)
+        persist(updated, immediate = true)
+    }
+
+    /** What the brain is weighing right now, winners and blocked options alike. */
+    fun considerations(): List<Consideration> =
+        _ui.value.pet?.let { Brain.considerations(it, _ui.value.config) } ?: emptyList()
+
+    /** The skill the pet is working towards, and how far along it is. */
+    fun studyFraction(): Float = _ui.value.pet?.let { Learning.studyFraction(it) } ?: 0f
+
+    /** Why [skill] is out of reach, or null when it is not. */
+    fun skillBlocker(skill: Skill): String? =
+        _ui.value.pet?.let { Learning.whyBlocked(it, skill) }
+
+    /**
+     * Sitting down with the pet for one lesson. This one *is* the player doing something to the
+     * creature — it spends the pet's energy and pays bond — so it runs through the same path as
+     * feeding and shows the same stat deltas.
+     */
+    fun teach() {
+        val pet = _ui.value.pet ?: return
+        Learning.teachBlockedReason(pet)?.let {
+            play(Sfx.DENY)
+            showToast(it)
+            return
+        }
+        val events = mutableListOf<GameEvent>()
+        val updated = Learning.teach(pet, events)
+        play(Sfx.CONFIRM)
+        _ui.update {
+            it.copy(
+                pet = updated,
+                animation = PetAnimation.HAPPY,
+                animationId = it.animationId + 1,
+                deltas = statDeltas(pet, updated),
+            )
+        }
+        handleEvents(events, offline = false)
+        persist(updated)
+    }
+
+    /** Why the pet and [palId] cannot pair off, phrased for the player, or null when they can. */
+    fun pairingBlocker(palId: String): String? =
+        _ui.value.pet?.let { Colony.pairingBlocker(it, palId) }
+
+    /** Puts the pet and [palId] together. Refused, with a reason, when the pairing is not allowed. */
+    fun pair(palId: String) {
+        val pet = _ui.value.pet ?: return
+        Colony.pairingBlocker(pet, palId)?.let {
+            play(Sfx.DENY)
+            showToast(it)
+            return
+        }
+        val events = mutableListOf<GameEvent>()
+        // Seeded from the save rather than the clock, so the child a player is shown in the
+        // preview is the child they get.
+        val updated = Colony.pair(pet, palId, _ui.value.config, kotlin.random.Random(pet.rngSeed), events)
+        _ui.update { it.copy(pet = updated) }
+        handleEvents(events, offline = false)
+        persist(updated, immediate = true)
+    }
+
+    /**
+     * Everyone the pet knows, family first and then the closest.
+     *
+     * Sorted here rather than in the domain because this is a presentation order, not a fact
+     * about the world: the colony keeps its own list stable so a visitor never jumps around the
+     * screen, and reordering it there would undo that for everybody.
+     */
+    fun pals(): List<Pal> {
+        fun rank(pal: Pal): Int = when (pal.relation) {
+            Relation.OFFSPRING -> 0
+            Relation.PARENT -> 1
+            Relation.MATE -> 2
+            Relation.FRIEND -> 3
+            Relation.VISITOR -> 4
+        }
+        return _ui.value.pet?.pals.orEmpty()
+            .sortedWith(compareBy<Pal> { rank(it) }.thenByDescending { it.affinity })
     }
 
     /** Runs one pure action against the current state and folds the result into the UI. */
