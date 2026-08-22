@@ -31,6 +31,7 @@ import com.neopal.pet.ui.screens.NewGameScreen
 import com.neopal.pet.ui.screens.SettingsScreen
 import com.neopal.pet.ui.screens.ShopScreen
 import com.neopal.pet.ui.screens.StatsScreen
+import com.neopal.pet.ui.screens.TalkScreen
 import com.neopal.pet.ui.games.CatchGameScreen
 import com.neopal.pet.ui.games.MemoryGameScreen
 import com.neopal.pet.ui.games.RhythmGameScreen
@@ -51,6 +52,7 @@ object Routes {
     const val MISSIONS = "missions"
     const val MIND = "mind"
     const val COLONY = "colony"
+    const val TALK = "talk"
     const val SETTINGS = "settings"
     const val MEMORIAL = "memorial"
 }
@@ -129,6 +131,12 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
             composable(Routes.MISSIONS) { MissionsScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.MIND) { MindScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.COLONY) { ColonyScreen(viewModel) { navController.popBackStack() } }
+            composable(Routes.TALK) {
+                TalkScreen(
+                    viewModel = viewModel,
+                    onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                ) { navController.popBackStack() }
+            }
             composable(Routes.SETTINGS) {
                 SettingsScreen(
                     viewModel = viewModel,

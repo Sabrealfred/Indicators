@@ -66,6 +66,14 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         /** Filled after a long absence so the player learns what they missed. */
         val offlineReport: OfflineReport? = null,
         val evolutionSplash: Boolean = false,
+        /**
+         * True while the creature is composing a reply.
+         *
+         * Lives here rather than as a field on the view model because Compose only recomposes on
+         * state it can observe: a plain `var` flips, the screen never hears about it, and the
+         * thinking line appears whenever the next unrelated emission happens to arrive.
+         */
+        val thinking: Boolean = false,
     )
 
     /** What happened while the app was closed, in plain sentences. */
@@ -82,8 +90,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      */
     private var mind: MindProvider = NoMind
 
-    /** True while a reply is in flight. One at a time; a second send would race the first. */
-    private var thinking = false
+    /** One reply at a time; a second send would race the first. */
     private var chatJob: Job? = null
 
     private val _ui = MutableStateFlow(UiState())
@@ -385,7 +392,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     // ---------------------------------------------------------------- talking to it
 
     /** True while the creature is composing a reply. */
-    fun isThinking(): Boolean = thinking
+    fun isThinking(): Boolean = _ui.value.thinking
 
     /**
      * Says something to the creature.
@@ -397,7 +404,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      */
     fun say(message: String) {
         val text = message.trim().take(MAX_MESSAGE_CHARS)
-        if (text.isEmpty() || thinking) return
+        if (text.isEmpty() || _ui.value.thinking) return
         val pet = _ui.value.pet ?: return
         val config = _ui.value.config
 
@@ -414,12 +421,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        thinking = true
+        _ui.update { it.copy(thinking = true) }
         chatJob?.cancel()
         chatJob = viewModelScope.launch {
             val brief = PetBrief.of(asked, config)
             val reply = mind.speak(brief, asked.chat, text)
-            thinking = false
+            _ui.update { it.copy(thinking = false) }
             // Read the pet again rather than closing over `asked`: the simulation ticks once a
             // second and the state that went into the request is stale by the time it returns.
             val now = _ui.value.pet ?: return@launch
@@ -450,7 +457,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val pet = _ui.value.pet ?: return
         if (pet.chat.isEmpty()) return
         chatJob?.cancel()
-        thinking = false
+        _ui.update { it.copy(thinking = false) }
         val cleared = pet.copy(chat = emptyList())
         play(Sfx.BACK)
         _ui.update { it.copy(pet = cleared) }

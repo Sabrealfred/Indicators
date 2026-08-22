@@ -276,7 +276,12 @@ internal object MindWire {
 
     /** Identifies the app to the endpoint. Carries nothing about the player. */
     const val APP_NAME = "NeoPal"
-    const val APP_URL = "https://github.com/neopal"
+    /**
+     * Sent as the referer so a shared endpoint can attribute traffic. It has to be a real address:
+     * an invented one is a claim about a project that does not exist, made to a third party, on
+     * every single request.
+     */
+    const val APP_URL = "https://github.com/Sabrealfred/Indicators"
 
     /** The path every endpoint here speaks, appended when the player gave only a base. */
     private const val CHAT_PATH = "/chat/completions"

@@ -31,6 +31,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.CleaningServices
@@ -246,6 +247,9 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         // The badge is the pet asking to be taught: an autonomous creature that wants something
         // it never learned how to do is the one state this screen cannot show on its own.
         HomeAction("Mind", Icons.Filled.Psychology, NeoColors.NeonCyan, badge = if (wantsTeaching) 1 else 0) { onOpen(Routes.MIND) },
+        // No badge: an unread count would be a lie, since the creature only ever speaks when
+        // spoken to. It never starts a conversation on its own.
+        HomeAction("Talk", Icons.AutoMirrored.Filled.Chat, NeoColors.StatBond, enabled = !pet.isDead) { onOpen(Routes.TALK) },
         HomeAction("Colony", Icons.Filled.Groups, NeoColors.NeonGreen, badge = pet.presentPals.size) { onOpen(Routes.COLONY) },
         HomeAction("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },
         HomeAction("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow) { onOpen(Routes.ALBUM) },
