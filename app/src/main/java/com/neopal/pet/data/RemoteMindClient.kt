@@ -144,7 +144,8 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
     private suspend fun request(config: MindConfig, messages: List<Message>): String? {
         val route = MindWire.routeOf(config) ?: return null
         val body = MindWire.requestBody(config, messages)
-        val raw = withTimeoutOrNull(config.timeoutMillis.coerceAtLeast(MindWire.MIN_TIMEOUT_MILLIS)) {
+        val budget = config.timeoutMillis.coerceIn(MindWire.MIN_TIMEOUT_MILLIS, MindWire.MAX_TIMEOUT_MILLIS)
+        val raw = withTimeoutOrNull(budget) {
             withContext(Dispatchers.IO) { post(route, body, config.timeoutMillis) }
         } ?: return null
         return MindWire.extractContent(raw)
@@ -166,6 +167,8 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
             http.connectTimeout = timeout
             http.readTimeout = timeout
             http.doOutput = true
+            // Redirects are refused rather than followed, because following one would re-send the
+            // player's key to whatever host the first one nominated.
             http.instanceFollowRedirects = false
             http.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             http.setRequestProperty("Accept", "application/json")
