@@ -107,7 +107,7 @@ iguales y conviene no tocarlas en bloque.
 | 4.2.2 | Sólo herramientas de **lectura** | Herramientas que **actúan**, cada una por la misma revalidación que `adopt`. Más capaz sin debilitar nada | Contrato de tool-calling |
 | 4.2.3 | ~~Cadencia fija~~ | ✅ **hecho** — la cadencia escala con el intelecto, en banda estrecha (0.6x–1.5x) para que un tier gratis dure el día |
 | 4.2.4 | ~~Nunca aprende de sí misma~~ | ✅ **hecho** — cada plan se compara contra el cuidado con el que empezó; una mejora clara deja lección, topeada por debajo de lo que enseña una muerte |
-| 4.2.5 | Nunca inicia conversación | Que hable sola cuando pasa algo que le importa | `TalkScreen` + notificaciones |
+| 4.2.5 | ~~Nunca inicia conversación~~ | ✅ **hecho** — habla sola sólo en primeras veces y puntos de quiebre (crecer, aprender una skill, hacer un amigo, emparejarse, una cría, curarse, sacar una lección propia). Nada de comidas: una criatura que comenta cada plato es una notificación |
 | 4.2.6 | Un solo modelo para todo | Modelo chico para decidir, grande para conversar y planificar | `MindConfig` |
 
 ---
@@ -165,6 +165,22 @@ Los tres viven en `PixelRenderer.kt`: **un solo frente**.
 | 6.4 | `stance` 0.30–0.55 se lee como un ocho | El rango menos lindo del barrido |
 | 6.5 | Log de decisiones no es lazy (hasta 40 filas) | Acotado hoy; si el tope crece, `LazyColumn` |
 | 6.6 | Ruta de red nunca ejecutada | Sin SDK acá; `post()`, timeouts y cancelación son razonados, no corridos |
+
+### 6.7 El bug que 6.6 dejó pasar — anotado porque la forma se repite
+
+Los tres throttles del cerebro remoto arrancaban en `Long.MIN_VALUE` y leían
+`pet.ageSeconds - lastX < gap`. Esa resta se desborda para cualquier edad y vuelve a un negativo
+grande, así que el gap nunca se cumplía: `maybeReconsider` y `maybePlan` **jamás se llamaron**.
+
+Lo que lo hace digno de anotar no es la aritmética sino que **no se ve desde afuera**. No hay
+crash, no hay log, ajustes reporta una ruta, el cliente es alcanzable — y el cerebro local cubre
+cada llamada omitida perfectamente. El único síntoma es una criatura que decide todo sola, que es
+exactamente como se ve la función apagada.
+
+Misma forma que el `0L` de `Errands.sanitise`: **un fallo silencioso que el camino local disimula**.
+Cada vez que lo remoto es un extra sobre algo que ya funciona, apagarlo por accidente no se nota.
+Regla que sale de acá: todo lo que decida *no* llamar a la red merece o un test o un contador
+visible, porque su falla se parece demasiado a su éxito.
 
 ---
 
