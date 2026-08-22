@@ -10,6 +10,7 @@ import com.neopal.pet.domain.LessonKind
 import com.neopal.pet.domain.Lineage
 import com.neopal.pet.domain.MindChoice
 import com.neopal.pet.domain.MindConfig
+import com.neopal.pet.domain.MindRole
 import com.neopal.pet.domain.MindProvider
 import com.neopal.pet.domain.MindReply
 import com.neopal.pet.domain.PetBrief
@@ -87,7 +88,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
         }
         messages += Message(ROLE_USER, message.trim().take(MindWire.MAX_INBOUND_CHARS))
 
-        val content = request(config, messages) ?: return null
+        val content = request(config, MindRole.CONVERSE, messages) ?: return null
         return MindWire.interpretReply(content)
     }
 
@@ -109,7 +110,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
             Message(ROLE_SYSTEM, MindWire.chooseSystemPrompt(brief)),
             Message(ROLE_USER, MindWire.chooseUserPrompt(brief, options)),
         )
-        val content = request(config, messages) ?: return null
+        val content = request(config, MindRole.DECIDE, messages) ?: return null
         return MindWire.interpretChoice(content, options)
     }
 
@@ -132,7 +133,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
             Message(ROLE_SYSTEM, MindWire.distilSystemPrompt()),
             Message(ROLE_USER, MindWire.distilUserPrompt(brief, record, decisions)),
         )
-        val content = request(config, messages) ?: return emptyList()
+        val content = request(config, MindRole.DISTIL, messages) ?: return emptyList()
         return MindWire.interpretLessons(content, brief.generation)
     }
 
@@ -166,7 +167,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
             Message(ROLE_SYSTEM, MindWire.planSystemPrompt(brief)),
             Message(ROLE_USER, MindWire.planUserPrompt(brief, tools, options)),
         )
-        val content = request(config, messages) ?: return null
+        val content = request(config, MindRole.PLAN, messages) ?: return null
         return MindWire.interpretPlan(content)
     }
 
@@ -180,9 +181,9 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
      * [MindConfig.timeoutMillis] promises the player — a server that dribbles a byte every second
      * would satisfy a read timeout forever.
      */
-    private suspend fun request(config: MindConfig, messages: List<Message>): String? {
+    private suspend fun request(config: MindConfig, role: MindRole, messages: List<Message>): String? {
         val route = MindWire.routeOf(config) ?: return null
-        val body = MindWire.requestBody(config, messages)
+        val body = MindWire.requestBody(config, messages, role)
         val budget = config.timeoutMillis.coerceIn(MindWire.MIN_TIMEOUT_MILLIS, MindWire.MAX_TIMEOUT_MILLIS)
         val raw = withTimeoutOrNull(budget) {
             withContext(Dispatchers.IO) { post(route, body, config.timeoutMillis) }
@@ -379,10 +380,14 @@ internal object MindWire {
      *
      * The key is never in here. It travels as a header and only as a header.
      */
-    fun requestBody(config: MindConfig, messages: List<RemoteMindClient.Message>): String {
+    fun requestBody(
+        config: MindConfig,
+        messages: List<RemoteMindClient.Message>,
+        role: MindRole = MindRole.CONVERSE,
+    ): String {
         val payload = buildJsonObject {
-            put("model", config.model)
-            put("max_tokens", config.maxTokens.coerceIn(32, 2048))
+            put("model", config.modelFor(role))
+            put("max_tokens", config.maxTokensFor(role).coerceIn(32, 2048))
             // Warm enough that the same state does not produce the same sentence twice, cool
             // enough that it keeps answering the question it was asked.
             put("temperature", 0.8)

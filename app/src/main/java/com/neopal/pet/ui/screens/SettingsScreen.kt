@@ -280,6 +280,28 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
 
                 Spacer(Modifier.height(pixelUnits(3)))
                 PixelTextWell(
+                    value = config.mind.quickModel,
+                    onValueChange = { v -> viewModel.updateMind { it.copy(quickModel = v.trim()) } },
+                    label = "Quick model (optional)",
+                    placeholder = "A smaller model, for deciding only",
+                    accent = NeoAccents.gold,
+                )
+                Spacer(Modifier.height(pixelUnits(1)))
+                Text(
+                    if (config.mind.splitsModels) {
+                        "Deciding goes to ${config.mind.quickModel}; talking, planning and " +
+                            "remembering go to ${config.mind.model}."
+                    } else {
+                        "Deciding runs many times an hour and only has to pick from a list the " +
+                            "game already checked. Sending it somewhere small leaves the quota " +
+                            "for talking and planning, which is where a big model shows."
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                Spacer(Modifier.height(pixelUnits(3)))
+                PixelTextWell(
                     value = config.mind.proxyUrl,
                     onValueChange = { v -> viewModel.updateMind { it.copy(proxyUrl = v.trim()) } },
                     label = "Shared service (optional)",

@@ -6,6 +6,7 @@ import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.LessonKind
 import com.neopal.pet.domain.Lineage
 import com.neopal.pet.domain.MindConfig
+import com.neopal.pet.domain.MindRole
 import com.neopal.pet.domain.PetBrief
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.LifeStage
@@ -105,6 +106,56 @@ class RemoteMindClientTest {
         assertFalse(body.contains("sk-secret"))
         assertFalse("nor should it ever be phrased as a header inside the body",
             body.contains("Authorization"))
+    }
+
+    // ---- a model per job -----------------------------------------------------------------
+
+    @Test
+    fun `one model means every job goes to it`() {
+        val messages = listOf(RemoteMindClient.Message("user", "hello"))
+        MindRole.entries.forEach { role ->
+            assertTrue(
+                "$role should use the only model configured",
+                MindWire.requestBody(keyedConfig, messages, role).contains("some/model:free"),
+            )
+        }
+    }
+
+    @Test
+    fun `a quick model takes the deciding and nothing else`() {
+        val split = keyedConfig.copy(quickModel = "tiny/model:free")
+        val messages = listOf(RemoteMindClient.Message("user", "hello"))
+
+        assertTrue(
+            "deciding runs many times an hour; that is the one to make cheap",
+            MindWire.requestBody(split, messages, MindRole.DECIDE).contains("tiny/model:free"),
+        )
+        listOf(MindRole.CONVERSE, MindRole.PLAN, MindRole.DISTIL).forEach { role ->
+            val body = MindWire.requestBody(split, messages, role)
+            assertTrue("$role is where a big model earns its keep", body.contains("some/model:free"))
+            assertFalse("$role must not be quietly downgraded", body.contains("tiny/model:free"))
+        }
+    }
+
+    @Test
+    fun `deciding is given a smaller reply budget than talking`() {
+        assertTrue(keyedConfig.maxTokensFor(MindRole.DECIDE) < keyedConfig.maxTokensFor(MindRole.CONVERSE))
+    }
+
+    @Test
+    fun `a tiny configured budget is never divided down to unusable`() {
+        // The share is a fraction, and a fraction of a small number is a reply cut off mid-word.
+        val mean = keyedConfig.copy(maxTokens = 40)
+        assertTrue(mean.maxTokensFor(MindRole.DECIDE) >= MindConfig.MIN_TOKENS)
+        MindRole.entries.forEach { assertTrue(mean.maxTokensFor(it) > 0) }
+    }
+
+    @Test
+    fun `naming the same model twice is not a split`() {
+        assertFalse("the settings screen should not claim a split that does nothing",
+            keyedConfig.copy(quickModel = keyedConfig.model).splitsModels)
+        assertFalse(keyedConfig.splitsModels)
+        assertTrue(keyedConfig.copy(quickModel = "tiny/model:free").splitsModels)
     }
 
     @Test

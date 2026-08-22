@@ -176,6 +176,32 @@ object NoMind : MindProvider {
 }
 
 /**
+ * The four jobs a remote mind is asked to do.
+ *
+ * They exist as a type because they are not alike, and pretending they were is what made a single
+ * model and a single token budget look reasonable. Choosing an action runs many times an hour and
+ * needs one number and a sentence back; conversation runs when the player feels like it and is
+ * the only place personality can show; planning happens rarely and is the one that actually needs
+ * to reason; distilling happens once in a creature's life. Charging all four the same rate means
+ * either the frequent job is far more expensive than it needs to be, or the rare and difficult
+ * ones are starved to pay for it.
+ */
+@Serializable
+enum class MindRole(val displayName: String) {
+    /** Answering the player. */
+    CONVERSE("Talking"),
+
+    /** Picking from a list the game has already validated. Runs most often, needs least. */
+    DECIDE("Deciding"),
+
+    /** Setting itself an errand after looking around. */
+    PLAN("Planning"),
+
+    /** Turning a finished life into lessons for the next one. Once per generation. */
+    DISTIL("Remembering"),
+}
+
+/**
  * Where the remote brain comes from.
  *
  * Two routes, deliberately. A hosted proxy means the feature works the moment the app is opened,
@@ -201,6 +227,17 @@ data class MindConfig(
     val apiKey: String = "",
     /** A free model by default, so the feature costs nothing to try. */
     val model: String = "meta-llama/llama-3.3-70b-instruct:free",
+    /**
+     * An optional second, smaller model for [MindRole.DECIDE]. Blank means use [model].
+     *
+     * Deciding is the job that runs many times an hour, and all it has to return is an index and
+     * a sentence — the hard part, working out which options are legal at all, has already been
+     * done locally before the request goes out. Spending a large model on that is spending the
+     * day's quota on the easiest question the creature ever asks, and the creature then has
+     * nothing left for the conversation or the plan, which are the two places a big model is
+     * actually worth having.
+     */
+    val quickModel: String = "",
     /** Let the model pick among the local brain's legal options. */
     val decidesActions: Boolean = true,
     /** Let the player talk to the creature. */
@@ -220,6 +257,27 @@ data class MindConfig(
     /** True when the feature should be attempted at all. */
     val usable: Boolean get() = enabled && hasRoute
 
+    /** Which model does this job. */
+    fun modelFor(role: MindRole): String = when (role) {
+        MindRole.DECIDE -> quickModel.ifBlank { model }
+        MindRole.CONVERSE, MindRole.PLAN, MindRole.DISTIL -> model
+    }
+
+    /**
+     * How long a reply this job is allowed, in tokens.
+     *
+     * Deciding gets a fraction of the budget because a long answer to "which of these, and why"
+     * is a worse answer — and because the ceiling is what stops a model that has started
+     * rambling from spending the rest of the day's quota on one request.
+     */
+    fun maxTokensFor(role: MindRole): Int = when (role) {
+        MindRole.DECIDE -> (maxTokens * DECIDE_TOKEN_SHARE).toInt().coerceAtLeast(MIN_TOKENS)
+        MindRole.CONVERSE, MindRole.PLAN, MindRole.DISTIL -> maxTokens
+    }
+
+    /** True when a job is being sent somewhere other than where the rest go. */
+    val splitsModels: Boolean get() = quickModel.isNotBlank() && quickModel != model
+
     /** Which route a call would take, for the settings screen to say so plainly. */
     val routeLabel: String
         get() = when {
@@ -228,4 +286,12 @@ data class MindConfig(
             proxyUrl.isNotBlank() -> "Shared service"
             else -> "No route set"
         }
+
+    companion object {
+        /** Fraction of the reply budget a decision gets. An index and one sentence needs little. */
+        const val DECIDE_TOKEN_SHARE = 0.45f
+
+        /** Floor, so a small configured budget cannot be divided down to nothing usable. */
+        const val MIN_TOKENS = 48
+    }
 }
