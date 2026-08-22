@@ -1,5 +1,6 @@
 package com.neopal.pet.domain
 
+import kotlin.math.abs
 import kotlin.random.Random
 
 /**
@@ -19,6 +20,15 @@ data class Consideration(
     val reason: String,
     /** Null when the pet could actually do it; otherwise the short reason it cannot. */
     val blockedBy: String?,
+    /**
+     * Which thing, when the kind alone does not say — the food to eat, the game to play.
+     *
+     * Two options of the same kind and different targets are genuinely different choices, so a
+     * mind picking between them has to be able to say *which*, and whatever executes the pick has
+     * to be told. Without this the index a model returns would be resolved back to the first
+     * option of that kind, and a creature asked for the cake would be handed the berry.
+     */
+    val target: String? = null,
 ) {
     val available: Boolean get() = blockedBy == null
 }
@@ -168,7 +178,9 @@ object Brain {
 
         for (i in ranked.indices) {
             val option = ranked[i].first
-            val runnerUp = ranked.getOrNull(i + 1)?.first?.kind
+            // Skipped past its own kind: "I nearly ate the berry instead" is not a road not
+            // taken, it is the same road. The runner-up is only interesting as another verb.
+            val runnerUp = ranked.drop(i + 1).firstOrNull { it.first.kind != option.kind }?.first?.kind
             // A discrete action can still be refused at the last moment — the pet is fuller than
             // it thought, the mess was already scooped. Fall through to the next best rather than
             // burning the turn, which is also what stops an empty pantry becoming a phantom meal.
@@ -199,11 +211,16 @@ object Brain {
         config: GameConfig,
         random: Random,
         events: MutableList<GameEvent>,
+        target: String? = null,
     ): PetState? {
         if (state.autonomy == Autonomy.OFF || !state.isMindAwake || state.isDead) return null
         if (state.isSleeping) return null
+        // A named target must still be there. This is the same re-check as the kind and it exists
+        // for the same reason: the answer describes a pantry that has had seconds to change, and
+        // silently substituting a different food would be the rules being applied to a decision
+        // nobody actually made. Refusing is right; the local brain then simply chooses.
         val option = options(state, config)
-            .firstOrNull { it.kind == kind && it.blockedBy == null }
+            .firstOrNull { it.kind == kind && it.blockedBy == null && (target == null || it.target == target) }
             ?: return null
         val spoken = reason.trim().take(MAX_ADOPTED_REASON_CHARS).ifBlank { option.reason }
         val runnerUp = options(state, config)
@@ -237,7 +254,7 @@ object Brain {
      */
     fun considerations(state: PetState, config: GameConfig): List<Consideration> =
         options(state, config)
-            .map { Consideration(it.kind, it.utility, it.reason, it.blockedBy) }
+            .map { Consideration(it.kind, it.utility, it.reason, it.blockedBy, it.target) }
             .sortedByDescending { it.utility }
 
     // ------------------------------------------------------------------ scoring
@@ -288,17 +305,29 @@ object Brain {
         // grazing constantly, which empties the pantry and the player's patience together.
         if (st.satiety < 82f) {
             val want = (hunger * hunger * (0.72f + 0.56f * g.appetite)).coerceIn(0f, 1f)
-            val food = bestFood(state, 100f - st.satiety)
-            if (food != null) {
-                out += Option(
-                    kind = ActivityKind.EAT,
-                    utility = want,
-                    durationSeconds = EAT_SECONDS,
-                    target = food.id,
-                    reason = "I was down to ${pct(st.satiety)} and there was a ${food.name} in the tin.",
-                    blockedBy = gate(state, Skill.SELF_FEED)
-                        ?: if (st.satiety >= 96f) "already full" else null,
-                )
+            val larder = foodChoices(state, 100f - st.satiety)
+            if (larder.isNotEmpty()) {
+                // Every food in reach is offered separately rather than one being picked here.
+                // That is the whole of "tools that act": a mind choosing by index among options
+                // the rules have already cleared can now say *which* thing, not merely which
+                // verb, and it gains that without a single new thing being taken on trust.
+                //
+                // It also gives the creature a taste of its own even with no model at all. The
+                // list is ordered by appeal, and appeal is not just which food fits the hole.
+                val blocked = gate(state, Skill.SELF_FEED)
+                    ?: if (st.satiety >= 96f) "already full" else null
+                larder.forEachIndexed { rank, food ->
+                    out += Option(
+                        kind = ActivityKind.EAT,
+                        // A narrow spread, so the ranking is real but every one of them still
+                        // plainly reads as "eat" against the other things it could be doing.
+                        utility = (want * (1f - rank * SECOND_HELPING_PENALTY)).coerceIn(0f, 1f),
+                        durationSeconds = EAT_SECONDS,
+                        target = food.id,
+                        reason = "I was down to ${pct(st.satiety)} and there was a ${food.name} in the tin.",
+                        blockedBy = blocked,
+                    )
+                }
             } else {
                 // Foraging is the pantry's understudy: slower, thinner, and only worth learning
                 // because the alternative is waiting for a keeper who is not coming.
@@ -496,12 +525,66 @@ object Brain {
      * Walks the catalog rather than the inventory map so the choice never depends on the order
      * keys happen to sit in a save file — a seeded run has to replay identically.
      */
-    private fun bestFood(state: PetState, deficit: Float): Item? =
+    /** How many foods the creature will hold in mind at once. More is a menu, not a decision. */
+    private const val MAX_FOOD_CHOICES = 3
+
+    /** How much each successive helping is discounted, so the ranking shows without dominating. */
+    private const val SECOND_HELPING_PENALTY = 0.06f
+
+    /** What is in reach, best first. */
+    private fun foodChoices(state: PetState, deficit: Float): List<Item> =
         ItemCatalog.foods
             .filter { (state.inventory[it.id] ?: 0) > 0 }
-            // Reward filling the hole, penalise overshooting it: an animal with one stew and a
-            // slightly empty stomach should reach for the berry.
-            .maxByOrNull { minOf(it.satiety, deficit) - 0.35f * (it.satiety - deficit).coerceAtLeast(0f) }
+            .sortedByDescending { appeal(it, deficit, state) }
+            .take(MAX_FOOD_CHOICES)
+
+    private fun bestFood(state: PetState, deficit: Float): Item? =
+        foodChoices(state, deficit).firstOrNull()
+
+    /**
+     * How much this creature wants this particular food, rather than how well it fits.
+     *
+     * Fit alone made every creature identical at the tin: the same arithmetic, the same answer,
+     * whatever it had been bred from. Appetite and the gourmand line now pull toward whatever is
+     * nicest rather than whatever is most sensible, which is the point of having either — and a
+     * small settled quirk means two creatures with the same genes still have different
+     * favourites, so "he always goes for the cake" is a thing a player can notice.
+     */
+    private fun appeal(item: Item, deficit: Float, state: PetState): Float {
+        // Reward filling the hole, penalise overshooting it: an animal with one stew and a
+        // slightly empty stomach should reach for the berry.
+        val fit = (minOf(item.satiety, deficit) - 0.35f * (item.satiety - deficit).coerceAtLeast(0f)) /
+            deficit.coerceAtLeast(1f)
+        val treat = (item.happiness / 40f).coerceIn(0f, 1f)
+        val sweetTooth = 0.75f * state.genome.appetite +
+            if (state.branch == EvolutionBranch.GOURMAND) 0.45f else 0f
+        // Hunger beats taste, but only while the hunger is real. A creature two thirds empty eats
+        // whatever fills it and there is nothing to discuss; a peckish one is exactly where a
+        // preference has room to show. Without this the fit term wins at every level and the
+        // genes are decoration — which is how the first version of this came out.
+        val indulgence = 0.30f + 0.95f * (1f - (deficit / 100f).coerceIn(0f, 1f))
+        return fit + indulgence * (treat * sweetTooth + FAVOURITE_WEIGHT * quirk(item, state))
+    }
+
+    /** How much of the choice is simply this creature's own taste. */
+    private const val FAVOURITE_WEIGHT = 0.22f
+
+    /**
+     * A settled number in 0..1 for this creature and this food.
+     *
+     * Arithmetic rather than a roll, because [options] is scored repeatedly for one decision and
+     * again for the screen that lists what the creature is weighing up. A favourite that changed
+     * between two reads would not be a favourite.
+     */
+    private fun quirk(item: Item, state: PetState): Float {
+        var h = item.id.hashCode().toLong() * 0x9E3779B9L +
+            (state.genome.hue * 1000f).toLong() * 0x85EBCA6BL +
+            state.generation * 0x27D4EB2FL
+        h = h xor (h ushr 29)
+        h *= -0x40A7B892E31B1A47L
+        h = h xor (h ushr 32)
+        return abs(h % 1_000).toFloat() / 1_000f
+    }
 
     private fun bestMedicine(state: PetState): Item? =
         ItemCatalog.ofKind(ItemKind.MEDICINE)

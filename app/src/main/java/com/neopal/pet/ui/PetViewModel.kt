@@ -191,9 +191,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
             reconsidering = false
             if (choice == null) return@launch
             val picked = options.getOrNull(choice.index) ?: return@launch
-            // Agreeing with the local brain is the common case and is not worth a second entry in
-            // the log; only a change of mind is.
-            if (picked.kind == pet.activity?.kind) return@launch
+            // Agreeing with the local brain is the common case and is not worth a second entry
+            // in the log; only a change of mind is. The target counts as part of the mind:
+            // reaching for the cake instead of the berry is a different decision, not the same
+            // one, and it is exactly the sort of difference worth showing the player.
+            val busy = pet.activity
+            if (picked.kind == busy?.kind && picked.target == busy.targetId) return@launch
             val now = _ui.value.pet ?: return@launch
             val adopted = mutableListOf<GameEvent>()
             val changed = Brain.adopt(
@@ -203,6 +206,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 config = _ui.value.config,
                 random = kotlin.random.Random(now.rngSeed),
                 events = adopted,
+                // Re-checked against the pantry as it is now, not as it was when the question
+                // went out. A target that has been eaten in the meantime refuses rather than
+                // silently becoming a different meal.
+                target = picked.target,
             ) ?: return@launch
             _ui.update { it.copy(pet = changed) }
             handleEvents(adopted, offline = false)
