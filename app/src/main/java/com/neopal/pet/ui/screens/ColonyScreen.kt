@@ -188,6 +188,7 @@ fun ColonyScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 NobodyYetPanel(pet)
             } else {
                 PalsPanel(
+                    pet = pet,
                     pals = pals,
                     here = here,
                     chosenId = chosen?.id,
@@ -221,6 +222,7 @@ fun ColonyScreen(viewModel: PetViewModel, onBack: () -> Unit) {
 /** Everyone the pet knows, family first, each at the shape it actually inherited. */
 @Composable
 private fun PalsPanel(
+    pet: PetState,
     pals: List<Pal>,
     here: Int,
     chosenId: String?,
@@ -230,7 +232,7 @@ private fun PalsPanel(
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = NeoAccents.cyan,
-        title = "Who ${if (pals.size == 1) "there is" else "there are"}",
+        title = "Who ${pet.name} knows",
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
@@ -262,6 +264,32 @@ private fun PalsPanel(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        // The second-commonest dead end after an empty list: a room full of visitors whose
+        // fondness never moves, because approaching one is the pet's own move and it is either
+        // not allowed to make it or has never been taught how. Said here rather than left for
+        // the player to infer from a meter that sits still.
+        val knowsHow = Skill.SOCIALISE in pet.skills
+        val allowed = pet.autonomy == Autonomy.FULL
+        if (pals.none { it.isFriend } && (!knowsHow || !allowed)) {
+            Spacer(Modifier.height(pixelUnits(2)))
+            if (!knowsHow) {
+                Condition(
+                    met = false,
+                    text = "Nobody's fondness will move until ${pet.name} has learned " +
+                        "${Skill.SOCIALISE.displayName.lowercase()}. Until then a visitor is " +
+                        "somebody it hides from.",
+                )
+            }
+            if (!allowed) {
+                Condition(
+                    met = false,
+                    text = "Going over to say hello is ${pet.name}'s own move, and on " +
+                        "${pet.autonomy.displayName} it is not allowed to make it. Set the day " +
+                        "to ${Autonomy.FULL.displayName} for it to approach anyone.",
+                )
+            }
+        }
     }
 }
 
@@ -302,21 +330,22 @@ private fun PalRow(
             .selectable(selected = chosen, role = Role.RadioButton, onClick = onChoose)
             // A chosen row is pressed into the panel rather than merely tinted: the shape says it
             // before the colour does, which is the only version that survives a colour-blind eye.
+            // The padding is paid whether or not the surface is drawn, so choosing a row does not
+            // shove every row under it down by two units.
             .then(
                 if (chosen) {
-                    Modifier
-                        .pixelSurface(
-                            fill = lerp(panel, accent, 0.16f),
-                            accent = accent,
-                            bevel = PixelBevel.PRESSED,
-                            borderUnits = 1,
-                            background = panel,
-                        )
-                        .padding(pixelUnits(2))
+                    Modifier.pixelSurface(
+                        fill = lerp(panel, accent, 0.16f),
+                        accent = accent,
+                        bevel = PixelBevel.PRESSED,
+                        borderUnits = 1,
+                        background = panel,
+                    )
                 } else {
                     Modifier
                 },
             )
+            .padding(pixelUnits(2))
             .semantics(mergeDescendants = true) { contentDescription = readOut },
     ) {
         Portrait(
