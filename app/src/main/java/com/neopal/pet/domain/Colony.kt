@@ -1,0 +1,649 @@
+package com.neopal.pet.domain
+
+import kotlin.random.Random
+
+/**
+ * The pet's family and social circle, laid out for a screen to draw.
+ *
+ * Assembled on demand rather than stored, because every part of it is already a fact about
+ * [PetState.pals]. A stored tree is a second copy of the truth that has to be kept in step with
+ * the first, and the one thing a family tree must never do is disagree with the pet standing in
+ * front of you.
+ */
+data class FamilyTree(
+    val name: String,
+    /** The pet's own parents, by name. Empty for a founder — which is not the same as unknown. */
+    val parentNames: List<String>,
+    val mates: List<Pal>,
+    val offspring: List<Pal>,
+    val friends: List<Pal>,
+    /** Eggs still in the nest, so the tree can show the branch that has not arrived yet. */
+    val expecting: List<NestEgg>,
+)
+
+/**
+ * What a pairing would most likely produce, shown before the player commits to it.
+ *
+ * The preview is the *average* child — every gene at the midpoint, no mutation roll — and that
+ * is deliberate. Rolling a real child for the preview would either lie (the egg re-rolls and
+ * comes out different) or force the roll to be fixed early, which hands the player a re-roll by
+ * closing the screen. An honest average with the odds explained beats a dishonest specimen.
+ */
+data class ChildPreview(
+    val genome: Genome,
+    val morphology: Morphology,
+    /** How far apart the two parents are, 0..1. Below [Genome.MIN_USEFUL_DISTANCE] is barred. */
+    val parentDistance: Float,
+    /** Change in [Genome.houndliness] from the player's own pet, positive meaning more hound. */
+    val houndlinessShift: Float,
+    /** One sentence for the breeding screen. */
+    val summary: String,
+)
+
+/**
+ * Other creatures: who visits, who stays, who becomes family.
+ *
+ * The colony exists because a tamagotchi's whole world is otherwise two entities — the pet and
+ * the hand that feeds it — and that world has nowhere to go once the needs are met. Visitors
+ * give the pet something to want that is not a stat, and breeding gives a lineage a direction.
+ *
+ * Everything here is kept deliberately shallow. Companions are [Pal] records, not second
+ * simulations: six fully-simulated pets would be six pets to neglect, and only one relationship
+ * in this game is allowed to fail. The cost of that choice is that a visitor cannot surprise
+ * you on its own; the benefit is that the save stays small and a long absence stays cheap.
+ *
+ * Every rate here is written per hour and converted against the elapsed step, never as a
+ * per-tick constant. [Simulation.advance] slices a catch-up into steps of one to sixty seconds
+ * depending on how long the player was away, so a per-tick chance would quietly make visitors
+ * sixty times rarer for anyone who came back after a day than for anyone watching live.
+ */
+object Colony {
+
+    // ---- how busy the room gets ---------------------------------------------------------
+
+    /**
+     * Chance per hour that somebody calls round, before temperament. Low on purpose: a visitor
+     * that turns up every ten minutes is scenery, and the point of a visitor is that meeting one
+     * is an event worth looking up for.
+     */
+    private const val ARRIVAL_PER_HOUR = 0.30f
+
+    /** How often the arrival roll is made, in pet seconds. Must not be smaller than a step. */
+    private const val ARRIVAL_CHECK_INTERVAL = 60L
+
+    /**
+     * How many companions a save remembers at all.
+     *
+     * The save is one JSON blob rewritten on every tick, so this cannot be unbounded — but the
+     * real reason is smaller than that. A friends list of forty names is a list nobody reads,
+     * and the pet is supposed to have friends, not followers.
+     */
+    const val MAX_REMEMBERED_PALS = 12
+
+    /** How many visitors can be in the room at once. Family does not count against it. */
+    const val MAX_PRESENT_VISITORS = 3
+
+    /** How many eggs the nest holds. Two is a clutch; more is a queue. */
+    const val MAX_NEST_EGGS = 2
+
+    /** How long a stranger hangs about before letting itself out, in pet seconds. */
+    private const val VISIT_SECONDS = 900L
+
+    /** A friend stays for longer, because that is most of what being a friend is. */
+    private const val FRIEND_VISIT_SECONDS = 2_700L
+
+    // ---- affinity -----------------------------------------------------------------------
+
+    /**
+     * Affinity gained per second of company, before temperament and rapport.
+     *
+     * Tuned so a first visit ends short of friendship and a second one crosses it. Friendship
+     * that lands inside one visit costs the player nothing and therefore means nothing; two
+     * visits means the pet had to still be there when they came back.
+     */
+    private const val AFFINITY_PER_SECOND = 0.030f
+
+    /** Affinity lost per hour apart. A fortnight of silence loses an acquaintance entirely. */
+    private const val DECAY_PER_HOUR = 2.5f
+
+    /**
+     * Floors under the decay, by how the companion stands with the pet.
+     *
+     * Without these, a night's sleep is enough to walk back a friendship the player spent two
+     * visits building, and the pet wakes up alone through no decision anybody made. Decay is
+     * meant to make an ignored acquaintance fade, not to charge rent on a friend.
+     */
+    private const val FRIEND_FLOOR = Pal.FRIEND_AT + 4f
+    private const val MATE_FLOOR = Pal.COURT_AT
+    private const val FAMILY_FLOOR = 70f
+
+    /** Offspring start here: they are family before they have done anything to earn it. */
+    private const val OFFSPRING_AFFINITY = 88f
+
+    // ---- eggs ---------------------------------------------------------------------------
+
+    /** Incubation at [GameConfig.lifeSpeed] 1.0. Long enough to be looked forward to. */
+    private const val INCUBATION_BASE_SECONDS = 1_800L
+
+    /** How many of the parent's skills a child can be taught. */
+    private const val TAUGHT_SKILL_LIMIT = 3
+
+    // -------------------------------------------------------------------------------------
+
+    /**
+     * Visitors arriving and leaving, affinity decay, eggs ripening.
+     *
+     * Runs whatever [PetState.autonomy] says, because none of it is a decision the pet makes.
+     * Somebody knocking at the door is not an act of will, and an egg does not wait for
+     * permission to hatch — gating this on autonomy would mean a player on Manual never sees the
+     * feature exist at all.
+     *
+     * Expects [PetState.ageSeconds] to have already advanced by [dt] this step, which is how
+     * [Simulation] orders its own handlers: the interval checks below read the clock, and a
+     * clock that has not moved yet fires them one step late for ever.
+     */
+    fun tick(
+        state: PetState,
+        config: GameConfig,
+        dt: Long,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState {
+        if (dt <= 0L) return state
+        var s = state
+        s = departures(s, events)
+        s = decayAffinity(s, dt)
+        s = arrivals(s, dt, random, events)
+        s = hatchEggs(s, random, events)
+        return capRemembered(s, events)
+    }
+
+    /**
+     * One step of a social activity aimed at [palId]. Called by the brain and by the player.
+     *
+     * Takes [dt] rather than granting a flat amount per call, so that the brain holding an
+     * activity for four minutes and the player tapping "visit" once are paid at the same rate.
+     * A per-call grant would make tapping the fastest way to a friendship, and the pet's own
+     * social life would be strictly worse than button-mashing.
+     *
+     * Deliberately does not touch happiness, bond, or [PetState.socialActions]. Those belong to
+     * whatever started the activity, which is the only thing that knows when a visit has actually
+     * finished; crediting them here as well would pay a socialising pet twice for one visit.
+     */
+    fun interact(
+        state: PetState,
+        palId: String,
+        kind: ActivityKind,
+        dt: Long,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState {
+        if (dt <= 0L || state.isDead || state.isSleeping || !state.stage.isHatched) return state
+        // A pet this miserable will not be talked round; see PetState.isSulking.
+        if (state.isSulking) return state
+        val index = state.pals.indexOfFirst { it.id == palId }
+        if (index < 0) return state
+        val pal = state.pals[index]
+        if (!pal.present) return state
+
+        val gain = AFFINITY_PER_SECOND * dt *
+            warmth(state) *
+            rapport(state.personality, pal.personality) *
+            weightOf(kind) *
+            (0.85f + random.nextFloat() * 0.30f)
+
+        val raised = pal.copy(affinity = (pal.affinity + gain).coerceIn(0f, 100f))
+        val updated = promoted(raised, events)
+        val pals = state.pals.toMutableList()
+        pals[index] = updated
+        return state.copy(pals = pals)
+    }
+
+    /**
+     * Lays an egg from the pet and [palId] if the pairing is allowed; otherwise returns state
+     * unchanged.
+     *
+     * The child's genome is rolled here and stored on the egg rather than at hatching, so a
+     * player who liked the roll cannot lose it by closing the app — see [NestEgg].
+     */
+    fun pair(
+        state: PetState,
+        palId: String,
+        config: GameConfig,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState {
+        if (pairingBlocker(state, palId) != null) return state
+        val index = state.pals.indexOfFirst { it.id == palId }
+        if (index < 0) return state
+        val pal = state.pals[index]
+
+        val egg = NestEgg(
+            id = "egg_${state.generation}_${state.ageSeconds}_${state.nest.size}",
+            genome = Genome.breed(state.genome, pal.genome, random),
+            // Either parent's family can carry, so a line can change species without changing
+            // its genes. Species drives the palette; the genome drives the shape.
+            species = if (random.nextBoolean()) state.species else pal.species,
+            laidAtSeconds = state.ageSeconds,
+            hatchesAtSeconds = state.ageSeconds + incubationSeconds(config),
+            otherParentId = pal.id,
+            otherParentName = pal.name,
+        )
+
+        // A pairing is a promotion whether or not affinity happened to cross the line during an
+        // interaction, and [promoted] is the only thing allowed to announce one — so a mate is
+        // always announced exactly once, however they got here.
+        val pals = state.pals.toMutableList()
+        pals[index] = promoted(pal, events)
+
+        events += GameEvent.EggLaid(egg)
+        return state.copy(pals = pals, nest = state.nest + egg)
+    }
+
+    /**
+     * Why a pairing is not allowed right now, phrased for the player, or null when it is allowed.
+     *
+     * Every refusal names its own reason. A breeding screen that greys out the button without
+     * saying why teaches the player nothing, and the rules here — a skill, two ages, a trust
+     * level, a full nest, a shared bloodline — are not guessable from the outside.
+     */
+    fun pairingBlocker(state: PetState, palId: String): String? {
+        val pal = state.pals.firstOrNull { it.id == palId }
+            ?: return "You have not met anyone by that name."
+        if (state.isDead) return "${state.name} is no longer with us."
+        if (!pal.present) return "${pal.name} is not here at the moment."
+        if (Skill.COURT !in state.skills) return "${state.name} has not learned how to court yet."
+        if (state.stage.order < LifeStage.TEEN.order) return "${state.name} is far too young to start a family."
+        if (pal.stage.order < LifeStage.TEEN.order) return "${pal.name} is far too young to start a family."
+        if (pal.affinity < Pal.COURT_AT) return "${pal.name} is not close enough to ${state.name} yet."
+        if (state.nest.size >= MAX_NEST_EGGS) return "The nest is already full."
+        if (Genome.distance(state.genome, pal.genome) < Genome.MIN_USEFUL_DISTANCE) {
+            return "${pal.name} is too closely related — the pair would only repeat themselves."
+        }
+        return null
+    }
+
+    // ---- read-only helpers for the UI ---------------------------------------------------
+
+    /** How long an egg sits in the nest at this pace. Exposed so the nest screen can say so. */
+    fun incubationSeconds(config: GameConfig): Long =
+        (INCUBATION_BASE_SECONDS / config.lifeSpeed.coerceIn(0.1f, 20f)).toLong().coerceAtLeast(60L)
+
+    /** Seconds until the next egg is due, or null when the nest is empty. */
+    fun nextHatchInSeconds(state: PetState): Long? =
+        state.nest.minOfOrNull { (it.hatchesAtSeconds - state.ageSeconds).coerceAtLeast(0L) }
+
+    /** Everyone the pet is related to or fond of, sorted for display. Pure; nothing is stored. */
+    fun familyTree(state: PetState): FamilyTree = FamilyTree(
+        name = state.name,
+        parentNames = state.parentNames,
+        mates = state.pals.filter { it.relation == Relation.MATE },
+        offspring = state.pals.filter { it.relation == Relation.OFFSPRING },
+        friends = state.pals.filter { it.relation == Relation.FRIEND }.sortedByDescending { it.affinity },
+        expecting = state.nest,
+    )
+
+    /**
+     * The likely child of the pet and [palId], or null when there is no such companion.
+     *
+     * Available even when [pairingBlocker] refuses, on purpose: "here is what you would get, and
+     * here is why you cannot have it yet" is a goal, whereas a blank panel is a dead end.
+     */
+    fun previewChild(state: PetState, palId: String): ChildPreview? {
+        val pal = state.pals.firstOrNull { it.id == palId } ?: return null
+        val mine = state.genome.toList()
+        val theirs = pal.genome.toList()
+        val average = Genome.fromList(List(Genome.GENE_COUNT) { i -> (mine[i] + theirs[i]) / 2f })
+        val shift = average.houndliness - state.genome.houndliness
+        return ChildPreview(
+            genome = average,
+            // Shown as an adult: a preview drawn at the child's own stage is a featureless
+            // newborn every time, which tells the player nothing about the pairing.
+            morphology = Morphology.of(average, LifeStage.ADULT, state.branch),
+            parentDistance = Genome.distance(state.genome, pal.genome),
+            houndlinessShift = shift,
+            summary = summarise(state, average, shift),
+        )
+    }
+
+    // ---- internals ----------------------------------------------------------------------
+
+    /**
+     * True exactly once per [window] of pet time, whatever the step size. The same guard
+     * [Simulation] uses: a plain modulo test fires twice at small steps and skips whole windows
+     * at large ones, so the real rate would depend on how the elapsed time happened to be
+     * sliced rather than on the number written down.
+     */
+    private fun crossedWindow(ageSeconds: Long, dt: Long, window: Long): Boolean =
+        window > 0 && (ageSeconds / window) != ((ageSeconds - dt) / window)
+
+    /** How readily this pet warms to company, 0.6..1.4. */
+    private fun warmth(state: PetState): Float = 0.6f + state.genome.sociability * 0.8f
+
+    /**
+     * How well two temperaments get on, 0.7..1.3.
+     *
+     * Not symmetric-by-accident but symmetric on purpose — the pair either clicks or does not,
+     * and a table where A likes B more than B likes A would need a second affinity number that
+     * nothing in the game ever shows.
+     */
+    private fun rapport(mine: Personality, theirs: Personality): Float {
+        if (mine == theirs) {
+            // Two of the same mostly get on, except for the two that compete.
+            return if (mine == Personality.GREEDY || mine == Personality.PLAYFUL) 0.95f else 1.25f
+        }
+        val pair = setOf(mine, theirs)
+        return when {
+            pair == setOf(Personality.BRAVE, Personality.SHY) -> 1.30f
+            pair == setOf(Personality.CALM, Personality.SHY) -> 1.25f
+            pair == setOf(Personality.PLAYFUL, Personality.BRAVE) -> 1.20f
+            pair == setOf(Personality.CALM, Personality.GREEDY) -> 1.10f
+            pair == setOf(Personality.PLAYFUL, Personality.SHY) -> 0.75f
+            pair == setOf(Personality.GREEDY, Personality.BRAVE) -> 0.80f
+            pair == setOf(Personality.GREEDY, Personality.SHY) -> 0.85f
+            else -> 1.0f
+        }
+    }
+
+    /** How much a given activity counts as time spent together. */
+    private fun weightOf(kind: ActivityKind): Float = when (kind) {
+        ActivityKind.COURT -> 1.20f
+        ActivityKind.SOCIALISE -> 1.00f
+        ActivityKind.PLAY -> 0.90f
+        ActivityKind.GROOM -> 0.55f
+        ActivityKind.EAT -> 0.45f
+        // Doing something else in the same room still counts for a little. It is company.
+        else -> 0.25f
+    }
+
+    /**
+     * Raises [pal]'s standing to match its affinity, announcing each step once.
+     *
+     * The latch is [Pal.relation] itself, and this is the only place it moves. Testing the
+     * affinity number against the threshold instead is the classic version of this bug: affinity
+     * sits on the boundary, wobbles a tenth either way with every tick, and the player gets
+     * "you are now friends" forty times a minute. A rank, once given, is never taken back.
+     */
+    private fun promoted(pal: Pal, events: MutableList<GameEvent>): Pal {
+        // Family outranks affinity and is never re-announced as a friendship.
+        if (pal.relation == Relation.OFFSPRING || pal.relation == Relation.PARENT) return pal
+        var p = pal
+        if (p.relation == Relation.VISITOR && p.affinity >= Pal.FRIEND_AT) {
+            p = p.copy(relation = Relation.FRIEND)
+            events += GameEvent.Befriended(p)
+        }
+        if (p.relation == Relation.FRIEND && p.canCourt) {
+            p = p.copy(relation = Relation.MATE)
+            events += GameEvent.Paired(p)
+        }
+        return p
+    }
+
+    /** The floor decay is not allowed to push a companion below, by standing. */
+    private fun floorFor(relation: Relation): Float = when (relation) {
+        Relation.VISITOR -> 0f
+        Relation.FRIEND -> FRIEND_FLOOR
+        Relation.MATE -> MATE_FLOOR
+        Relation.OFFSPRING, Relation.PARENT -> FAMILY_FLOOR
+    }
+
+    /** Time apart cools an acquaintance. Company does not: that is what [interact] is for. */
+    private fun decayAffinity(state: PetState, dt: Long): PetState {
+        if (state.pals.isEmpty()) return state
+        val loss = DECAY_PER_HOUR * (dt / 3600f)
+        var changed = false
+        val pals = state.pals.map { pal ->
+            if (pal.present) return@map pal
+            val floor = floorFor(pal.relation)
+            if (pal.affinity <= floor) return@map pal
+            changed = true
+            pal.copy(affinity = (pal.affinity - loss).coerceAtLeast(floor))
+        }
+        return if (changed) state.copy(pals = pals) else state
+    }
+
+    /**
+     * Sees out anyone whose visit has run its course.
+     *
+     * On a timer rather than a die roll, so that a visitor's stay is something the player can
+     * learn the shape of: a stranger is gone within a quarter of an hour unless you spend it
+     * with them, and that is the pressure the whole social loop runs on.
+     */
+    private fun departures(state: PetState, events: MutableList<GameEvent>): PetState {
+        if (state.pals.none { it.present }) return state
+        var changed = false
+        val pals = state.pals.map { pal ->
+            // Offspring live here. They are not visiting.
+            if (!pal.present || pal.relation == Relation.OFFSPRING) return@map pal
+            val stay = if (pal.isFriend) FRIEND_VISIT_SECONDS else VISIT_SECONDS
+            if (state.ageSeconds - pal.lastSeenSeconds < stay) return@map pal
+            changed = true
+            events += GameEvent.PalLeft(pal.name)
+            pal.copy(present = false, lastSeenSeconds = state.ageSeconds)
+        }
+        return if (changed) state.copy(pals = pals) else state
+    }
+
+    /**
+     * Rolls for somebody calling round.
+     *
+     * A companion the pet already knows is as likely to come back as a stranger is to turn up
+     * for the first time, which is the whole point of remembering them. A world that only ever
+     * produces strangers has no relationships in it, only introductions.
+     */
+    private fun arrivals(
+        state: PetState,
+        dt: Long,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState {
+        if (state.isDead || state.isSleeping || !state.isMindAwake) return state
+        if (!crossedWindow(state.ageSeconds, dt, ARRIVAL_CHECK_INTERVAL)) return state
+        if (state.pals.count { it.present && it.relation != Relation.OFFSPRING } >= MAX_PRESENT_VISITORS) return state
+
+        val chance = ARRIVAL_PER_HOUR * warmth(state) * (ARRIVAL_CHECK_INTERVAL / 3600f)
+        if (random.nextFloat() >= chance) return state
+
+        val away = state.pals.filter { !it.present && it.relation != Relation.OFFSPRING }
+        if (away.isNotEmpty() && random.nextFloat() < 0.5f) {
+            // Somebody the pet already knows, favouring whoever it is fondest of.
+            val returning = away.maxByOrNull { it.affinity + random.nextFloat() * 10f } ?: return state
+            val back = returning.copy(present = true, lastSeenSeconds = state.ageSeconds)
+            events += GameEvent.MetPal(back)
+            return state.copy(pals = state.pals.map { if (it.id == back.id) back else it })
+        }
+
+        if (state.pals.size >= MAX_REMEMBERED_PALS && state.pals.none { evictable(it) }) return state
+        val stranger = generatePal(state, random)
+        events += GameEvent.MetPal(stranger)
+        return state.copy(pals = state.pals + stranger)
+    }
+
+    /**
+     * A new face.
+     *
+     * Drawn from a random species and then drifted well past what [Genome.founder] would give,
+     * because a visitor from the pet's own family drawn tightly around the same centre is often
+     * closer than [Genome.MIN_USEFUL_DISTANCE] — and a colony of pals nobody is allowed to breed
+     * with is a colony with no second half. The drift is what gives breeding somewhere to go.
+     */
+    private fun generatePal(state: PetState, random: Random): Pal {
+        val species = Species.entries[random.nextInt(Species.entries.size)]
+        val base = Genome.founder(species, random).toList()
+        val genome = Genome.fromList(
+            List(Genome.GENE_COUNT) { i ->
+                (base[i] + (random.nextFloat() - random.nextFloat()) * WANDER_SPREAD).coerceIn(0f, 1f)
+            },
+        )
+        val name = uniqueName(state.pals.map { it.name } + state.name, random)
+        return Pal(
+            id = "pal_${state.ageSeconds}_${random.nextInt(100_000)}",
+            name = name,
+            species = species,
+            genome = genome,
+            personality = Personality.entries[random.nextInt(Personality.entries.size)],
+            // Visitors are grown: a wandering baby would be somebody's lost child, which is a
+            // story this game has no way to finish.
+            stage = if (random.nextFloat() < 0.25f) LifeStage.TEEN else LifeStage.ADULT,
+            relation = Relation.VISITOR,
+            affinity = 0f,
+            metAtSeconds = state.ageSeconds,
+            lastSeenSeconds = state.ageSeconds,
+            skills = emptySet(),
+            present = true,
+        )
+    }
+
+    /** How far a visitor's genes are allowed to wander past its species' own centre. */
+    private const val WANDER_SPREAD = 0.34f
+
+    private val NAME_HEADS = listOf(
+        "Bo", "Mi", "Ka", "Ru", "Ta", "Ne", "Zu", "Li", "Fen", "Sol",
+        "Vex", "Ori", "Pud", "Wis", "Nim", "Cob", "Tam", "Ril", "Jun", "Hex",
+        "Dov", "Ash", "Moe", "Pip", "Sig", "Yar",
+    )
+    private val NAME_TAILS = listOf(
+        "", "bo", "ka", "lo", "mi", "na", "ri", "sk", "ta", "vi", "zu", "by",
+    )
+
+    /**
+     * A short, pronounceable name nobody in the room is already using.
+     *
+     * Two identical names in one friends list is worse than an odd name: the player cannot tell
+     * which one they befriended, and every screen that names a companion becomes ambiguous.
+     */
+    private fun uniqueName(taken: List<String>, random: Random): String {
+        repeat(16) {
+            val candidate = NAME_HEADS[random.nextInt(NAME_HEADS.size)] +
+                NAME_TAILS[random.nextInt(NAME_TAILS.size)]
+            if (candidate !in taken) return candidate
+        }
+        // Vanishingly unlikely with a dozen names in play, but the list must never collide.
+        return NAME_HEADS[random.nextInt(NAME_HEADS.size)] +
+            NAME_TAILS[random.nextInt(NAME_TAILS.size)] +
+            NAME_TAILS[random.nextInt(NAME_TAILS.size)]
+    }
+
+    /** Eggs whose time has come become companions with the strongest standing in the game. */
+    private fun hatchEggs(
+        state: PetState,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState {
+        if (state.nest.isEmpty()) return state
+        if (state.nest.none { it.isReady(state.ageSeconds) }) return state
+
+        val remaining = ArrayList<NestEgg>(state.nest.size)
+        val hatched = ArrayList<Pal>(state.nest.size)
+        for (egg in state.nest) {
+            if (!egg.isReady(state.ageSeconds)) {
+                remaining += egg
+                continue
+            }
+            // Teaching is a skill the parent had to learn, so a child inheriting anything is
+            // something the player did rather than something the genome did. The easiest skills
+            // go first: nobody teaches a newborn to read before it can feed itself.
+            val taught = if (Skill.TEACH in state.skills) {
+                state.skills.sortedBy { it.intellectRequired }.take(TAUGHT_SKILL_LIMIT).toSet()
+            } else {
+                emptySet()
+            }
+            val child = Pal(
+                id = "pal_child_${egg.id}",
+                name = uniqueName(state.pals.map { it.name } + hatched.map { it.name } + state.name, random),
+                species = egg.species,
+                genome = egg.genome,
+                personality = Personality.entries[random.nextInt(Personality.entries.size)],
+                stage = LifeStage.BABY,
+                relation = Relation.OFFSPRING,
+                affinity = OFFSPRING_AFFINITY,
+                metAtSeconds = state.ageSeconds,
+                lastSeenSeconds = state.ageSeconds,
+                parentNames = listOf(state.name, egg.otherParentName),
+                skills = taught,
+                present = true,
+            )
+            hatched += child
+            events += GameEvent.ChildHatched(child)
+        }
+        if (hatched.isEmpty()) return state
+        return state.copy(pals = state.pals + hatched, nest = remaining)
+    }
+
+    /** A companion nothing would be lost by forgetting. */
+    private fun evictable(pal: Pal): Boolean =
+        !pal.present && pal.relation == Relation.VISITOR
+
+    /**
+     * Keeps the remembered list inside [MAX_REMEMBERED_PALS].
+     *
+     * Runs on every tick rather than only after an arrival, so a save written by an older build
+     * — or by a bug — is pulled back inside the cap the first time it is loaded instead of
+     * growing for ever from wherever it started.
+     */
+    private fun capRemembered(state: PetState, events: MutableList<GameEvent>): PetState {
+        if (state.pals.size <= MAX_REMEMBERED_PALS) return state
+        val keep = state.pals
+            .sortedByDescending { keepScore(it) }
+            .take(MAX_REMEMBERED_PALS)
+            .map { it.id }
+            .toSet()
+        state.pals.forEach { pal ->
+            // Somebody who was in the room has to be seen to leave it, or the UI shows a
+            // companion that silently stops existing between one frame and the next.
+            if (pal.id !in keep && pal.present) events += GameEvent.PalLeft(pal.name)
+        }
+        // Filtered rather than rebuilt from the sorted copy, so the list keeps its own order and
+        // the friends screen does not reshuffle itself every time somebody is forgotten.
+        return state.copy(pals = state.pals.filter { it.id in keep })
+    }
+
+    /** Who is worth remembering, most first: standing, then fondness, then who is here now. */
+    private fun keepScore(pal: Pal): Float {
+        val rank = when (pal.relation) {
+            Relation.OFFSPRING -> 400f
+            Relation.PARENT -> 350f
+            Relation.MATE -> 300f
+            Relation.FRIEND -> 200f
+            Relation.VISITOR -> 100f
+        }
+        return rank + pal.affinity / 200f + if (pal.present) 40f else 0f
+    }
+
+    /** One trait, and what a move in either direction reads as on the breeding screen. */
+    private class Trait(val up: String, val down: String, val of: (Genome) -> Float)
+
+    private val TRAITS = listOf(
+        Trait("a longer muzzle", "a rounder face") { it.muzzle },
+        Trait("bigger ears", "smaller ears") { it.ears },
+        Trait("floppier ears", "more upright ears") { it.earDroop },
+        Trait("longer legs", "shorter legs") { it.limbs },
+        Trait("a lower stance", "a more upright stance") { it.stance },
+        Trait("a fuller tail", "a stubbier tail") { it.tail },
+        Trait("a heavier build", "a slighter build") { it.build },
+        Trait("a shaggier coat", "a smoother coat") { it.coat },
+    )
+
+    /** One sentence naming the change the player is most likely to actually notice. */
+    private fun summarise(state: PetState, child: Genome, shift: Float): String {
+        var best: Trait? = null
+        var bestDelta = 0f
+        for (trait in TRAITS) {
+            val delta = trait.of(child) - trait.of(state.genome)
+            if (kotlin.math.abs(delta) > kotlin.math.abs(bestDelta)) {
+                best = trait
+                bestDelta = delta
+            }
+        }
+        val trend = when {
+            shift > 0.04f -> "further from ${state.name}'s round shape"
+            shift < -0.04f -> "rounder than ${state.name}"
+            else -> "much like ${state.name}"
+        }
+        if (best == null || kotlin.math.abs(bestDelta) < 0.03f) {
+            return "A child would look $trend."
+        }
+        val note = if (bestDelta > 0f) best.up else best.down
+        return "A child would look $trend, with $note."
+    }
+}

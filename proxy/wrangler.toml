@@ -1,0 +1,14 @@
+name = "neopal-brain"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Rate limiting needs a KV namespace. Create one and paste its id here:
+#
+#   wrangler kv namespace create RATE
+#
+# Without it the worker runs unlimited, which is fine for a private endpoint and a bad idea for
+# one you have shared. See README.md.
+#
+# [[kv_namespaces]]
+# binding = "RATE"
+# id = "paste-the-id-wrangler-prints"

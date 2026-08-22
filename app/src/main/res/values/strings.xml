@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NeoPal</string>
+    <string name="channel_care_name">Care reminders</string>
+    <string name="channel_care_description">Tells you when your pet is hungry, dirty or sick.</string>
+    <string name="action_feed">Feed</string>
+    <string name="action_clean">Clean</string>
+    <string name="action_play">Play</string>
+    <string name="action_medicine">Medicine</string>
+    <string name="action_lights">Lights</string>
+    <string name="action_praise">Praise</string>
+    <string name="action_scold">Scold</string>
+    <string name="action_shop">Shop</string>
+    <string name="action_album">Album</string>
+    <string name="action_awards">Awards</string>
+    <string name="action_settings">Settings</string>
+
+    <!-- Shared navigation -->
+    <string name="nav_back">Back</string>
+
+    <!-- Widgets: meters, pills and buttons -->
+    <string name="cd_stat_value">%1$s, %2$d out of 100</string>
+    <string name="cd_stat_value_low">%1$s, %2$d out of 100, needs attention</string>
+    <string name="cd_action_with_badge">%1$s, %2$d waiting</string>
+    <string name="badge_overflow">9+</string>
+    <string name="cd_coins">%1$d coins</string>
+    <string name="level_short">LV %1$d</string>
+    <string name="cd_level">Level %1$d, %2$d of %3$d experience</string>
+
+    <!-- Stats screen -->
+    <string name="stats_section_needs">Needs</string>
+    <string name="stats_section_growth">Growth</string>
+    <string name="stats_section_record">Record</string>
+    <string name="stat_satiety">Satiety</string>
+    <string name="stat_happiness">Happiness</string>
+    <string name="stat_energy">Energy</string>
+    <string name="stat_hygiene">Hygiene</string>
+    <string name="stat_health">Health</string>
+    <string name="stat_discipline">Discipline</string>
+    <string name="stat_bond">Bond</string>
+    <string name="stats_age">Age</string>
+    <string name="stats_age_value">%1$d pet days</string>
+    <string name="stats_stage_progress">Stage progress</string>
+    <string name="stats_percent_value">%1$d %%</string>
+    <string name="stats_weight">Weight</string>
+    <string name="stats_weight_value">%1$d g</string>
+    <string name="stats_generation">Generation</string>
+    <string name="stats_generation_value">#%1$d</string>
+    <string name="stats_care_grade">Care grade</string>
+    <string name="stats_care_grade_hint">Averages the five needs — food, mood, energy, hygiene and health — as they stand right now.</string>
+    <string name="stats_leaning_toward">Leaning toward</string>
+    <string name="branch_hint_athletic">restless, always moving</string>
+    <string name="branch_hint_gourmand">fond of its meals</string>
+    <string name="branch_hint_scholar">attentive, well behaved</string>
+    <string name="branch_hint_feral">wary, left to itself</string>
+    <string name="branch_hint_balanced">even tempered</string>
+    <string name="stats_record_meals">Meals served</string>
+    <string name="stats_record_cleanups">Clean-ups</string>
+    <string name="stats_record_games_played">Games played</string>
+    <string name="stats_record_games_won">Games won</string>
+    <string name="stats_record_praises">Praises</string>
+    <string name="stats_record_scoldings">Scoldings</string>
+    <string name="stats_record_cures">Illnesses cured</string>
+    <string name="stats_record_mistakes">Care mistakes</string>
+
+    <!-- Awards screen -->
+    <string name="awards_title">AWARDS</string>
+    <string name="awards_progress">%1$d/%2$d</string>
+    <string name="cd_awards_progress">%1$d of %2$d awards unlocked</string>
+    <string name="awards_reward">+%1$d</string>
+    <string name="cd_award_unlocked">Unlocked. %1$s. %2$s. Reward %3$d coins.</string>
+    <string name="cd_award_locked">Locked. %1$s. %2$s. Reward %3$d coins.</string>
+
+    <!-- Album screen -->
+    <string name="album_title">ALBUM</string>
+    <string name="album_take_photo">Take a photo</string>
+    <string name="album_empty_title">Nothing here yet</string>
+    <string name="album_empty_body">Every evolution files itself here on its own. For everything in between, hold your finger on %1$s and the moment gets kept.</string>
+    <string name="album_caption">%1$s · %2$s</string>
+    <string name="cd_album_card">Photo: %1$s. %2$s, %3$s.</string>
+</resources>

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NeoPal</string>
+    <string name="channel_care_name">Recordatorios de cuidado</string>
+    <string name="channel_care_description">Te avisa cuando tu mascota tiene hambre, está sucia o enferma.</string>
+    <string name="action_feed">Alimentar</string>
+    <string name="action_clean">Limpiar</string>
+    <string name="action_play">Jugar</string>
+    <string name="action_medicine">Medicina</string>
+    <string name="action_lights">Luces</string>
+    <string name="action_praise">Felicitar</string>
+    <string name="action_scold">Regañar</string>
+    <string name="action_shop">Tienda</string>
+    <string name="action_album">Álbum</string>
+    <string name="action_awards">Logros</string>
+    <string name="action_settings">Ajustes</string>
+
+    <!-- Navegación compartida -->
+    <string name="nav_back">Atrás</string>
+
+    <!-- Widgets: medidores, píldoras y botones -->
+    <string name="cd_stat_value">%1$s, %2$d de 100</string>
+    <string name="cd_stat_value_low">%1$s, %2$d de 100, necesita atención</string>
+    <string name="cd_action_with_badge">%1$s, %2$d pendientes</string>
+    <string name="badge_overflow">9+</string>
+    <string name="cd_coins">%1$d monedas</string>
+    <string name="level_short">NV %1$d</string>
+    <string name="cd_level">Nivel %1$d, %2$d de %3$d de experiencia</string>
+
+    <!-- Pantalla de estadísticas -->
+    <string name="stats_section_needs">Necesidades</string>
+    <string name="stats_section_growth">Crecimiento</string>
+    <string name="stats_section_record">Historial</string>
+    <string name="stat_satiety">Saciedad</string>
+    <string name="stat_happiness">Felicidad</string>
+    <string name="stat_energy">Energía</string>
+    <string name="stat_hygiene">Higiene</string>
+    <string name="stat_health">Salud</string>
+    <string name="stat_discipline">Disciplina</string>
+    <string name="stat_bond">Vínculo</string>
+    <string name="stats_age">Edad</string>
+    <string name="stats_age_value">%1$d días de mascota</string>
+    <string name="stats_stage_progress">Progreso de etapa</string>
+    <string name="stats_percent_value">%1$d %%</string>
+    <string name="stats_weight">Peso</string>
+    <string name="stats_weight_value">%1$d g</string>
+    <string name="stats_generation">Generación</string>
+    <string name="stats_generation_value">n.º %1$d</string>
+    <string name="stats_care_grade">Nota de cuidado</string>
+    <string name="stats_care_grade_hint">Promedia las cinco necesidades —comida, ánimo, energía, higiene y salud— tal y como están ahora mismo.</string>
+    <string name="stats_leaning_toward">Se inclina hacia</string>
+    <string name="branch_hint_athletic">inquieta, siempre en movimiento</string>
+    <string name="branch_hint_gourmand">aficionada a la comida</string>
+    <string name="branch_hint_scholar">atenta y bien educada</string>
+    <string name="branch_hint_feral">recelosa, dejada a su aire</string>
+    <string name="branch_hint_balanced">de carácter equilibrado</string>
+    <string name="stats_record_meals">Comidas servidas</string>
+    <string name="stats_record_cleanups">Limpiezas</string>
+    <string name="stats_record_games_played">Partidas jugadas</string>
+    <string name="stats_record_games_won">Partidas ganadas</string>
+    <string name="stats_record_praises">Felicitaciones</string>
+    <string name="stats_record_scoldings">Regaños</string>
+    <string name="stats_record_cures">Enfermedades curadas</string>
+    <string name="stats_record_mistakes">Descuidos</string>
+
+    <!-- Pantalla de logros -->
+    <string name="awards_title">LOGROS</string>
+    <string name="awards_progress">%1$d/%2$d</string>
+    <string name="cd_awards_progress">%1$d de %2$d logros desbloqueados</string>
+    <string name="awards_reward">+%1$d</string>
+    <string name="cd_award_unlocked">Desbloqueado. %1$s. %2$s. Recompensa: %3$d monedas.</string>
+    <string name="cd_award_locked">Bloqueado. %1$s. %2$s. Recompensa: %3$d monedas.</string>
+
+    <!-- Pantalla del álbum -->
+    <string name="album_title">ÁLBUM</string>
+    <string name="album_take_photo">Hacer una foto</string>
+    <string name="album_empty_title">Aquí no hay nada todavía</string>
+    <string name="album_empty_body">Cada evolución se archiva aquí sola. Para todo lo demás, mantén el dedo sobre %1$s y el momento queda guardado.</string>
+    <string name="album_caption">%1$s · %2$s</string>
+    <string name="cd_album_card">Foto: %1$s. %2$s, %3$s.</string>
+</resources>

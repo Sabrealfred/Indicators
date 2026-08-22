@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="chassis_black">#FF141416</color>
+    <color name="surface_light">#FFF4F5F7</color>
+    <color name="neon_cyan">#FF00C3E3</color>
+</resources>
