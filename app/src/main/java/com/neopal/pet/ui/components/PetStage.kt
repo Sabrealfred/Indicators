@@ -66,6 +66,7 @@ import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.StatDelta
+import com.neopal.pet.ui.art.CachedSceneBackdrop
 import com.neopal.pet.ui.art.CreatureFrame
 import com.neopal.pet.ui.art.CreatureSpec
 import com.neopal.pet.ui.art.ParticleKind
@@ -202,6 +203,13 @@ fun PetStage(
     val cfg by rememberUpdatedState(config)
     val particles = remember { ParticleSystem() }
     val pixelRenderer = remember(config.pixelHeight) { PixelRenderer(config.pixelHeight) }
+
+    // The room's wall and floor, kept rather than redrawn. They are a pure function of theme,
+    // night and draw size, and drawing them the long way was about three quarters of every
+    // frame's draw calls — a couple of thousand one-pixel-tall rects re-issued sixty times a
+    // second for a picture that had not changed. Survives recomposition and redraws itself when
+    // the theme, the dark or the surface changes; see [CachedSceneBackdrop].
+    val sceneBackdrop = remember { CachedSceneBackdrop() }
 
     // Which screen the player last actually saw. Saveable, and that is the entire point: the mode
     // is only changeable in Settings, where no stage is composed, and coming back here builds a
@@ -412,6 +420,7 @@ fun PetStage(
             parallax = sceneParallax(time, pointerX),
             petDay = day,
             props = props,
+            backdrop = sceneBackdrop,
         )
         drawPoops(state.poops, time)
         // Every third pet day turns wet, and the space and arcade rooms are indoors.

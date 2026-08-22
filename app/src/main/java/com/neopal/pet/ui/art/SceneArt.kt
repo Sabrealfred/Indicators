@@ -125,6 +125,9 @@ fun scenePropHits(
  * drawn; a prop drifting by a third of a pixel shimmers once it is magnified twelve times.
  *
  * All motion is a pure function of (themeId, timeSeconds) so frames never flicker randomly.
+ *
+ * Two of the layers below do not move at all — see [SceneBackdrop]. [backdrop] decides where
+ * they come from; the default draws them the long way, exactly as this function always has.
  */
 fun DrawScope.drawScene(
     themeId: String,
@@ -134,31 +137,19 @@ fun DrawScope.drawScene(
     parallax: Float = 0f,
     petDay: Int = 0,
     props: ScenePropState = ScenePropState(),
+    backdrop: SceneBackdrop = SceneBackdrop.Direct,
 ) {
     val n = night.coerceIn(0f, 1f)
     val palette = Palettes.applyNight(Palettes.room(themeId), n)
     val c = artPixel()
-    val w = size.width
-    val h = size.height
     val season = seasonFor(petDay)
-    val horizon = snapTo(h * HORIZON, c)
+    val horizon = snapTo(size.height * HORIZON, c)
     val twilight = twilightAmount(n)
     val daylight = 1f - smoothStep(0.30f, 0.72f, n)
 
-    // 1. Wall: four tones of the room ramp, interleaved at the seams.
-    drawDitheredVertical(palette.wallTop, palette.wallBottom, Rect(0f, 0f, w, horizon), ramp = palette.ramp)
-
-    // 2. Dawn/dusk warmth, strongest just above the floor. Stacked translucent slabs with
-    // dithered edges rather than one gradient, for the same reason as the wall.
-    if (twilight > 0.01f) {
-        drawDitherFadeOut(
-            color = Color(0xFFFFAE6B),
-            rect = Rect(0f, horizon * 0.18f, w, horizon),
-            alpha = 0.42f * twilight,
-            bands = 3,
-            fromTop = false,
-        )
-    }
+    // 1+2. The wall and the dusk warmth on it. Nothing here reads the clock, the parallax or
+    // the pet, so it is one of the two layers [backdrop] is allowed to keep. See [drawRoomWall].
+    backdrop.wall(this, themeId, n)
 
     // 3. Theme backdrop (sea, void, canopy) behind the window and props.
     drawThemeBackdrop(themeId, palette, n, timeSeconds, horizon, parallax)
@@ -166,14 +157,12 @@ fun DrawScope.drawScene(
     // 4. Window with the sky behind it, plus sun, moon, stars and clouds.
     drawWindow(themeId, palette, n, twilight, timeSeconds, parallax, season)
 
-    // 5. Floor. It goes down before the props so that each prop can drop its own shadow onto
-    // it; drawing the floor last would paint over every contact shadow in the room.
-    drawDitheredVertical(palette.floor, palette.floorShade, Rect(0f, horizon, w, h), bands = 4, ramp = palette.ramp)
-    drawFloorboards(palette, horizon, c)
-
-    // 6. Ambient occlusion along the join. Cheap, and the single change that stops the room
-    // looking like two rectangles stacked on top of each other.
-    drawContactShadow(palette, horizon, c)
+    // 5+6. Floor, floorboards and the ambient occlusion along the join. It goes down before the
+    // props so that each prop can drop its own shadow onto it; drawing the floor last would
+    // paint over every contact shadow in the room. Static, and the second layer [backdrop] may
+    // keep — but a *separate* one, because layers 3 and 4 are drawn between it and the wall and
+    // merging the two would move the window in front of the floor. See [drawRoomFloor].
+    backdrop.floor(this, themeId, n)
 
     // 7. Theme props, each sitting in its own pool of shade.
     drawThemeProps(themeId, palette, timeSeconds, horizon, parallax, season)
@@ -203,6 +192,88 @@ fun DrawScope.drawScene(
 
     // 12. Lights-out overlay, warm and soft rather than a flat black.
     if (lightsOff) drawLightsOutOverlay()
+}
+
+/**
+ * Where the two unmoving layers of [drawScene] come from.
+ *
+ * The wall and the floor are a pure function of `(themeId, night, size)`: no clock, no parallax,
+ * no pet, no season. Together they were about three quarters of every frame's draw calls — a
+ * couple of thousand small rects, most of them one art pixel tall, re-issued sixty times a
+ * second to paint a picture that had not changed since the room was opened. This interface is
+ * the seam that lets a caller stop doing that.
+ *
+ * [Direct] is the behaviour this file has always had, and stays the default: nobody who calls
+ * `drawScene` has to know the seam exists. `CachedSceneBackdrop` is the one that keeps them.
+ *
+ * Two entries rather than one, and they are not interchangeable: the theme backdrop and the
+ * window are drawn *between* them, so a single cached layer holding both would put the floor in
+ * front of the window.
+ */
+interface SceneBackdrop {
+
+    /** Layers 1 and 2: the wall, and the dusk warmth washing down it. */
+    fun wall(scope: DrawScope, themeId: String, night: Float)
+
+    /** Layers 5 and 6: floor, floorboards, and the ambient occlusion where they meet the wall. */
+    fun floor(scope: DrawScope, themeId: String, night: Float)
+
+    companion object {
+        /** Draws both layers where they stand, every time. What `drawScene` did before. */
+        val Direct: SceneBackdrop = object : SceneBackdrop {
+            override fun wall(scope: DrawScope, themeId: String, night: Float) =
+                scope.drawRoomWall(themeId, night)
+
+            override fun floor(scope: DrawScope, themeId: String, night: Float) =
+                scope.drawRoomFloor(themeId, night)
+        }
+    }
+}
+
+/**
+ * Layers 1 and 2 of [drawScene], lifted out whole so they can be drawn somewhere other than the
+ * screen. Every value it needs is recomputed from [themeId], [night] and the draw size, which is
+ * the property that makes the layer cacheable in the first place.
+ */
+internal fun DrawScope.drawRoomWall(themeId: String, night: Float) {
+    val n = night.coerceIn(0f, 1f)
+    val palette = Palettes.applyNight(Palettes.room(themeId), n)
+    val w = size.width
+    val horizon = snapTo(size.height * HORIZON, artPixel())
+    val twilight = twilightAmount(n)
+
+    // 1. Wall: four tones of the room ramp, interleaved at the seams.
+    drawDitheredVertical(palette.wallTop, palette.wallBottom, Rect(0f, 0f, w, horizon), ramp = palette.ramp)
+
+    // 2. Dawn/dusk warmth, strongest just above the floor. Stacked translucent slabs with
+    // dithered edges rather than one gradient, for the same reason as the wall.
+    if (twilight > 0.01f) {
+        drawDitherFadeOut(
+            color = Color(0xFFFFAE6B),
+            rect = Rect(0f, horizon * 0.18f, w, horizon),
+            alpha = 0.42f * twilight,
+            bands = 3,
+            fromTop = false,
+        )
+    }
+}
+
+/** Layers 5 and 6 of [drawScene], on the same terms as [drawRoomWall]. */
+internal fun DrawScope.drawRoomFloor(themeId: String, night: Float) {
+    val n = night.coerceIn(0f, 1f)
+    val palette = Palettes.applyNight(Palettes.room(themeId), n)
+    val c = artPixel()
+    val w = size.width
+    val h = size.height
+    val horizon = snapTo(h * HORIZON, c)
+
+    // 5. Floor.
+    drawDitheredVertical(palette.floor, palette.floorShade, Rect(0f, horizon, w, h), bands = 4, ramp = palette.ramp)
+    drawFloorboards(palette, horizon, c)
+
+    // 6. Ambient occlusion along the join. Cheap, and the single change that stops the room
+    // looking like two rectangles stacked on top of each other.
+    drawContactShadow(palette, horizon, c)
 }
 
 /**
