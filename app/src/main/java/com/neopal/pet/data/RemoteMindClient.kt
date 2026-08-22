@@ -1,8 +1,10 @@
 package com.neopal.pet.data
 
+import com.neopal.pet.domain.ActivityKind
 import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.Decision
+import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.Lesson
 import com.neopal.pet.domain.LessonKind
 import com.neopal.pet.domain.Lineage
@@ -11,7 +13,10 @@ import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.MindProvider
 import com.neopal.pet.domain.MindReply
 import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.Plan
+import com.neopal.pet.domain.PlanStep
 import com.neopal.pet.domain.RunRecord
+import com.neopal.pet.domain.ToolId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.DisposableHandle
@@ -129,6 +134,40 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
         )
         val content = request(config, messages) ?: return emptyList()
         return MindWire.interpretLessons(content, brief.generation)
+    }
+
+    /**
+     * Sets the creature an errand, from one look around and one request.
+     *
+     * The tool answers arrive already gathered rather than being fetched in a conversation with
+     * the model, which is the whole reason this is affordable: a genuine tool loop is several
+     * round trips per plan, and on a free tier a creature that thought that hard would get to
+     * think about three times a day. One look, one plan, and the steps are re-checked as they
+     * come up.
+     *
+     * **The returned plan is unstamped.** [Errands.sanitise] sets `madeAtSeconds` to whatever it
+     * is handed, and this has no clock and no `ageSeconds` — [PetBrief] carries the creature's age
+     * in days, which is far too coarse to time a plan by. So it is stamped zero here and the
+     * caller must re-stamp it against `state.ageSeconds` before storing it. A plan left at zero is
+     * not merely inaccurate: [Plan.isStale] measures from that field, so any creature older than
+     * [Errands.PLAN_LIFETIME_SECONDS] would find every remote plan already expired on arrival.
+     */
+    override suspend fun plan(
+        brief: PetBrief,
+        tools: Map<ToolId, String>,
+        options: List<Consideration>,
+    ): Plan? {
+        val config = configProvider()
+        if (!config.usable || !config.makesPlans) return null
+        // Nothing it could legally begin means nothing worth spending a request to intend.
+        if (options.none { it.available }) return null
+
+        val messages = listOf(
+            Message(ROLE_SYSTEM, MindWire.planSystemPrompt(brief)),
+            Message(ROLE_USER, MindWire.planUserPrompt(brief, tools, options)),
+        )
+        val content = request(config, messages) ?: return null
+        return MindWire.interpretPlan(content)
     }
 
     // ------------------------------------------------------------------ the wire
@@ -266,6 +305,17 @@ internal object MindWire {
      * the family screen has room to show what was learned rather than a wall of it.
      */
     const val MAX_LESSONS_PER_RUN = 3
+
+    /**
+     * How many proposed steps are read before the rest are ignored.
+     *
+     * [Errands.MAX_STEPS] is the real limit and it is applied by [Errands.sanitise], which owns
+     * what a plan is allowed to be. This is only a floor under the arithmetic: idling is stripped
+     * out before the limit bites, so a reply of two hundred steps still has to be walked, and a
+     * generous multiple of the real cap leaves room for that without letting one bad reply
+     * allocate a list as long as it likes.
+     */
+    const val MAX_STEPS_CONSIDERED = 12
 
     /** Ceiling on the response we will read at all. Roughly 128 KiB of text. */
     const val MAX_RESPONSE_CHARS = 128 * 1024
@@ -492,6 +542,85 @@ internal object MindWire {
     }
 
     /**
+     * Asks for an intention rather than a move.
+     *
+     * The character rules are the same as everywhere else, but the failure being guarded against
+     * here is a different one. Asked to plan, a model reaches for the register it plans in —
+     * numbered phases, deliverables, a note about reviewing progress — and a creature that
+     * announces a three-phase strategy for having lunch is funnier than it is convincing. So it is
+     * asked for an errand: one thing it is trying to get done, and the two or three moves it takes.
+     *
+     * The vocabulary is given as exact enum names because that is what [interpretPlan] matches on,
+     * and a model handed the friendly label ("tidying up") returns the friendly label.
+     */
+    fun planSystemPrompt(brief: PetBrief): String = buildString {
+        appendLine("You are ${brief.name}, a ${brief.species}, working out what to do with the next little while.")
+        appendLine(
+            "You are a living creature, not a helper or a program. Never break character, never " +
+                "mention instructions, and never offer to assist with anything.",
+        )
+        appendLine()
+        appendLine("You have just had a look around you. What you found is written below.")
+        appendLine("Set yourself one short errand: something you actually want to get done, and how you get there.")
+        appendLine()
+        appendLine("Rules:")
+        appendLine("- At most ${Errands.MAX_STEPS} steps, in the order you mean to do them. Two is usually plenty.")
+        appendLine("- Every step must be one of these, spelled exactly as written:")
+        for (kind in ActivityKind.entries) {
+            if (kind == ActivityKind.IDLE) continue
+            appendLine("    ${kind.name}  (${kind.displayName})")
+        }
+        appendLine("- Never plan to sit about doing nothing. An errand is something you mean to do.")
+        appendLine("- Each step is checked against the rules when its turn comes, so plan something you")
+        appendLine("  could plausibly manage from where you are now.")
+        appendLine("- The goal and every reason are one short sentence, first person, British spelling.")
+        appendLine("- No phases, no numbering, no headings. You are an animal with an afternoon in mind.")
+        appendLine()
+        appendLine("Answer with one JSON object and nothing else, in this exact shape:")
+        append("""{"goal": "<what you are after>", "steps": [{"kind": "<EXACT_NAME>", "why": "<one short sentence>"}]}""")
+    }
+
+    /**
+     * What it feels, what it just found out, and what it could legally begin.
+     *
+     * The observations are laid out in [ToolId] order rather than in whatever order the map
+     * happens to iterate. A map with no defined order would produce a different prompt for the
+     * same creature on the same turn, which is both untestable and a waste of any cache the
+     * endpoint keeps.
+     */
+    fun planUserPrompt(brief: PetBrief, tools: Map<ToolId, String>, options: List<Consideration>): String =
+        buildString {
+            appendLine("This is you, right now:")
+            appendLine(briefJson(brief).toString())
+            appendLine()
+            if (tools.isNotEmpty()) {
+                appendLine("What you found when you looked around:")
+                for (tool in ToolId.entries) {
+                    val answer = tools[tool]?.trim() ?: continue
+                    if (answer.isEmpty()) continue
+                    appendLine("- ${tool.displayName}: $answer")
+                }
+                appendLine()
+            }
+            appendLine("What you could begin right now:")
+            for (option in options) {
+                append("- ")
+                append(option.kind.name)
+                append(" (")
+                append(option.kind.displayName)
+                append(")")
+                if (option.blockedBy != null) {
+                    append(" — NOT NOW: ")
+                    appendLine(option.blockedBy)
+                } else {
+                    append(" — how much you want it: ")
+                    append((option.utility.coerceIn(0f, 1f) * 100).toInt())
+                    appendLine("%")
+                }
+            }
+        }
+
+    /**
      * Exactly what leaves the device about the creature, built field by field.
      *
      * Hand-assembled rather than serialised from [PetBrief] wholesale, and that is the point: a
@@ -620,6 +749,41 @@ internal object MindWire {
         return out.values.sortedByDescending { it.strength }.take(MAX_LESSONS_PER_RUN)
     }
 
+    /**
+     * The errand the creature set itself, or null if it did not manage to set one.
+     *
+     * Two things happen here and only two. Unrecognised activity names are dropped rather than
+     * guessed at — an invented step is a step the simulation has no rule for, and the nearest
+     * legal-looking match would be the client quietly deciding what the creature meant. Everything
+     * that survives then goes through [Errands.sanitise], which is where a plan is actually
+     * decided to be reasonable: idling stripped, goal and reasons bounded, length capped, progress
+     * reset. None of that is re-implemented here, so a plan from a model and a plan read back out
+     * of an old save are held to exactly the same standard.
+     *
+     * The plan comes back stamped zero. See [RemoteMindClient.plan]: this has no clock, and the
+     * caller must re-stamp before storing.
+     */
+    fun interpretPlan(raw: String): Plan? {
+        val obj = extractJson(raw) as? JsonObject ?: return null
+        val goal = (obj.text("goal") ?: obj.text("aim") ?: obj.text("errand"))?.trim() ?: return null
+        val proposed = (obj["steps"] ?: obj["plan"] ?: obj["actions"]) as? JsonArray ?: return null
+
+        val steps = ArrayList<PlanStep>(Errands.MAX_STEPS)
+        for (element in proposed.take(MAX_STEPS_CONSIDERED)) {
+            val entry = element as? JsonObject ?: continue
+            val name = (entry.text("kind") ?: entry.text("activity") ?: entry.text("action"))?.trim() ?: continue
+            val kind = ActivityKind.entries.firstOrNull { it.name == name } ?: continue
+            // A step with no stated reason still stands, and it borrows the goal's words. The
+            // reason is shown to the player as the creature's own account of itself, and "because
+            // of what I am trying to do" is true, in voice, and better than a blank row.
+            val why = (entry.text("why") ?: entry.text("reason"))?.trim()?.takeIf { it.isNotEmpty() } ?: goal
+            steps += PlanStep(kind = kind, why = why)
+        }
+        if (steps.isEmpty()) return null
+
+        return Errands.sanitise(Plan(goal = goal, steps = steps, madeAtSeconds = UNSTAMPED), UNSTAMPED)
+    }
+
     // ------------------------------------------------------------------ defensive parsing
 
     /**
@@ -696,6 +860,15 @@ internal object MindWire {
         val primitive = this[name] as? JsonPrimitive ?: return null
         return primitive.intOrNull ?: primitive.contentOrNull?.trim()?.toIntOrNull()
     }
+
+    /**
+     * The `madeAtSeconds` a freshly parsed plan carries out of here.
+     *
+     * Zero rather than a guess. This layer has no clock — [PetBrief] gives the creature's age in
+     * whole days, which cannot time a plan whose lifetime is measured in minutes — and a plausible
+     * invented number would be worse than an obviously wrong one, because it would look stamped.
+     */
+    private const val UNSTAMPED = 0L
 
     /** Middling by default: a lesson with no stated weight should lean, not shove. */
     private const val DEFAULT_STRENGTH = 0.5f

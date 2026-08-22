@@ -114,6 +114,38 @@ object Brain {
         val last = s.decisions.lastOrNull()
         if (last != null && s.ageSeconds - last.atSeconds < MIN_DECISION_GAP_SECONDS) return s
 
+        // A plan that has run out of time is dropped before it can be followed. Needs move: a plan
+        // made forty-five minutes ago was made about a creature that no longer exists.
+        s = Errands.expireIfStale(s, events)
+
+        // A plan outranks the scoring, which is the entire point of having one. Scoring answers
+        // "what does it most want right now"; a plan answers "what was it in the middle of". A
+        // creature that re-scored from scratch every time would abandon the errand it set out on
+        // the moment anything became marginally more appealing, and never finish anything.
+        Errands.nextStep(s)?.let { step ->
+            val planned = options(s, config).firstOrNull { it.kind == step.kind && it.blockedBy == null }
+            if (planned != null) {
+                val started = commit(
+                    state = s,
+                    option = Option(
+                        kind = planned.kind,
+                        utility = planned.utility,
+                        durationSeconds = planned.durationSeconds,
+                        target = planned.target,
+                        reason = step.why.ifBlank { planned.reason },
+                        blockedBy = null,
+                    ),
+                    runnerUp = null,
+                    random = random,
+                    events = events,
+                )
+                if (started != null) return Errands.advance(started)
+            }
+            // The step cannot be done. Abandon the plan rather than retrying it: a creature that
+            // insists on lunch in front of an empty pantry is not persistent, it is stuck.
+            s = Errands.abandon(s, events)
+        }
+
         val ranked = options(s, config)
             .filter { it.blockedBy == null }
             .map { it to it.utility + random.nextFloat() * JITTER }

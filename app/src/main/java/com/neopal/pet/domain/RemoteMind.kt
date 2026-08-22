@@ -141,6 +141,24 @@ interface MindProvider {
      * Returning an empty list means the line simply starts fresh, which is not a failure.
      */
     suspend fun distil(brief: PetBrief, record: RunRecord, decisions: List<Decision>): List<Lesson>
+
+    /**
+     * Sets the creature an errand: a short sequence with a goal behind it.
+     *
+     * [tools] is what looking around told it — the read-only answers from [ToolId], gathered
+     * before the call so the whole plan is one request rather than a conversation. That is a
+     * deliberate limit: a real tool loop would be several round trips per plan, and on a free
+     * tier a creature that thought that hard would think three times a day.
+     *
+     * [options] are the activities currently legal, so a plan is at least *plausible* when it is
+     * made. It is still re-checked step by step as it is followed, because plausible when made
+     * and legal three steps later are different things.
+     */
+    suspend fun plan(
+        brief: PetBrief,
+        tools: Map<ToolId, String>,
+        options: List<Consideration>,
+    ): Plan?
 }
 
 /** A provider that is never ready and never answers. The default, and the offline case. */
@@ -150,6 +168,11 @@ object NoMind : MindProvider {
     override suspend fun choose(brief: PetBrief, options: List<Consideration>): MindChoice? = null
     override suspend fun distil(brief: PetBrief, record: RunRecord, decisions: List<Decision>): List<Lesson> =
         emptyList()
+    override suspend fun plan(
+        brief: PetBrief,
+        tools: Map<ToolId, String>,
+        options: List<Consideration>,
+    ): Plan? = null
 }
 
 /**
@@ -184,6 +207,8 @@ data class MindConfig(
     val conversation: Boolean = true,
     /** Distil a finished life into lessons for the next one. */
     val lineageLessons: Boolean = true,
+    /** Let it look around and set itself a short errand rather than one decision at a time. */
+    val makesPlans: Boolean = true,
     /** Hard ceiling on reply length, in tokens. Keeps a free model inside its quota. */
     val maxTokens: Int = 220,
     /** Give up after this long and let the local brain answer. */

@@ -17,6 +17,8 @@ import com.neopal.pet.domain.Brain
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Errands
+import com.neopal.pet.domain.ToolId
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
@@ -147,6 +149,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 handleEvents(result.events, offline = false)
                 maybeReconsider(result.events)
+                maybePlan()
             }
         }
     }
@@ -205,9 +208,59 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * Sets the creature an errand when it has none and is not busy.
+     *
+     * This is the small agentic loop: it looks around with the read-only tools, all of which are
+     * answered locally and for free, and only then spends one request asking what it should be
+     * getting on with. Gathering the observations before the call rather than letting the mind ask
+     * for them one at a time is the whole economy of it — a real tool conversation is several
+     * round trips per plan, and on a free tier that buys about three thoughts a day.
+     */
+    private fun maybePlan() {
+        val current = _ui.value
+        val pet = current.pet ?: return
+        val config = current.config
+        if (!config.mind.usable || !config.mind.makesPlans || !mind.isReady) return
+        if (planning || pet.plan != null) return
+        if (!pet.isMindAwake || pet.isSleeping || pet.isDead) return
+        if (pet.autonomy != Autonomy.FULL) return
+        if (pet.ageSeconds - lastPlannedAtSeconds < PLAN_GAP_SECONDS) return
+
+        val options = Brain.considerations(pet, config).filter { it.available }
+        if (options.size < 2) return
+
+        planning = true
+        lastPlannedAtSeconds = pet.ageSeconds
+        viewModelScope.launch {
+            val looked = ToolId.entries.associateWith { Errands.answer(it, pet, config) }
+            val proposed = mind.plan(PetBrief.of(pet, config), looked, options)
+            planning = false
+            if (proposed == null) return@launch
+            val now = _ui.value.pet ?: return@launch
+            // Stamped against the creature as it is now, not as it was when the request went out,
+            // so a plan is never born already halfway to expiring.
+            val accepted = Errands.sanitise(proposed, now.ageSeconds) ?: return@launch
+            if (now.plan != null) return@launch
+            val planned = now.copy(plan = accepted)
+            _ui.update { it.copy(pet = planned) }
+            handleEvents(listOf(GameEvent.PlanMade(accepted.goal, accepted.steps.size)), offline = false)
+            persist(planned)
+        }
+    }
+
     /** True while a reconsideration is in flight, so they cannot pile up. */
     private var reconsidering = false
     private var lastReconsideredAtSeconds = Long.MIN_VALUE
+    private var planning = false
+    private var lastPlannedAtSeconds = Long.MIN_VALUE
+
+    /**
+     * Pet seconds between errands. Longer than the reconsider gap because a plan is meant to be
+     * worked through rather than replaced: setting a new one every few minutes would mean the
+     * creature never finished an afternoon it started.
+     */
+    private val PLAN_GAP_SECONDS = 1_800L
 
     /**
      * Pet seconds between reconsiderations. Five minutes is frequent enough that a player watching
@@ -659,6 +712,8 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
                 is GameEvent.PalLeft,
+                is GameEvent.PlanAbandoned,
+                is GameEvent.PlanMade,
                 -> Unit
 
                 is GameEvent.CareMistake, is GameEvent.FellAsleep, is GameEvent.WokeUp -> Unit

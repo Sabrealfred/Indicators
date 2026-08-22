@@ -1,0 +1,194 @@
+package com.neopal.pet.domain
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import kotlin.random.Random
+
+/**
+ * The creature's small agentic loop.
+ *
+ * A plan is a statement of intent, never an authorisation, and most of what is worth testing here
+ * is that difference: a plan made against one world must not be able to act on another, and a plan
+ * that cannot proceed must end rather than spin.
+ */
+class ErrandsTest {
+
+    private val config = GameConfig.Default
+    private val start = 1_000_000L
+
+    private fun pet(
+        skills: Set<Skill> = Skill.entries.toSet(),
+        stats: Stats = Stats(satiety = 50f, happiness = 60f, energy = 80f, hygiene = 60f),
+        inventory: Map<String, Int> = mapOf("meal_bowl" to 3),
+        poops: Int = 2,
+    ): PetState = Simulation
+        .advance(Simulation.newGame("T", Species.LEAF, start), start + 120_000, config)
+        .state
+        .copy(
+            stage = LifeStage.ADULT,
+            ageSeconds = config.secondsPerPetDay / 2,
+            stats = stats,
+            inventory = inventory,
+            poops = poops,
+            autonomy = Autonomy.FULL,
+            skills = skills,
+            intellect = 60f,
+            genome = Genome(),
+        )
+
+    private fun plan(vararg kinds: ActivityKind, at: Long) = Plan(
+        goal = "Be presentable before company.",
+        steps = kinds.map { PlanStep(it, "Because I said I would.") },
+        madeAtSeconds = at,
+    )
+
+    // ---- tools ---------------------------------------------------------------------------
+
+    @Test
+    fun `looking never changes anything`() {
+        val before = pet()
+        ToolId.entries.forEach { Errands.answer(it, before, config) }
+        assertEquals("a tool that reads must not write", before, pet())
+    }
+
+    @Test
+    fun `the pantry tool tells the truth about an empty pantry`() {
+        assertTrue(
+            Errands.answer(ToolId.LOOK_IN_PANTRY, pet(inventory = emptyMap()), config)
+                .contains("empty", ignoreCase = true),
+        )
+        assertTrue(
+            Errands.answer(ToolId.LOOK_IN_PANTRY, pet(), config).contains("x3"),
+        )
+    }
+
+    @Test
+    fun `taking stock reports the mess it is standing in`() {
+        val answer = Errands.answer(ToolId.CHECK_SELF, pet(poops = 3), config)
+        assertTrue(answer.contains("3 mess"))
+    }
+
+    // ---- what a plan is allowed to be ----------------------------------------------------
+
+    @Test
+    fun `a plan of nothing but idling is not a plan`() {
+        val idle = Plan("Do nothing", listOf(PlanStep(ActivityKind.IDLE, "x")), 0L)
+        assertNull("three shrugs is not an afternoon", Errands.sanitise(idle, 100L))
+    }
+
+    @Test
+    fun `a plan is bounded and always starts unspent`() {
+        val long = Plan(
+            goal = "g".repeat(500),
+            steps = List(20) { PlanStep(ActivityKind.PLAY, "why") },
+            madeAtSeconds = 0L,
+            // A mind marking its own steps done would skip the ones it did not want checked.
+            done = 15,
+        )
+        val clean = Errands.sanitise(long, 100L)
+        assertNotNull(clean)
+        assertTrue(clean!!.steps.size <= Errands.MAX_STEPS)
+        assertTrue(clean.goal.length <= Errands.MAX_GOAL_CHARS)
+        assertEquals("a plan may not arrive half spent", 0, clean.done)
+        assertEquals("and it is stamped when it is accepted", 100L, clean.madeAtSeconds)
+    }
+
+    @Test
+    fun `a blank goal is refused`() {
+        assertNull(Errands.sanitise(Plan("   ", listOf(PlanStep(ActivityKind.PLAY, "x")), 0L), 5L))
+    }
+
+    // ---- following one -------------------------------------------------------------------
+
+    @Test
+    fun `the creature works through a plan in order`() {
+        var s = pet().copy(plan = plan(ActivityKind.TIDY, ActivityKind.PLAY, at = config.secondsPerPetDay / 2))
+        val events = mutableListOf<GameEvent>()
+
+        s = Brain.tick(s, config, 1L, Random(1), events)
+        assertEquals("the first step is the first step", ActivityKind.TIDY, s.activity?.kind)
+        assertEquals("and it is marked off", 1, s.plan?.done)
+    }
+
+    @Test
+    fun `a plan outranks what it would otherwise most want`() {
+        // Starving, with food to hand: scoring would say eat. The plan says tidy up.
+        var s = pet(stats = Stats(satiety = 12f, happiness = 60f, energy = 80f, hygiene = 60f))
+            .copy(plan = plan(ActivityKind.TIDY, at = config.secondsPerPetDay / 2))
+        s = Brain.tick(s, config, 1L, Random(1), mutableListOf())
+        assertEquals(
+            "a creature that re-scored from scratch would never finish an errand",
+            ActivityKind.TIDY,
+            s.activity?.kind,
+        )
+    }
+
+    @Test
+    fun `a step that cannot be done ends the plan instead of spinning on it`() {
+        // The plan says eat; the pantry is empty and it never learned to forage.
+        var s = pet(inventory = emptyMap(), skills = Skill.entries.toSet() - Skill.FORAGE)
+            .copy(plan = plan(ActivityKind.EAT, at = config.secondsPerPetDay / 2))
+        val events = mutableListOf<GameEvent>()
+        s = Brain.tick(s, config, 1L, Random(1), events)
+
+        assertNull("insisting on lunch at an empty pantry is a stuck loop", s.plan)
+        assertTrue(events.any { it is GameEvent.PlanAbandoned })
+    }
+
+    @Test
+    fun `a plan made about a creature that no longer exists is dropped`() {
+        val stale = plan(ActivityKind.PLAY, at = 0L)
+        var s = pet().copy(plan = stale)
+        assertTrue(stale.isStale(s.ageSeconds))
+
+        val events = mutableListOf<GameEvent>()
+        s = Brain.tick(s, config, 1L, Random(1), events)
+        assertNull(s.plan)
+        assertTrue(events.any { it is GameEvent.PlanAbandoned })
+    }
+
+    @Test
+    fun `finishing the last step clears the plan`() {
+        var s = pet().copy(plan = plan(ActivityKind.TIDY, at = config.secondsPerPetDay / 2))
+        s = Brain.tick(s, config, 1L, Random(1), mutableListOf())
+        assertNull("a finished plan is not kept around empty", s.plan)
+    }
+
+    @Test
+    fun `no plan means the creature simply decides for itself`() {
+        val s = Brain.tick(pet(), config, 1L, Random(1), mutableListOf())
+        assertNull(s.plan)
+        assertNotNull("it still does something", s.activity)
+    }
+
+    @Test
+    fun `manual mode ignores plans entirely`() {
+        val s = pet().copy(
+            autonomy = Autonomy.OFF,
+            plan = plan(ActivityKind.TIDY, at = config.secondsPerPetDay / 2),
+        )
+        val after = Brain.tick(s, config, 1L, Random(1), mutableListOf())
+        assertNull("a player who took the wheel keeps it", after.activity)
+        assertEquals("and the plan is left untouched rather than quietly spent", s.plan, after.plan)
+    }
+
+    @Test
+    fun `advancing past the end never rewinds or overruns`() {
+        val one = pet().copy(plan = plan(ActivityKind.PLAY, at = 0L))
+        val spent = Errands.advance(one)
+        assertNull(spent.plan)
+        assertEquals("advancing nothing is not an error", spent, Errands.advance(spent))
+    }
+
+    @Test
+    fun `a sleeping creature does not sleepwalk through its plan`() {
+        val s = pet().copy(isSleeping = true, plan = plan(ActivityKind.TIDY, at = config.secondsPerPetDay / 2))
+        val after = Brain.tick(s, config, 1L, Random(1), mutableListOf())
+        assertEquals("the plan waits", s.plan?.done, after.plan?.done)
+        assertFalse(after.activity?.kind == ActivityKind.TIDY)
+    }
+}

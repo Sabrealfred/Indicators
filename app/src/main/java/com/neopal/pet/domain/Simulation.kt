@@ -33,6 +33,9 @@ sealed interface GameEvent {
     data class Paired(val pal: Pal) : GameEvent
     data class EggLaid(val egg: NestEgg) : GameEvent
     data class ChildHatched(val child: Pal) : GameEvent
+    /** A plan was dropped: refused, or simply too old to still be about this creature. */
+    data class PlanAbandoned(val goal: String) : GameEvent
+    data class PlanMade(val goal: String, val steps: Int) : GameEvent
 }
 
 data class SimResult(val state: PetState, val events: List<GameEvent>)

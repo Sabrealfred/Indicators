@@ -312,6 +312,11 @@ data class PetState(
     val lessons: List<Lesson> = emptyList(),
     /** Conversation with the player, oldest first, bounded by [Simulation.MAX_CHAT_TURNS]. */
     val chat: List<ChatTurn> = emptyList(),
+    /**
+     * What the creature means to do next, and why. Null is the ordinary state: a creature without
+     * a plan is not idle, it is simply deciding one thing at a time.
+     */
+    val plan: Plan? = null,
 
     val rngSeed: Long = 0L,
 ) {

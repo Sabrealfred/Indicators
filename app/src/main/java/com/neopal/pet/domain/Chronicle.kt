@@ -124,6 +124,8 @@ object Chronicle {
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,
         is GameEvent.PalLeft,
+        is GameEvent.PlanAbandoned,
+        is GameEvent.PlanMade,
         -> null
 
         is GameEvent.Unlocked -> null
