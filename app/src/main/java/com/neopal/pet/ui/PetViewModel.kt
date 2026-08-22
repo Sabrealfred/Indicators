@@ -249,11 +249,23 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * "Has not happened yet", for the throttles below.
+     *
+     * Not `Long.MIN_VALUE`, and the difference is not cosmetic. Every throttle here reads
+     * `pet.ageSeconds - lastX < gap`, and `ageSeconds - Long.MIN_VALUE` overflows straight back
+     * into a large negative number for any age at all — so the gap always appears unmet and the
+     * throttle blocks forever. The failure is invisible from the outside: no crash, no log, just
+     * a remote brain that is switched on, configured, reachable, and never once called. Halving
+     * the sentinel leaves the subtraction room to stay positive.
+     */
+    private val NEVER = Long.MIN_VALUE / 2
+
     /** True while a reconsideration is in flight, so they cannot pile up. */
     private var reconsidering = false
-    private var lastReconsideredAtSeconds = Long.MIN_VALUE
+    private var lastReconsideredAtSeconds = NEVER
     private var planning = false
-    private var lastPlannedAtSeconds = Long.MIN_VALUE
+    private var lastPlannedAtSeconds = NEVER
 
     /**
      * Pet seconds between errands. Longer than the reconsider gap because a plan is meant to be
