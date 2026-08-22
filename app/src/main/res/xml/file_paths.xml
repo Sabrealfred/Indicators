@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The one directory the FileProvider will share, and nothing else.
+
+    `path` matches UpdateService.DOWNLOAD_DIR, and `cache-path` roots it at the app's cache
+    directory. A downloaded APK is disposable by definition — if the system reclaims the cache
+    before the player taps install, the updater notices the file is gone and offers to fetch it
+    again. Nothing else in the app is reachable through this provider: not the save, not the
+    key, not the rest of the cache.
+-->
+<paths>
+    <cache-path name="updates" path="updates/" />
+</paths>

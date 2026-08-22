@@ -69,10 +69,12 @@ class AutonomyIntegrationTest {
         val hungry = keeper(stats = Stats(satiety = 18f, happiness = 70f, energy = 80f, hygiene = 90f))
         val after = live(hungry, 1_800)
 
-        assertTrue("it should have eaten something", after.mealsEaten > hungry.mealsEaten)
+        assertTrue("it should have eaten something", after.selfCareActions > hungry.selfCareActions)
         assertTrue("and the tin should have come out of the cupboard",
             (after.inventory["meal_bowl"] ?: 0) < (hungry.inventory["meal_bowl"] ?: 0))
         assertTrue("which is the point: it is no longer starving", after.stats.satiety > hungry.stats.satiety)
+        // See [CareActions.Actor]: the meal is real, the keeper's record of meals served is not.
+        assertEquals("nobody served it", hungry.mealsEaten, after.mealsEaten)
     }
 
     @Test
@@ -83,7 +85,7 @@ class AutonomyIntegrationTest {
         )
         val after = live(hungry, 1_800)
 
-        assertEquals("nothing was eaten", hungry.mealsEaten, after.mealsEaten)
+        assertEquals("nothing was eaten", hungry.selfCareActions, after.selfCareActions)
         assertEquals("the cupboard is untouched", hungry.inventory["meal_bowl"], after.inventory["meal_bowl"])
         assertTrue("and it is worse off than it started", after.stats.satiety < hungry.stats.satiety)
         assertNull("nothing was ever decided", after.activity)
@@ -192,5 +194,44 @@ class AutonomyIntegrationTest {
 
         assertNull("a baby decides nothing", after.activity)
         assertTrue("and learns nothing on its own", after.skills.isEmpty())
+    }
+
+    /**
+     * A companion standing in the room, fond of nobody yet.
+     *
+     * Genetically far from [keeper]'s flat genome on purpose, so that nothing downstream of this
+     * fixture is ever really being blocked by the bloodline rule.
+     */
+    private fun moss(at: Long) = Pal(
+        id = "pal_moss",
+        name = "Moss",
+        species = Species.AQUA,
+        genome = Genome.fromList(List(Genome.GENE_COUNT) { 0.85f }),
+        personality = Personality.CALM,
+        stage = LifeStage.ADULT,
+        relation = Relation.VISITOR,
+        affinity = 0f,
+        metAtSeconds = at,
+        lastSeenSeconds = at,
+        present = true,
+    )
+
+    @Test
+    fun `company counts while the player is driving`() {
+        // The whole colony hangs off one number: fondness. Friendship, courting, an egg and a
+        // child are all thresholds on it. Fondness used to move only inside the creature's own
+        // SOCIALISE activity — which is a decision, which needs FULL autonomy, which is not the
+        // default — so the default player got visitors who arrived at nothing, left at nothing,
+        // and a colony that could never once do anything. Skills are empty here too: standing in
+        // a room somebody else is standing in is not an act the creature performs.
+        val manual = keeper(autonomy = Autonomy.OFF, skills = emptySet()).let {
+            it.copy(intellect = 5f, pals = listOf(moss(it.ageSeconds)))
+        }
+
+        val after = live(manual, 600)
+        val pal = after.pals.single { it.id == "pal_moss" }
+
+        assertTrue("ten minutes in the same room has to count for something", pal.affinity > 0f)
+        assertNull("and none of it is the creature deciding anything", after.activity)
     }
 }

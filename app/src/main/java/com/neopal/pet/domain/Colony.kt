@@ -103,6 +103,22 @@ object Colony {
      */
     private const val AFFINITY_PER_SECOND = 0.030f
 
+    /**
+     * Affinity gained per second simply by being in the room together, before temperament and
+     * rapport. Three tenths of [AFFINITY_PER_SECOND]: about six visits to a friendship instead
+     * of two.
+     *
+     * This is the difference between company and a visit. Going over to somebody is an act the
+     * creature performs — it needs the skill, and it needs the player's permission to act at
+     * all — but two creatures in one room grow used to each other whether or not either of them
+     * decided to, and that is not a thing autonomy has any business gating. Without it the only
+     * road to a friendship ran through [Brain]'s SOCIALISE activity, which needs FULL autonomy,
+     * which is not the default: every visitor a default player ever saw arrived at nothing and
+     * left at nothing, and the entire colony downstream of the number — courting, the nest, the
+     * offspring, the lineage — was unreachable in the shipped configuration.
+     */
+    private const val COMPANY_PER_SECOND = AFFINITY_PER_SECOND * 0.30f
+
     /** Affinity lost per hour apart. A fortnight of silence loses an acquaintance entirely. */
     private const val DECAY_PER_HOUR = 2.5f
 
@@ -120,6 +136,33 @@ object Colony {
     /** Offspring start here: they are family before they have done anything to earn it. */
     private const val OFFSPRING_AFFINITY = 88f
 
+    // ---- growing up ----------------------------------------------------------------------
+
+    /**
+     * How long a child stays at home, in pet seconds: exactly as long as the player's own pet
+     * takes to get from newly hatched to grown, because it is the same journey.
+     *
+     * Read from [Simulation] rather than written down again, so the two can never drift apart —
+     * a hard-coded number here would quietly stop meaning "grown up" the first time anybody
+     * retuned a life stage.
+     */
+    private fun leaveHomeSeconds(config: GameConfig): Long =
+        Simulation.stageDuration(LifeStage.BABY, config) +
+            Simulation.stageDuration(LifeStage.CHILD, config) +
+            Simulation.stageDuration(LifeStage.TEEN, config)
+
+    /**
+     * How long a grown child can go without calling in before the roster lets it go.
+     *
+     * A whole adulthood — about half a life at [GameConfig.lifeSpeed] 1.0. This is the one thing
+     * that keeps a full colony from being permanent, and it is deliberately the *only* way a
+     * family member is ever forgotten: still at home, or in touch, and nothing can dislodge them.
+     * What is lost is a row on a roster, not the fact of them — the diary keeps every child that
+     * ever hatched, and the run record keeps the line.
+     */
+    private fun outOfTouchSeconds(config: GameConfig): Long =
+        Simulation.stageDuration(LifeStage.ADULT, config)
+
     // ---- eggs ---------------------------------------------------------------------------
 
     /** Incubation at [GameConfig.lifeSpeed] 1.0. Long enough to be looked forward to. */
@@ -131,11 +174,12 @@ object Colony {
     // -------------------------------------------------------------------------------------
 
     /**
-     * Visitors arriving and leaving, affinity decay, eggs ripening.
+     * Visitors arriving and leaving, company, affinity decay, eggs ripening.
      *
      * Runs whatever [PetState.autonomy] says, because none of it is a decision the pet makes.
-     * Somebody knocking at the door is not an act of will, and an egg does not wait for
-     * permission to hatch — gating this on autonomy would mean a player on Manual never sees the
+     * Somebody knocking at the door is not an act of will, an egg does not wait for permission
+     * to hatch, and two creatures sharing a room grow used to each other without either of them
+     * choosing to — gating any of it on autonomy would mean a player on Manual never sees the
      * feature exist at all.
      *
      * Expects [PetState.ageSeconds] to have already advanced by [dt] this step, which is how
@@ -151,11 +195,13 @@ object Colony {
     ): PetState {
         if (dt <= 0L) return state
         var s = state
-        s = departures(s, events)
+        s = departures(s, config, events)
         s = decayAffinity(s, dt)
-        s = arrivals(s, dt, random, events)
+        // Before arrivals, so nobody is paid for a step they spent somewhere else.
+        s = company(s, dt, events)
+        s = arrivals(s, config, dt, random, events)
         s = hatchEggs(s, random, events)
-        return capRemembered(s, events)
+        return capRemembered(s, config, events)
     }
 
     /**
@@ -205,6 +251,13 @@ object Colony {
      *
      * The child's genome is rolled here and stored on the egg rather than at hatching, so a
      * player who liked the roll cannot lose it by closing the app — see [NestEgg].
+     *
+     * Each egg is rolled from its own stream, not from [random] directly. The only seed a caller
+     * has to hand is [PetState.rngSeed], and that moves only when [Simulation.advance] runs a
+     * step — which it declines to do until the wall clock has crossed a whole second. Two eggs
+     * laid in one sitting were therefore rolled from the same seed over the same two parents and
+     * came out gene for gene identical: a clutch of twins nobody bred for, in the one part of
+     * the game whose entire point is that a child is a roll of the dice.
      */
     fun pair(
         state: PetState,
@@ -218,16 +271,25 @@ object Colony {
         if (index < 0) return state
         val pal = state.pals[index]
 
+        // Every term is a fact about the state or the caller's own seed, so a test that fixes
+        // both still pins the child exactly — the fix is per-egg entropy, not unpredictability.
+        // What the twins do not share is how many eggs were already in the nest.
+        val eggSeed = random.nextLong() * 0x9E3779B97F4A7C15uL.toLong() +
+            (state.nest.size + 1L) * 0x2545F4914F6CDD1DuL.toLong() +
+            palId.hashCode().toLong()
+        val eggRandom = Random(eggSeed)
+
         val egg = NestEgg(
             id = "egg_${state.generation}_${state.ageSeconds}_${state.nest.size}",
-            genome = Genome.breed(state.genome, pal.genome, random),
+            genome = Genome.breed(state.genome, pal.genome, eggRandom),
             // Either parent's family can carry, so a line can change species without changing
             // its genes. Species drives the palette; the genome drives the shape.
-            species = if (random.nextBoolean()) state.species else pal.species,
+            species = if (eggRandom.nextBoolean()) state.species else pal.species,
             laidAtSeconds = state.ageSeconds,
             hatchesAtSeconds = state.ageSeconds + incubationSeconds(config),
             otherParentId = pal.id,
             otherParentName = pal.name,
+            parentName = state.name,
         )
 
         // A pairing is a promotion whether or not affinity happened to cross the line during an
@@ -237,7 +299,12 @@ object Colony {
         pals[index] = promoted(pal, events)
 
         events += GameEvent.EggLaid(egg)
-        return state.copy(pals = pals, nest = state.nest + egg)
+        // The seed moves on the way out as well. The salt above is what makes a clutch different
+        // from itself; this is what stops the *next* thing to read PetState.rngSeed inside the
+        // same second from replaying a stream that has already been spent. Anything that
+        // consumes randomness and hands back a state should leave a fresh seed behind, or the
+        // second-resolution clock decides how random the game is.
+        return state.copy(pals = pals, nest = state.nest + egg, rngSeed = eggRandom.nextLong())
     }
 
     /**
@@ -255,6 +322,14 @@ object Colony {
         if (Skill.COURT !in state.skills) return "${state.name} has not learned how to court yet."
         if (state.stage.order < LifeStage.TEEN.order) return "${state.name} is far too young to start a family."
         if (pal.stage.order < LifeStage.TEEN.order) return "${pal.name} is far too young to start a family."
+        // Family is barred by name, not left to the genome test below. A child of a distant
+        // pairing can sit far enough from its parent to pass that test, and "the numbers happen
+        // to allow it" is not a rule anybody wants applied here. Reachable since children grew
+        // up: an offspring is family at 88 fondness on the day it hatches, so trust and age are
+        // never what stops it.
+        if (pal.relation == Relation.OFFSPRING || pal.relation == Relation.PARENT) {
+            return "${pal.name} is ${state.name}'s own family."
+        }
         if (pal.affinity < Pal.COURT_AT) return "${pal.name} is not close enough to ${state.name} yet."
         if (state.nest.size >= MAX_NEST_EGGS) return "The nest is already full."
         if (Genome.distance(state.genome, pal.genome) < Genome.MIN_USEFUL_DISTANCE) {
@@ -387,7 +462,39 @@ object Colony {
         Relation.OFFSPRING, Relation.PARENT -> FAMILY_FLOOR
     }
 
-    /** Time apart cools an acquaintance. Company does not: that is what [interact] is for. */
+    /**
+     * Fondness earned by everybody currently in the room, at [COMPANY_PER_SECOND].
+     *
+     * Takes no [Random]: the ordinary passage of time in company is not a die roll, and keeping
+     * it deterministic means it cannot shift the visitor stream — the same seed still builds the
+     * same world.
+     *
+     * The pet has to actually be there for it: asleep, dead, sulking or not yet old enough to
+     * have noticed anybody is nobody's company. Whoever the creature has *chosen* to spend the
+     * step with is skipped, because [interact] is about to pay them at the full rate and paying
+     * them here as well would credit the same second twice.
+     */
+    private fun company(state: PetState, dt: Long, events: MutableList<GameEvent>): PetState {
+        if (state.isDead || state.isSleeping || !state.isMindAwake || state.isSulking) return state
+        if (state.pals.none { it.present }) return state
+        val activity = state.activity
+        val engaged = if (activity?.kind == ActivityKind.SOCIALISE || activity?.kind == ActivityKind.COURT) {
+            activity.targetId
+        } else {
+            null
+        }
+        var changed = false
+        val pals = state.pals.map { pal ->
+            if (!pal.present || pal.id == engaged || pal.affinity >= 100f) return@map pal
+            val gain = COMPANY_PER_SECOND * dt * warmth(state) * rapport(state.personality, pal.personality)
+            if (gain <= 0f) return@map pal
+            changed = true
+            promoted(pal.copy(affinity = (pal.affinity + gain).coerceIn(0f, 100f)), events)
+        }
+        return if (changed) state.copy(pals = pals) else state
+    }
+
+    /** Time apart cools an acquaintance. Company is [company]'s and [interact]'s business. */
     private fun decayAffinity(state: PetState, dt: Long): PetState {
         if (state.pals.isEmpty()) return state
         val loss = DECAY_PER_HOUR * (dt / 3600f)
@@ -403,18 +510,38 @@ object Colony {
     }
 
     /**
-     * Sees out anyone whose visit has run its course.
+     * Sees out anyone whose visit has run its course, and sends grown children out into the
+     * world.
      *
      * On a timer rather than a die roll, so that a visitor's stay is something the player can
      * learn the shape of: a stranger is gone within a quarter of an hour unless you spend it
      * with them, and that is the pressure the whole social loop runs on.
+     *
+     * Children leaving is on the same kind of timer and is the reason the colony has a future.
+     * A child that never grows up is a room that only ever fills, and the roster cap turns from
+     * a limit into a stop: twelve children who never leave and can never be forgotten meant no
+     * new visitor, no new mate, and no thirteenth child, for ever. Growing up is the ordinary
+     * way a household makes room for the next one.
      */
-    private fun departures(state: PetState, events: MutableList<GameEvent>): PetState {
+    private fun departures(state: PetState, config: GameConfig, events: MutableList<GameEvent>): PetState {
         if (state.pals.none { it.present }) return state
+        val leaveHome = leaveHomeSeconds(config)
         var changed = false
         val pals = state.pals.map { pal ->
-            // Offspring live here. They are not visiting.
-            if (!pal.present || pal.relation == Relation.OFFSPRING) return@map pal
+            if (!pal.present) return@map pal
+            // A child still at home. It is not visiting, so the visit timer does not apply to it;
+            // what applies is whether it has grown up. [Pal.stage] is the latch — once it has
+            // moved out it is an adult, and any later visit is an ordinary visit.
+            if (pal.relation == Relation.OFFSPRING && pal.stage.order < LifeStage.ADULT.order) {
+                if (state.ageSeconds - pal.metAtSeconds < leaveHome) return@map pal
+                changed = true
+                events += GameEvent.PalLeft(pal.name)
+                return@map pal.copy(
+                    stage = LifeStage.ADULT,
+                    present = false,
+                    lastSeenSeconds = state.ageSeconds,
+                )
+            }
             val stay = if (pal.isFriend) FRIEND_VISIT_SECONDS else VISIT_SECONDS
             if (state.ageSeconds - pal.lastSeenSeconds < stay) return@map pal
             changed = true
@@ -430,9 +557,13 @@ object Colony {
      * A companion the pet already knows is as likely to come back as a stranger is to turn up
      * for the first time, which is the whole point of remembering them. A world that only ever
      * produces strangers has no relationships in it, only introductions.
+     *
+     * "Somebody the pet already knows" includes its own grown children. They were excluded back
+     * when an offspring was always in the room and there was nothing to come back from.
      */
     private fun arrivals(
         state: PetState,
+        config: GameConfig,
         dt: Long,
         random: Random,
         events: MutableList<GameEvent>,
@@ -444,7 +575,7 @@ object Colony {
         val chance = ARRIVAL_PER_HOUR * warmth(state) * (ARRIVAL_CHECK_INTERVAL / 3600f)
         if (random.nextFloat() >= chance) return state
 
-        val away = state.pals.filter { !it.present && it.relation != Relation.OFFSPRING }
+        val away = state.pals.filter { !it.present }
         if (away.isNotEmpty() && random.nextFloat() < 0.5f) {
             // Somebody the pet already knows, favouring whoever it is fondest of.
             val returning = away.maxByOrNull { it.affinity + random.nextFloat() * 10f } ?: return state
@@ -453,7 +584,13 @@ object Colony {
             return state.copy(pals = state.pals.map { if (it.id == back.id) back else it })
         }
 
-        if (state.pals.size >= MAX_REMEMBERED_PALS && state.pals.none { evictable(it) }) return state
+        // A full roster is a state, not a stop: no new face while the twelve are all still in
+        // touch, and it lifts of its own accord as soon as one of them is not.
+        if (state.pals.size >= MAX_REMEMBERED_PALS &&
+            state.pals.none { evictable(it, state.ageSeconds, config) }
+        ) {
+            return state
+        }
         val stranger = generatePal(state, random)
         events += GameEvent.MetPal(stranger)
         return state.copy(pals = state.pals + stranger)
@@ -559,7 +696,9 @@ object Colony {
                 affinity = OFFSPRING_AFFINITY,
                 metAtSeconds = state.ageSeconds,
                 lastSeenSeconds = state.ageSeconds,
-                parentNames = listOf(state.name, egg.otherParentName),
+                // Whoever laid it, not whoever is standing in the room: an egg can outlive its
+                // parent, and the family tree is the one place that has to stay true to that.
+                parentNames = listOf(egg.parentName.ifBlank { state.name }, egg.otherParentName),
                 skills = taught,
                 present = true,
             )
@@ -570,9 +709,21 @@ object Colony {
         return state.copy(pals = state.pals + hatched, nest = remaining)
     }
 
-    /** A companion nothing would be lost by forgetting. */
-    private fun evictable(pal: Pal): Boolean =
-        !pal.present && pal.relation == Relation.VISITOR
+    /**
+     * A companion nothing would be lost by forgetting.
+     *
+     * Two of them: an acquaintance who left and never mattered, and a grown child who moved out
+     * and has not been round since its parent's whole adulthood. The second one is what stops a
+     * household of twelve from being the last thing that ever happens — see [outOfTouchSeconds].
+     * Anybody in the room, and any family still in touch, is not on this list at all.
+     */
+    private fun evictable(pal: Pal, ageSeconds: Long, config: GameConfig): Boolean = when {
+        pal.present -> false
+        pal.relation == Relation.VISITOR -> true
+        pal.relation == Relation.OFFSPRING && pal.stage.order >= LifeStage.ADULT.order ->
+            ageSeconds - pal.lastSeenSeconds >= outOfTouchSeconds(config)
+        else -> false
+    }
 
     /**
      * Keeps the remembered list inside [MAX_REMEMBERED_PALS].
@@ -581,25 +732,47 @@ object Colony {
      * — or by a bug — is pulled back inside the cap the first time it is loaded instead of
      * growing for ever from wherever it started.
      */
-    private fun capRemembered(state: PetState, events: MutableList<GameEvent>): PetState {
+    private fun capRemembered(
+        state: PetState,
+        config: GameConfig,
+        events: MutableList<GameEvent>,
+    ): PetState {
         if (state.pals.size <= MAX_REMEMBERED_PALS) return state
         val keep = state.pals
-            .sortedByDescending { keepScore(it) }
+            // Ties broken by who was seen most recently, so when the roster has to give somebody
+            // up it is the one furthest out of touch rather than whoever happens to be last in
+            // the list — which, with a houseful of equally-loved children, was the newborn.
+            .sortedWith(
+                compareByDescending<Pal> { keepScore(it, state.ageSeconds, config) }
+                    .thenByDescending { it.lastSeenSeconds },
+            )
             .take(MAX_REMEMBERED_PALS)
             .map { it.id }
             .toSet()
         state.pals.forEach { pal ->
             // Somebody who was in the room has to be seen to leave it, or the UI shows a
-            // companion that silently stops existing between one frame and the next.
-            if (pal.id !in keep && pal.present) events += GameEvent.PalLeft(pal.name)
+            // companion that silently stops existing between one frame and the next. Family goes
+            // on the record whether or not it was in the room, because losing one off the roster
+            // is the biggest thing this function ever does.
+            if (pal.id !in keep && (pal.present || pal.relation != Relation.VISITOR)) {
+                events += GameEvent.PalLeft(pal.name)
+            }
         }
         // Filtered rather than rebuilt from the sorted copy, so the list keeps its own order and
         // the friends screen does not reshuffle itself every time somebody is forgotten.
         return state.copy(pals = state.pals.filter { it.id in keep })
     }
 
-    /** Who is worth remembering, most first: standing, then fondness, then who is here now. */
-    private fun keepScore(pal: Pal): Float {
+    /**
+     * Who is worth remembering, most first: standing, then fondness, then who is here now.
+     *
+     * The one demotion is the one [evictable] already names — a grown child gone long enough to
+     * count as out of touch drops below a stranger standing in the room. Without it the two
+     * disagreed: arrivals would let a new face in on the strength of an out-of-touch child, and
+     * then this would throw the new face straight back out again, which is a meeting that never
+     * happened and an event announcing that it did.
+     */
+    private fun keepScore(pal: Pal, ageSeconds: Long, config: GameConfig): Float {
         val rank = when (pal.relation) {
             Relation.OFFSPRING -> 400f
             Relation.PARENT -> 350f
@@ -607,7 +780,8 @@ object Colony {
             Relation.FRIEND -> 200f
             Relation.VISITOR -> 100f
         }
-        return rank + pal.affinity / 200f + if (pal.present) 40f else 0f
+        val outOfTouch = if (pal.relation != Relation.VISITOR && evictable(pal, ageSeconds, config)) -350f else 0f
+        return rank + outOfTouch + pal.affinity / 200f + if (pal.present) 40f else 0f
     }
 
     /** One trait, and what a move in either direction reads as on the breeding screen. */

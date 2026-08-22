@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The home-screen widget. The picture is one ImageView holding a bitmap the app draws with its
+    own art code; everything a person reads is a real TextView, so it follows the reader's font
+    size and a screen reader can find it.
+
+    The plate is inset from the edges on purpose: the bitmap has the host's own corner radius cut
+    into it, and a full-width bar would put two square corners back at the bottom of it.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent">
+
+    <ImageView
+        android:id="@+id/widget_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:importantForAccessibility="no"
+        android:contentDescription="@null" />
+
+    <LinearLayout
+        android:id="@+id/widget_bar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_margin="6dp"
+        android:orientation="vertical"
+        android:background="#CC17131F"
+        android:paddingLeft="8dp"
+        android:paddingRight="8dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:baselineAligned="true">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:textColor="#F6F3EA"
+                android:text="NeoPal" />
+
+            <TextView
+                android:id="@+id/widget_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:layout_marginStart="6dp"
+                android:maxLines="1"
+                android:textSize="10sp"
+                android:textColor="#99F6F3EA"
+                android:text="" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/widget_detail"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:maxLines="1"
+                android:ellipsize="end"
+                android:textSize="11sp"
+                android:textColor="#CCF6F3EA"
+                android:text="Tap to open" />
+
+            <TextView
+                android:id="@+id/widget_chip"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="6dp"
+                android:layout_marginStart="6dp"
+                android:paddingLeft="10dp"
+                android:paddingRight="10dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:maxLines="1"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="#17131F"
+                android:background="#F5C542"
+                android:visibility="gone"
+                android:text="Feed" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

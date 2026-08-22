@@ -12,11 +12,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.neopal.pet.domain.Memorial
 import com.neopal.pet.ui.screens.AchievementsScreen
 import com.neopal.pet.ui.screens.AlbumScreen
 import com.neopal.pet.ui.screens.BootScreen
@@ -32,6 +36,7 @@ import com.neopal.pet.ui.screens.SettingsScreen
 import com.neopal.pet.ui.screens.ShopScreen
 import com.neopal.pet.ui.screens.StatsScreen
 import com.neopal.pet.ui.screens.TalkScreen
+import com.neopal.pet.ui.screens.UpdateScreen
 import com.neopal.pet.ui.games.CatchGameScreen
 import com.neopal.pet.ui.games.DuetGameScreen
 import com.neopal.pet.ui.games.FetchGameScreen
@@ -62,6 +67,7 @@ object Routes {
     const val COLONY = "colony"
     const val TALK = "talk"
     const val SETTINGS = "settings"
+    const val UPDATE = "update"
     const val MEMORIAL = "memorial"
 }
 
@@ -70,6 +76,19 @@ object Routes {
 fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory)) {
     val navController = rememberNavController()
     val ui by viewModel.ui.collectAsState()
+    // Deliberately above the NavHost, so it is scoped to the activity rather than to the update
+    // route: created inside the route it would be cleared on every back press, and clearing it
+    // cancels a download in flight. See UpdateViewModel's own note.
+    val updateViewModel: UpdateViewModel = viewModel(factory = UpdateViewModel.Factory)
+
+    // Which death the player has already been shown the memorial for.
+    //
+    // It lives up here, in the graph, rather than inside HomeScreen, because that is the whole
+    // bug: navigating to the memorial disposes the home destination's composition, so anything
+    // home remembered came back reset, home saw a dead pet again and navigated straight back.
+    // "Stay a moment" and the system back button both bounced, and the player could not get out.
+    // Held at the NavHost this outlives every destination underneath it. See [Memorial].
+    var mournedDeath by rememberSaveable { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
@@ -100,8 +119,11 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                 NewGameScreen(
                     isNextGeneration = ui.pet?.isDead == true,
                     generation = ui.pet?.generation ?: 1,
-                    onStart = { name, species ->
-                        if (ui.pet?.isDead == true) viewModel.startNextGeneration(name, species)
+                    // Only offered when the last life is over: these are its children, and they
+                    // are not candidates for anything while it is still using the tank.
+                    heirs = if (ui.pet?.isDead == true) viewModel.heirs() else emptyList(),
+                    onStart = { name, species, heirId ->
+                        if (ui.pet?.isDead == true) viewModel.startNextGeneration(name, species, heirId)
                         else viewModel.startNewGame(name, species)
                         navController.navigate(Routes.HOME) {
                             popUpTo(Routes.NEW_GAME) { inclusive = true }
@@ -112,7 +134,16 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
             composable(Routes.HOME) {
                 HomeScreen(
                     viewModel = viewModel,
-                    onOpen = { route -> navController.navigate(route) },
+                    // Home reports the death; the graph decides whether it is news. Reported on
+                    // every rebuild of the screen on purpose -- the decision is not home's to make,
+                    // and home has nowhere durable to make it from.
+                    onPetDied = { key ->
+                        if (Memorial.shouldOpen(key, mournedDeath)) {
+                            mournedDeath = key
+                            navController.navigate(Routes.MEMORIAL) { launchSingleTop = true }
+                        }
+                    },
+                    onOpen = { route -> navController.navigate(route) { launchSingleTop = true } },
                 )
             }
             composable(Routes.STATS) { StatsScreen(viewModel) { navController.popBackStack() } }
@@ -165,7 +196,11 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
                         viewModel.resetEverything()
                         navController.navigate(Routes.NEW_GAME) { popUpTo(Routes.HOME) { inclusive = true } }
                     },
+                    onOpenUpdates = { navController.navigate(Routes.UPDATE) },
                 )
+            }
+            composable(Routes.UPDATE) {
+                UpdateScreen(updateViewModel) { navController.popBackStack() }
             }
             composable(Routes.MEMORIAL) {
                 MemorialScreen(

@@ -22,6 +22,25 @@ data class DayLedger(
     val praises: Int = 0,
     val medicine: Int = 0,
     val mistakes: Int = 0,
+
+    /**
+     * The best each need has been today.
+     *
+     * Counters can only ever go up, so a goal counted off them is safe: three meals served at
+     * noon are still three meals served at midnight. A *stat* goal is not, because satiety loses
+     * about twenty points an hour — "get satiety above 90" was therefore a goal that un-finished
+     * itself within the quarter hour, and the day it belonged to was graded on whatever the
+     * needle happened to read at roll-over rather than on how the day was lived. These four
+     * marks are what makes a stat goal behave like the counters: reached once is reached.
+     *
+     * Zero on a save written before this existed, which costs nothing — every stat goal reads
+     * the larger of the mark and the live value, so an unrecorded day grades exactly as it
+     * always did.
+     */
+    val peakSatiety: Float = 0f,
+    val peakHappiness: Float = 0f,
+    val peakEnergy: Float = 0f,
+    val peakHygiene: Float = 0f,
 ) {
     companion object {
         fun of(state: PetState, dayIndex: Int) = DayLedger(
@@ -33,6 +52,12 @@ data class DayLedger(
             praises = state.praises,
             medicine = state.medicineDoses,
             mistakes = state.careMistakes,
+            // A day opens on the needs it inherits: waking up already clean is a day that has
+            // been clean, and pretending otherwise would only re-ask for something already true.
+            peakSatiety = state.stats.satiety,
+            peakHappiness = state.stats.happiness,
+            peakEnergy = state.stats.energy,
+            peakHygiene = state.stats.hygiene,
         )
     }
 }
@@ -100,17 +125,18 @@ object Missions {
         Mission("m_praise", "Kind words", "Praise your pet 2 times.", 2, 14, 10) { s, d ->
             s.praises - d.praises
         },
-        Mission("m_bath", "Squeaky clean", "Get hygiene above 90.", 1, 16, 12) { s, _ ->
-            if (s.stats.hygiene > 90f) 1 else 0
+        // The four stat goals ask what the day *reached*, not what it ends on. See [DayLedger].
+        Mission("m_bath", "Squeaky clean", "Get hygiene above 90.", 1, 16, 12) { s, d ->
+            if (maxOf(s.stats.hygiene, d.peakHygiene) > 90f) 1 else 0
         },
-        Mission("m_full", "Well fed", "Get satiety above 90.", 1, 16, 12) { s, _ ->
-            if (s.stats.satiety > 90f) 1 else 0
+        Mission("m_full", "Well fed", "Get satiety above 90.", 1, 16, 12) { s, d ->
+            if (maxOf(s.stats.satiety, d.peakSatiety) > 90f) 1 else 0
         },
-        Mission("m_happy", "Beaming", "Get happiness above 90.", 1, 18, 14) { s, _ ->
-            if (s.stats.happiness > 90f) 1 else 0
+        Mission("m_happy", "Beaming", "Get happiness above 90.", 1, 18, 14) { s, d ->
+            if (maxOf(s.stats.happiness, d.peakHappiness) > 90f) 1 else 0
         },
-        Mission("m_rested", "Well rested", "Get energy above 90.", 1, 16, 12) { s, _ ->
-            if (s.stats.energy > 90f) 1 else 0
+        Mission("m_rested", "Well rested", "Get energy above 90.", 1, 16, 12) { s, d ->
+            if (maxOf(s.stats.energy, d.peakEnergy) > 90f) 1 else 0
         },
         Mission("m_flawless", "Not a single slip", "Get through the day with no care mistakes.", 1, 34, 26) { s, d ->
             if (s.careMistakes == d.mistakes) 1 else 0
@@ -146,6 +172,32 @@ object Missions {
                 claimed = mission.id in state.claimedMissionIds,
             )
         }
+    }
+
+    /**
+     * Writes today's high-water marks into the ledger.
+     *
+     * Cheap enough to call from the tick loop: it compares four floats and returns the same
+     * instance when nothing has improved. It has to run *during* the day rather than at
+     * roll-over, because at roll-over the evidence is already gone — that is precisely the
+     * failure it exists to stop.
+     */
+    fun observe(state: PetState): PetState {
+        val l = state.dayLedger
+        val s = state.stats
+        if (s.satiety <= l.peakSatiety && s.happiness <= l.peakHappiness &&
+            s.energy <= l.peakEnergy && s.hygiene <= l.peakHygiene
+        ) {
+            return state
+        }
+        return state.copy(
+            dayLedger = l.copy(
+                peakSatiety = maxOf(l.peakSatiety, s.satiety),
+                peakHappiness = maxOf(l.peakHappiness, s.happiness),
+                peakEnergy = maxOf(l.peakEnergy, s.energy),
+                peakHygiene = maxOf(l.peakHygiene, s.hygiene),
+            ),
+        )
     }
 
     /** True when every one of today's missions is finished, claimed or not. */

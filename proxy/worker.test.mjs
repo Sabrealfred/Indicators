@@ -166,4 +166,76 @@ await test('the rate limiter counts, and fails open rather than shut', async () 
   );
 });
 
-console.log(passed === 12 ? `OK (${passed} tests)` : `${passed}/12 passed`);
+// ---- what the security review found, each pinned so it cannot come back -------------------
+
+await test('a rejected request still costs the caller its quota', async () => {
+  // Counting after the shape checks let someone burn this Worker's own request allowance with
+  // malformed posts, for free, without ever touching a counter.
+  let seen = 0;
+  const limiter = { limit: async () => { seen++; return { success: true }; } };
+  const e = { ...env, LIMITER: limiter };
+  upstream(() => ok('hi'), []);
+  await worker.fetch(post('not json'), e);
+  await worker.fetch(post({ messages: [] }), e);
+  await worker.fetch(post(brief, '/wrong-path'), e);
+  assert.ok(seen >= 2, `malformed requests must be counted, saw ${seen}`);
+});
+
+await test('an atomic limiter is used when one is bound, and it actually stops a burst', async () => {
+  // The KV path cannot do this: its read-modify-write is not atomic, so a concurrent burst all
+  // reads zero and all passes. That is the case a rate limiter exists for.
+  let n = 0;
+  const limiter = { limit: async () => ({ success: ++n <= 3 }) };
+  const sent = [];
+  upstream(() => ok('hi'), sent);
+  const e = { ...env, LIMITER: limiter };
+  const codes = await Promise.all(Array.from({ length: 10 }, () => worker.fetch(post(brief), e).then((r) => r.status)));
+  assert.equal(codes.filter((c) => c === 200).length, 3);
+  assert.equal(codes.filter((c) => c === 429).length, 7);
+  assert.equal(sent.length, 3, 'a refused request must not reach the upstream');
+});
+
+await test('a declared oversize body is refused before it is buffered', async () => {
+  // Reading first meant a 40MB post cost ~250MB of heap — past the per-isolate limit — before
+  // the 413 came back. One upload, one crashed isolate.
+  const sent = [];
+  upstream(() => ok('hi'), sent);
+  let read = false;
+  const req = new Request('https://x.example/v1/chat/completions', {
+    method: 'POST',
+    body: JSON.stringify(brief),
+    headers: { 'Content-Length': String(50_000_000) },
+  });
+  const spied = new Proxy(req, {
+    get(t, k) {
+      if (k === 'text') return async () => { read = true; return t.text(); };
+      const v = Reflect.get(t, k);
+      return typeof v === 'function' ? v.bind(t) : v;
+    },
+  });
+  assert.equal((await worker.fetch(spied, env)).status, 413);
+  assert.equal(read, false, 'the body must not be read at all');
+});
+
+await test('a body of literal null is a clean 400, not a thrown handler', async () => {
+  // JSON.parse('null') succeeds; reading a field off it throws out of fetch, which Cloudflare
+  // turns into a 1101 page instead of the 400 intended here.
+  const sent = [];
+  upstream(() => ok('hi'), sent);
+  assert.equal((await worker.fetch(post('null'), env)).status, 400);
+  assert.equal((await worker.fetch(post('123'), env)).status, 400);
+  assert.equal((await worker.fetch(post('"a string"'), env)).status, 400);
+  assert.equal(sent.length, 0);
+});
+
+await test('a negative ceiling cannot be forwarded', async () => {
+  const sent = [];
+  upstream(() => ok('hi'), sent);
+  await worker.fetch(post({ ...brief, max_tokens: -1 }), env);
+  assert.ok(sent[0].body.max_tokens >= 1, `got ${sent[0].body.max_tokens}`);
+  sent.length = 0;
+  await worker.fetch(post({ ...brief, max_tokens: 'nonsense' }), env);
+  assert.ok(sent[0].body.max_tokens >= 1);
+});
+
+console.log(passed === 17 ? `OK (${passed} tests)` : `${passed}/17 passed`);

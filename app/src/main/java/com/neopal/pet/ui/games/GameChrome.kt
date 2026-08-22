@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
 
@@ -55,14 +56,30 @@ fun GameHeader(
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onExit) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = NeoColors.OnDark)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    // The header sits on colorScheme.background, so the arrow has to be
+                    // onBackground. The fixed NeoColors.OnDark it used to carry is a
+                    // dark-theme near-white: 16.71:1 on the dark chassis, 1.01:1 on the
+                    // light surface — the only way out of a game, invisible.
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
             }
             Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.weight(1f))
             Text(left, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.padding(horizontal = 6.dp))
-            Text(right, style = MaterialTheme.typography.labelSmall, color = NeoColors.NeonCyan)
+            // Same defect as the back arrow above, one control over. The raw neon cyan is drawn
+            // for the near-black chassis: 8.69:1 there, 1.94:1 on the light surface. NeoAccents
+            // keeps a dimmed twin for exactly this, and swapping to it takes the counter to
+            // 5.53:1 in the light theme while leaving the dark theme untouched.
+            Text(right, style = MaterialTheme.typography.labelSmall, color = NeoAccents.cyan)
         }
+        // The timer bar is the only thing on screen that says how long is left, so it is a
+        // graphical control and owes 3:1, not decoration that owes nothing. Same swap, same
+        // numbers: 1.94:1 to 5.53:1 in the light theme, 7.07:1 in the dark either way.
+        val timerFill = NeoAccents.cyan
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -75,7 +92,7 @@ fun GameHeader(
                     .fillMaxWidth(progress.coerceIn(0f, 1f))
                     .height(4.dp)
                     .clip(CircleShape)
-                    .background(NeoColors.NeonCyan),
+                    .background(timerFill),
             )
         }
     }

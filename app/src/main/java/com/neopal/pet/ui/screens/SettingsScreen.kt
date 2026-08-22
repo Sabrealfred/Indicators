@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.domain.PetClock
 import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelChip
@@ -70,7 +74,12 @@ private const val DisabledAlpha = 0.38f
 
 /** Look, sound, reminders, pace, tips, save import/export and reset — grouped by what they change. */
 @Composable
-fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame: () -> Unit) {
+fun SettingsScreen(
+    viewModel: PetViewModel,
+    onBack: () -> Unit,
+    onResetToNewGame: () -> Unit,
+    onOpenUpdates: () -> Unit,
+) {
     val ui by viewModel.ui.collectAsState()
     val config = ui.config
     val clipboard = LocalClipboardManager.current
@@ -84,6 +93,9 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            // Edge to edge: keep the content out of the status and gesture bars. The
+            // background is applied first on purpose, so it still bleeds under them.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = pixelUnits(3)),
     ) {
@@ -217,6 +229,15 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
             )
         }
 
+
+        // Its own file: the only section of this screen that needs a speech engine in the
+        // composition, and the only one whose copy has to stay honest about hardware.
+        Spacer(Modifier.height(pixelUnits(3)))
+        VoiceSettingsPanel(
+            pet = ui.pet,
+            config = config.voice,
+            onChange = { voice -> viewModel.updateConfig { it.copy(voice = voice) } },
+        )
 
         Spacer(Modifier.height(pixelUnits(3)))
         SettingsPanel(
@@ -435,21 +456,24 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
             }
             Spacer(Modifier.height(pixelUnits(3)))
             Text(
-                "Clock: one pet day lasts ${config.secondsPerPetDay / 60} minutes.",
+                "Clock: one pet day lasts ${PetClock.minutesOf(config)} minutes.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(1)))
             PixelSlider(
-                value = (config.secondsPerPetDay / 60f),
+                value = PetClock.minutesOf(config).toFloat(),
                 onValueChange = { minutes ->
-                    viewModel.updateConfig { it.copy(secondsPerPetDay = (minutes.toLong().coerceAtLeast(5L)) * 60L) }
+                    viewModel.updateConfig { PetClock.withMinutes(it, minutes) }
                 },
                 label = "Minutes per pet day",
-                valueLabel = "${config.secondsPerPetDay / 60} minutes",
-                valueRange = 5f..240f,
-                // 47 notches of five minutes — the same stops the Material slider's 46 steps had.
-                notches = 47,
+                valueLabel = "${PetClock.minutesOf(config)} minutes",
+                // Range and stops come from the domain, which has a test tying the top of the
+                // range to GameConfig's own default. They were literals here, and they did not
+                // include it: the control opened pinned to its maximum, two hours short of the
+                // truth, and the first touch anywhere on it cut the day by a third.
+                valueRange = PetClock.MIN_MINUTES_PER_DAY.toFloat()..PetClock.MAX_MINUTES_PER_DAY.toFloat(),
+                notches = PetClock.NOTCHES,
                 accent = NeoAccents.cyan,
             )
             Spacer(Modifier.height(pixelUnits(1)))
@@ -525,6 +549,32 @@ fun SettingsScreen(viewModel: PetViewModel, onBack: () -> Unit, onResetToNewGame
                 Spacer(Modifier.height(pixelUnits(2)))
                 Text(it, style = MaterialTheme.typography.labelSmall, color = NeoAccents.cyan)
             }
+        }
+
+        Spacer(Modifier.height(pixelUnits(3)))
+        // Directly above the danger zone on purpose: it is the other thing on this screen that
+        // can end with the save gone, if a build turns out to be signed with a different key.
+        SettingsPanel("App updates", "Where new builds come from, and whether there is one.") {
+            PixelButton(
+                onClick = onOpenUpdates,
+                accent = NeoAccents.cyan,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Check for updates",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.height(pixelUnits(2)))
+            Text(
+                "NeoPal installs from its own release page rather than a store, so it does not " +
+                    "update itself in the background. Nothing is downloaded or installed without " +
+                    "you asking for it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))

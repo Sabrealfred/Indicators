@@ -443,6 +443,30 @@ data class GameConfig(
      * for either should never be handed one.
      */
     val retroMode: RetroMode = RetroMode.NONE,
+    /**
+     * Whether the creature speaks aloud, and whether it listens. Silent both ways by default —
+     * nothing should start talking the first time somebody opens the app. See [CreatureVoice].
+     */
+    val voice: VoiceConfig = VoiceConfig(),
+    /**
+     * How the creature is allowed to interrupt. [notificationsEnabled] is the master switch and
+     * this is the shape of what gets through when it is on — which of the "come and look"
+     * moments are worth a buzz, and the quiet window that nothing crosses.
+     *
+     * Kept here rather than in the notification code because it is a rule about the game, and
+     * because the quiet hours have to be readable by a pure function that can be tested without
+     * a phone attached.
+     */
+    val nudges: NudgeSettings = NudgeSettings(),
+    /**
+     * Whether a copy of the save is kept in `Documents/NeoPal`, outside this app's sandbox.
+     *
+     * On by default, because a backup a player has to remember to make is a backup that does not
+     * exist on the day it is needed, and this one costs them nothing: no permission prompt, no
+     * dialog, one small text file in a folder with the app's name on it. It is what makes the
+     * difference between an uninstall costing a lineage and costing one tap in a file picker.
+     */
+    val saveMirrorEnabled: Boolean = true,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
     /**

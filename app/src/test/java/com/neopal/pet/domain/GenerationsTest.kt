@@ -144,6 +144,103 @@ class GenerationsTest {
         assertTrue("twelve mistakes over ten hours is the better keeper", long.mistakesPerHour < short.mistakesPerHour)
     }
 
+    @Test
+    fun `the player's own records outlive the creature that set them`() {
+        val lived = starved(hatched()).copy(
+            highScores = mapOf("rhythm" to 4_200, "catch" to 910),
+            level = 7,
+            xp = 40,
+            careStreakDays = 5,
+            bestCareStreak = 9,
+        )
+        val next = Simulation.nextGeneration(lived, "Second", Species.VOLT, lived.lastTickMillis + 5_000)
+
+        assertEquals(
+            "a minigame record was set by the player's thumbs, not by the pet",
+            mapOf("rhythm" to 4_200, "catch" to 910),
+            next.highScores,
+        )
+        assertEquals("the achievement calls it keeper level, and keepers do not die", 7, next.level)
+        assertEquals("progress toward the next keeper level goes with the level", 40, next.xp)
+        assertEquals(
+            "burying one pet and adopting another on the same day is not a day missed",
+            5,
+            next.careStreakDays,
+        )
+        assertEquals("a best is a record of the player, and records are not undone", 9, next.bestCareStreak)
+    }
+
+    @Test
+    fun `a wiped high score would make the seven-game badge unwinnable across lives`() {
+        val played = hatched().copy(highScores = MiniGame.entries.associate { it.id to 100 })
+        assertEquals(MiniGame.entries.size, MiniGame.playedCount(played))
+
+        val next = Simulation.nextGeneration(played, "Second", Species.LEAF, played.lastTickMillis + 5_000)
+        assertEquals(
+            "\"score in all seven\" says ever, and ever has to outlive one creature",
+            MiniGame.entries.size,
+            MiniGame.playedCount(next),
+        )
+    }
+
+    @Test
+    fun `what belonged to the creature is still buried with it`() {
+        val lived = starved(hatched()).copy(
+            mealsEaten = 30,
+            gamesPlayed = 12,
+            gamesWon = 7,
+            cleanups = 8,
+            praises = 9,
+            scolds = 2,
+            medicineDoses = 4,
+            careMistakes = 11,
+            peakBond = 77f,
+            intellect = 60f,
+            skills = setOf(Skill.TIDY_UP, Skill.SELF_GROOM),
+            studySessions = 5,
+        )
+        val next = Simulation.nextGeneration(lived, "Second", Species.VOLT, lived.lastTickMillis + 5_000)
+
+        assertEquals("meals were eaten by a mouth that is gone", 0, next.mealsEaten)
+        assertEquals(0, next.gamesPlayed)
+        assertEquals(0, next.gamesWon)
+        assertEquals(0, next.cleanups)
+        assertEquals(0, next.praises)
+        assertEquals(0, next.scolds)
+        assertEquals(0, next.medicineDoses)
+        assertEquals("a new pet has not been neglected yet", 0, next.careMistakes)
+        assertEquals(0, next.studySessions)
+        assertEquals(0f, next.peakBond, 0.0001f)
+        assertTrue("a bond is with somebody in particular", next.stats.bond < 20f)
+        assertTrue("nothing is inherited but what a parent could teach", next.skills.isEmpty())
+        assertTrue("intellect is a brain, and this is a different brain", next.intellect < 10f)
+        assertEquals(LifeStage.EGG, next.stage)
+        assertEquals(0L, next.ageSeconds)
+        assertTrue(!next.isDead)
+        assertNull(next.deathReason)
+    }
+
+    @Test
+    fun `a toy paid for once is not repossessed by the funeral`() {
+        val furnished = starved(hatched()).copy(
+            inventory = mapOf(
+                "hat_crown" to 1,
+                "room_beach" to 1,
+                "toy_ball" to 1,
+                "toy_drum" to 1,
+                "meal_stew" to 4,
+            ),
+        )
+        val next = Simulation.nextGeneration(furnished, "Second", Species.VOLT, furnished.lastTickMillis + 5_000)
+
+        assertEquals("a hat outlives its wearer", 1, next.inventory["hat_crown"])
+        assertEquals(1, next.inventory["room_beach"])
+        assertEquals("a ball is furniture, not a meal — nothing about it was used up", 1, next.inventory["toy_ball"])
+        assertEquals(1, next.inventory["toy_drum"])
+        assertEquals("food does not keep; the new pet gets its own starter pack", null, next.inventory["meal_stew"])
+        assertEquals(3, next.inventory["snack_berry"])
+    }
+
     private fun hatched(): PetState =
         Simulation.advance(Simulation.newGame("Test", Species.AQUA, start), start + 120_000, config).state
 

@@ -265,10 +265,11 @@ private fun PalsPanel(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        // The second-commonest dead end after an empty list: a room full of visitors whose
-        // fondness never moves, because approaching one is the pet's own move and it is either
-        // not allowed to make it or has never been taught how. Said here rather than left for
-        // the player to infer from a meter that sits still.
+        // The second-commonest dead end after an empty list: a room full of visitors nobody ever
+        // becomes fond of. Time in the room does it by itself, slowly; going over to somebody is
+        // what makes it quick, and that is the pet's own move — it either has not been taught it
+        // or is not allowed to make it. Said here rather than left for the player to infer from
+        // a meter that crawls.
         val knowsHow = Skill.SOCIALISE in pet.skills
         val allowed = pet.autonomy == Autonomy.FULL
         if (pals.none { it.isFriend } && (!knowsHow || !allowed)) {
@@ -276,9 +277,9 @@ private fun PalsPanel(
             if (!knowsHow) {
                 Condition(
                     met = false,
-                    text = "Nobody's fondness will move until ${pet.name} has learned " +
-                        "${Skill.SOCIALISE.displayName.lowercase()}. Until then a visitor is " +
-                        "somebody it hides from.",
+                    text = "Fondness creeps up on its own while somebody is in the room, but it " +
+                        "takes about six visits that way. ${pet.name} has not learned " +
+                        "${Skill.SOCIALISE.displayName.lowercase()} yet, which is what makes it two.",
                 )
             }
             if (!allowed) {
@@ -286,7 +287,8 @@ private fun PalsPanel(
                     met = false,
                     text = "Going over to say hello is ${pet.name}'s own move, and on " +
                         "${pet.autonomy.displayName} it is not allowed to make it. Set the day " +
-                        "to ${Autonomy.FULL.displayName} for it to approach anyone.",
+                        "to ${Autonomy.FULL.displayName} for it to approach anyone rather than " +
+                        "waiting for company to do the work.",
                 )
             }
         }
@@ -519,7 +521,8 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
                 "${pet.name} has learned ${Skill.SOCIALISE.displayName.lowercase()}."
             } else {
                 "${pet.name} has not learned ${Skill.SOCIALISE.displayName.lowercase()} yet. " +
-                    "Until it does, a visitor is somebody it hides from, and fondness never moves."
+                    "Until it does, a visitor is somebody it sits across the room from — " +
+                    "fondness still creeps up, at about a third of the pace."
             },
         )
         Condition(
@@ -528,9 +531,9 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
                 "The day is ${pet.autonomy.displayName.lowercase()}, so ${pet.name} will go over " +
                     "and say hello by itself."
             } else {
-                "Company is ${pet.name}'s own move to make, and on ${pet.autonomy.displayName} it " +
-                    "is not allowed to make it. Set the day to ${Autonomy.FULL.displayName} for it " +
-                    "to approach a visitor at all."
+                "Going over is ${pet.name}'s own move to make, and on ${pet.autonomy.displayName} " +
+                    "it is not allowed to make it. Company still counts while somebody is here; " +
+                    "set the day to ${Autonomy.FULL.displayName} for it to do more than share a room."
             },
         )
         Condition(

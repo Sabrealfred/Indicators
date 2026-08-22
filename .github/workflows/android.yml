@@ -16,6 +16,13 @@ jobs:
     name: Unit tests + debug APK
     runs-on: ubuntu-latest
 
+    # The versionCode every APK this workflow produces carries. run_number is monotonic per
+    # repository and never reused, which is exactly what the in-app updater needs: without an
+    # increasing number every published build says "1" and the updater can only ever answer
+    # "you are up to date".
+    env:
+      NEOPAL_VERSION_CODE: ${{ github.run_number }}
+
     steps:
       - uses: actions/checkout@v4
 
@@ -60,9 +67,31 @@ jobs:
           set -euo pipefail
           apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
           cp "$apk" neopal-debug.apk
+          sha256=$(sha256sum neopal-debug.apk | cut -d" " -f1)
+          size=$(stat -c%s neopal-debug.apk)
+          code="${NEOPAL_VERSION_CODE}"
+          name="1.0.${code}"
+
+          # The marker the in-app updater reads. It is the only thing that tells a phone which
+          # build this release actually is: the tag never moves, so nothing else on the page is
+          # orderable. Written inside an HTML comment so it does not show on the release page,
+          # and parsed by AppVersion.parseMarker, which requires every field and refuses a
+          # repeated key. The sha256 is re-checked against the downloaded bytes before anything
+          # is handed to the installer, so a wrong one costs a failed update, not a bad one.
+          {
+            echo "Debug build of ${{ github.sha }}."
+            echo
+            echo "Download \`neopal-debug.apk\` on your phone and allow installing from unknown sources."
+            echo
+            echo "Build ${code} (${name}). Signed with the repository's committed debug key, so"
+            echo "this installs over any previous build from this workflow without losing the save."
+            echo
+            echo "<!-- neopal-update: code=${code} name=${name} sha256=${sha256} size=${size} asset=neopal-debug.apk -->"
+          } > release-notes.md
+
           gh release delete debug-latest --yes --cleanup-tag || true
           gh release create debug-latest neopal-debug.apk \
             --prerelease \
             --target "${{ github.sha }}" \
             --title "NeoPal — debug APK" \
-            --notes "Debug build of ${{ github.sha }}. Download \`neopal-debug.apk\` on your phone and allow installing from unknown sources. Debug-signed: uninstall any previous copy before updating."
+            --notes-file release-notes.md

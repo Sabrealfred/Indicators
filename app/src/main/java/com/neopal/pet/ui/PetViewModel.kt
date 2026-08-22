@@ -8,39 +8,52 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
+import com.neopal.pet.data.Notifier
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.data.RemoteMindClient
+import com.neopal.pet.data.SaveVault
 import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.ActionResult
 import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.Brain
 import com.neopal.pet.domain.Cadence
 import com.neopal.pet.domain.CareActions
+import com.neopal.pet.domain.ChatTurn
+import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Distillation
 import com.neopal.pet.domain.Errands
-import com.neopal.pet.domain.ToolId
-import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
-import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Learning
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.MindProvider
-import com.neopal.pet.domain.NoMind
-import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.PetClock
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
-import com.neopal.pet.domain.PetAnimation
-import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.NoMind
 import com.neopal.pet.domain.Pal
+import com.neopal.pet.domain.PetAnimation
+import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Relation
+import com.neopal.pet.domain.RunRecord
+import com.neopal.pet.domain.SaveCadence
+import com.neopal.pet.domain.SaveUrgency
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.domain.Skill
 import com.neopal.pet.domain.Species
 import com.neopal.pet.domain.StatDelta
+import com.neopal.pet.domain.ToolId
 import com.neopal.pet.domain.statDeltas
+import com.neopal.pet.widget.PetWidget
+import com.neopal.pet.widget.PetWidgetBridge
+import com.neopal.pet.widget.PetWidgetHost
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -106,6 +119,16 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
     private var saveJob: Job? = null
+
+    /**
+     * The newest state that is not known to be on disk. Held here rather than captured by the
+     * save job so that cancelling a scheduled write cannot lose the change it was going to make.
+     */
+    private var pendingSave: PetState? = null
+
+    /** How often a write is allowed to happen at all. See [SaveCadence]. */
+    private val saveCadence = SaveCadence()
+
     /**
      * The foreground clock only runs while the screen is actually in front of someone. Left
      * running in the background it fed the simulation a stream of one-second ticks, which look
@@ -116,7 +139,51 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     private var inForeground: Boolean = true
     private var toastJob: Job? = null
 
+    /**
+     * The copy of the save that outlives an uninstall.
+     *
+     * Held here rather than made per call because the rate limit is per instance: a fresh
+     * SaveVault starts with `lastMirrorAtMillis = 0`, so a caller that built one each time would
+     * write a MediaStore file on every single tick while looking exactly like a caller that
+     * respected the twenty-minute interval.
+     */
+    private val vault = SaveVault(application)
+
+    /**
+     * Outlives this view model on purpose. The mirror is started from `onPaused`, and
+     * `viewModelScope` is cancelled the moment the view model is cleared — which on a
+     * configuration change or a swipe-away is the very next thing that happens. A write
+     * cancelled halfway is exactly what [SaveVault]'s three-step rotation is designed to
+     * survive, but not starting it at all is a lineage lost for no reason.
+     */
+    private val vaultScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+
+    /**
+     * This view model's end of [PetWidgetBridge]. Held as a property rather than written inline
+     * so [onCleared] can check identity before clearing: on a configuration change the new view
+     * model installs itself before the old one is cleared, and a blind `host = null` there would
+     * disconnect the live one.
+     */
+    private val widgetHost = object : PetWidgetHost {
+        override fun petInHand(): PetState? = _ui.value.pet
+        override fun configInHand(): GameConfig = _ui.value.config
+
+        // Exactly the tail every other action gets: chronicle, deltas, toast, persist — and the
+        // blip. The creature chirping when it is fed from the home screen is the point of
+        // feeding it from the home screen.
+        override fun takeFromWidget(result: ActionResult) = runAction(Sfx.CONFIRM) { result }
+    }
+
     init {
+        // While this view model is alive it owns the pet, and a widget that wrote the save
+        // underneath it would have its work silently discarded the next time the app resumed
+        // and persisted its own copy. So the widget hands its taps here instead. Installed
+        // before the first load: a tap that arrives early finds a null pet and is refused,
+        // which is correct, whereas a tap that arrives before the bridge exists would be
+        // applied to the save behind the app's back.
+        PetWidgetBridge.host = widgetHost
+
         viewModelScope.launch {
             val config = repository.currentConfig()
             val saved = repository.currentState()
@@ -146,7 +213,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)
                 if (result.state != pet) {
                     _ui.update { it.copy(pet = result.state) }
-                    persist(result.state)
+                    // Every tick changes the state, if only its `lastTickMillis`, so this ran
+                    // once a second. It is the one caller whose state is derived rather than
+                    // authored — see [SaveUrgency.ROUTINE].
+                    persist(result.state, SaveUrgency.ROUTINE)
                 }
                 handleEvents(result.events, offline = false)
                 maybeReconsider(result.events)
@@ -271,21 +341,99 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     // ---------------------------------------------------------------- lifecycle
 
     fun startNewGame(name: String, species: Species) {
+        forgetCadence()
         val state = Simulation.newGame(name, species, System.currentTimeMillis())
         _ui.update { it.copy(pet = state, loading = false) }
         play(Sfx.CONFIRM)
-        persist(state, immediate = true)
+        persist(state, SaveUrgency.NOW)
     }
 
-    fun startNextGeneration(name: String, species: Species) {
+    /**
+     * The creature's own children, offered as the next generation.
+     *
+     * Empty until it has actually bred, which is the point: the reward for courting, laying an
+     * egg and raising a child is that the child is who continues.
+     */
+    fun heirs(): List<Pal> =
+        _ui.value.pet?.pals.orEmpty().filter { it.relation == Relation.OFFSPRING }
+
+    /**
+     * Starts the next life, from [heirId] when one is named.
+     *
+     * The heir parameter is the whole of selective breeding. `Simulation.nextGeneration` has
+     * always accepted one — the child's genome carries over, its species, its parents' names, the
+     * skills it was taught — and nothing ever passed it, so every generation was an unrelated
+     * founder and the child a player had bred simply vanished when its parent died. The genetics
+     * worked perfectly right up to the moment they were supposed to pay off.
+     */
+    fun startNextGeneration(name: String, species: Species, heirId: String? = null) {
         val previous = _ui.value.pet ?: return startNewGame(name, species)
-        val state = Simulation.nextGeneration(previous, name, species, System.currentTimeMillis())
+        val heir = heirId?.let { id -> previous.pals.firstOrNull { it.id == id && it.relation == Relation.OFFSPRING } }
+        val nowMillis = System.currentTimeMillis()
+        val state = Simulation.nextGeneration(
+            previous = previous,
+            name = name,
+            // An heir keeps its own species; picking one is not a choice about species.
+            species = heir?.species ?: species,
+            nowMillis = nowMillis,
+            heir = heir,
+        )
+        forgetCadence()
         _ui.update { it.copy(pet = state) }
         play(Sfx.CONFIRM)
-        persist(state, immediate = true)
+        persist(state, SaveUrgency.NOW)
+        distilPreviousLife(previous, nowMillis)
+    }
+
+    /**
+     * Asks the remote mind what the life that just ended was about, and folds its answer into the
+     * heir that is already living.
+     *
+     * Deliberately *after* the generation has started rather than in front of it. The local
+     * distillation in [Simulation.nextGeneration] has already given the child its inheritance, so
+     * nobody waits on a network to bury a pet, and a player with no key gets the whole feature
+     * minus the wording. See [Distillation] for what an answer is allowed to do when it lands.
+     */
+    private fun distilPreviousLife(previous: PetState, endedAtMillis: Long) {
+        val config = _ui.value.config
+        if (!config.mind.usable || !config.mind.lineageLessons || !mind.isReady) return
+        val record = RunRecord.of(previous, endedAtMillis)
+        val brief = PetBrief.of(previous, config)
+        val decisions = previous.decisions
+        viewModelScope.launch {
+            val lessons = mind.distil(brief, record, decisions)
+            if (lessons.isEmpty()) return@launch
+            val heir = _ui.value.pet ?: return@launch
+            val folded = Distillation.fold(heir, previous.generation, lessons) ?: return@launch
+            _ui.update { it.copy(pet = folded) }
+            persist(folded)
+        }
+    }
+
+    /**
+     * Clears the remote-brain throttles at the start of a life.
+     *
+     * They are stamped in *pet* seconds, and a new generation starts back at zero. Carrying the
+     * previous creature's stamps forward meant `age - last` stayed negative for as long as that
+     * creature had lived — so a successor to a full life could not think, plan or speak for its
+     * entire childhood. Silent, naturally: identical to a creature that was never given a brain.
+     */
+    private fun forgetCadence() {
+        lastReconsideredAtSeconds = Cadence.NEVER
+        lastPlannedAtSeconds = Cadence.NEVER
+        lastSpokeFirstAtSeconds = Cadence.NEVER
     }
 
     fun resetEverything() {
+        // Cancelled first, and that ordering is the whole fix. `persist` is a single-slot debounce
+        // and the clock loop refreshes it, so at almost any moment there is a write of the
+        // current pet already scheduled. Clearing the store without cancelling it lets that
+        // write land *after* the removal and put the save back — invisibly, because the screen
+        // has already moved on to the new-game screen. The pending state has to be dropped as
+        // well as the job, now that it is held in a field rather than captured by the job.
+        saveJob?.cancel()
+        pendingSave = null
+        forgetCadence()
         viewModelScope.launch {
             repository.clear()
             _ui.update { it.copy(pet = null) }
@@ -295,19 +443,45 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     /** Called when the app leaves the screen, so the world is simulated as time away. */
     fun onPaused() {
         inForeground = false
-        _ui.value.pet?.let { persist(it, immediate = true) }
+        // The creature is allowed to speak up again from here. While the app is on screen it is
+        // not: an entry in the shade about a pet the player is looking at is clutter.
+        Notifier.onAppBackgrounded()
+        _ui.value.pet?.let { pet ->
+            // NOW, not the routine cadence. This is the one path that makes the new write rate
+            // safe: whatever the clock has been sitting on lands here, at the last instant the
+            // process is guaranteed to still be running.
+            persist(pet, SaveUrgency.NOW)
+            // Forced, ignoring the interval. Going to the background is one of the two moments
+            // the mirror exists for — the other is a death — because it is the last instant this
+            // process is guaranteed to still be running. A mirror that is twenty minutes stale
+            // is still a lineage saved; a mirror that was never written is not.
+            mirror(pet, force = true)
+        }
+        // The player just did something and the home screen is where they are going. Ordered
+        // after the persist so the widget reads the pet it is about to draw, not the one before.
+        PetWidget.refresh(getApplication<Application>())
+    }
+
+    override fun onCleared() {
+        // Nobody is holding the pet any more, so the widget goes back to writing the save
+        // itself. Leaving a stale host here would route taps into a view model that is gone.
+        if (PetWidgetBridge.host === widgetHost) PetWidgetBridge.host = null
+        super.onCleared()
     }
 
     /** Called when the app returns to the foreground so offline progress lands immediately. */
     fun onResumed() {
         inForeground = true
+        // Takes down whatever is pinned and clears the interruption budget. The player answered
+        // by coming back, whether or not they came back because of the notification.
+        Notifier.onAppOpened(getApplication<Application>())
         val current = _ui.value
         val pet = current.pet ?: return
         val result = Simulation.advance(pet, System.currentTimeMillis(), current.config)
         val report = buildOfflineReport(pet, result.state, result.events)
         _ui.update { it.copy(pet = result.state, offlineReport = report ?: it.offlineReport) }
         handleEvents(result.events, offline = true)
-        persist(result.state, immediate = true)
+        persist(result.state, SaveUrgency.NOW)
     }
 
     fun dismissOfflineReport() = _ui.update { it.copy(offlineReport = null) }
@@ -372,6 +546,9 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun rename(name: String) = runAction(Sfx.CONFIRM) { CareActions.rename(it, name) }
     fun snapshot(title: String) = runAction(Sfx.CONFIRM) { CareActions.snapshot(it, title, System.currentTimeMillis()) }
 
+    /** Uses an item for what it is for; the routing lives in [CareActions.use], not here. */
+    fun useItem(itemId: String) = runAction(Sfx.CONFIRM) { CareActions.use(it, itemId) }
+
     fun finishGame(won: Boolean, score: Float, gameName: String, gameId: String, points: Int) =
         runAction(if (won) Sfx.LEVEL_UP else Sfx.GAME_MISS) {
             CareActions.finishGame(it, won, score, gameName, gameId, points)
@@ -432,7 +609,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         play(Sfx.CONFIRM)
         _ui.update { it.copy(pet = updated) }
         showToast(autonomy.description)
-        persist(updated, immediate = true)
+        persist(updated, SaveUrgency.NOW)
     }
 
     /** What the brain is weighing right now, winners and blocked options alike. */
@@ -491,7 +668,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val updated = Colony.pair(pet, palId, _ui.value.config, kotlin.random.Random(pet.rngSeed), events)
         _ui.update { it.copy(pet = updated) }
         handleEvents(events, offline = false)
-        persist(updated, immediate = true)
+        persist(updated, SaveUrgency.NOW)
     }
 
     /**
@@ -639,7 +816,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val cleared = pet.copy(chat = emptyList())
         play(Sfx.BACK)
         _ui.update { it.copy(pet = cleared) }
-        persist(cleared, immediate = true)
+        persist(cleared, SaveUrgency.NOW)
     }
 
     /** Longest thing the player can say in one go. Free models charge for every token of it. */
@@ -650,7 +827,25 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         updateConfig { it.copy(mind = transform(it.mind)) }
     }
 
+    /**
+     * Writes the out-of-sandbox copy, if the player has left it on and the device can hold one.
+     *
+     * Deliberately silent about its outcome. This is not something the player asked for at the
+     * moment it happens, and a failure — no MediaStore before Android 10, no room, a revoked
+     * volume — costs them nothing they can act on right now. What they can act on is the export
+     * button, which reports everything.
+     */
+    private fun mirror(pet: PetState, force: Boolean) {
+        val config = _ui.value.config
+        vault.mirrorEnabled = config.saveMirrorEnabled
+        if (vault.mirrorGate(System.currentTimeMillis(), force) != null) return
+        // On the application scope rather than viewModelScope: this is called from onPaused, and
+        // viewModelScope is cancelled when the view model is cleared, which can be moments later.
+        vaultScope.launch { vault.mirror(pet, config, System.currentTimeMillis(), force) }
+    }
+
     /** Runs one pure action against the current state and folds the result into the UI. */
+
     private fun runAction(sfx: Sfx, block: (PetState) -> ActionResult) {
         val pet = _ui.value.pet ?: return
         val raw = block(pet)
@@ -678,11 +873,21 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun markTutorialSeen() = updateConfig { it.copy(tutorialSeen = true) }
 
     fun updateConfig(transform: (GameConfig) -> GameConfig) {
-        val updated = transform(_ui.value.config)
+        val previous = _ui.value.config
+        val updated = transform(previous)
         ChiptuneEngine.enabled = updated.soundEnabled
         ChiptuneEngine.volume = updated.sfxVolume
-        _ui.update { it.copy(config = updated) }
+        // Moving the day length moves the ruler the day counter is measured with, and the mission
+        // roll-over reads any jump in that counter as days the player was not there for -- so
+        // changing this setting used to cost them their care streak on the next tick. Re-base the
+        // day index onto the new clock here, at the moment the setting changes, which is the only
+        // moment both clocks are in hand. See [PetClock.reclock]: it is a no-op unless the day
+        // length actually moved, and it re-labels the day rather than restarting it.
+        val before = _ui.value.pet
+        val reclocked = before?.let { PetClock.reclock(it, previous, updated) }
+        _ui.update { state -> state.copy(config = updated, pet = reclocked ?: state.pet) }
         viewModelScope.launch { repository.saveConfig(updated) }
+        if (reclocked != null && reclocked !== before) persist(reclocked, SaveUrgency.NOW)
     }
 
     suspend fun exportSave(): String = repository.exportSave()
@@ -723,6 +928,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     triggerAnimation(PetAnimation.DEAD)
                     play(Sfx.DEATH)
                     showToast("${_ui.value.pet?.name ?: "Your pet"} passed away: ${event.reason.displayName}.")
+                    // The other moment the out-of-sandbox copy exists for. A death is when a save
+                    // becomes a record rather than a game in progress, and it is also when a
+                    // player is most likely to uninstall.
+                    _ui.value.pet?.let { mirror(it, force = true) }
                 }
                 is GameEvent.GotSick -> showToast("Your pet caught something.")
                 is GameEvent.Recovered -> showToast("Fully recovered!")
@@ -767,6 +976,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     showToast("Worked something out on its own.")
                 }
 
+                // Deliberately silent *here*, not unhandled: Decided and Finished are the two
+                // halves of one log line and both are folded into the decision log in the
+                // domain (Brain.recordOutcome), which the Mind screen reads. A toast per
+                // finished tidy-up is the notification this app exists not to be.
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
@@ -801,12 +1014,26 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         if (_ui.value.config.soundEnabled) ChiptuneEngine.play(sfx)
     }
 
-    /** Debounced write so a burst of taps does not hammer the disk. */
-    private fun persist(state: PetState, immediate: Boolean = false) {
+    /**
+     * Writes the world down, at the rate [SaveCadence] allows.
+     *
+     * The state to be written lives in [pendingSave] rather than being captured by the job, so a
+     * write that is cancelled and replaced by a more urgent one does not drop the change it was
+     * carrying, and a write that starts late writes what is true now rather than what was true
+     * when it was scheduled.
+     */
+    private fun persist(state: PetState, urgency: SaveUrgency = SaveUrgency.SOON) {
+        pendingSave = state
+        val wait = saveCadence.waitFor(urgency, System.currentTimeMillis(), saveJob?.isActive == true)
+            ?: return
         saveJob?.cancel()
         saveJob = viewModelScope.launch {
-            if (!immediate) delay(800)
-            repository.save(state)
+            if (wait > 0L) delay(wait)
+            val writing = pendingSave ?: return@launch
+            repository.save(writing)
+            saveCadence.written(System.currentTimeMillis())
+            // Only if nothing newer arrived while the write was in flight.
+            if (pendingSave === writing) pendingSave = null
         }
     }
 

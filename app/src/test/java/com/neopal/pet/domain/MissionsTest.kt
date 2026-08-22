@@ -169,6 +169,48 @@ class MissionsTest {
         assertTrue("advance() must close the day out; nothing else calls rollOver", after.dayLedger.dayIndex > 1)
     }
 
+    @Test
+    fun `a day lived well keeps the streak even after the stats have drained`() {
+        // A day whose offering asks for a stat threshold. Counter goals cannot be un-finished by
+        // the clock; a stat goal can, and that is the whole of this bug.
+        val day = dayOffering("m_full")
+        val pet = satisfyAll(petOnDay(day)).copy(lastTickMillis = start)
+
+        // The day being lived: half a minute with every need up where the missions want them.
+        val lived = Simulation.advance(pet, start + 30_000L, config).state
+        assertTrue("the day really was finished while it was being lived", Missions.allComplete(lived))
+
+        // Hours later the needs have drained, exactly as they must — satiety alone loses 20 a
+        // hour. Nothing the player did has been undone; only the clock has moved.
+        val tomorrow = lived.copy(
+            ageSeconds = (day + 1) * config.secondsPerPetDay,
+            stats = lived.stats.copy(satiety = 30f, happiness = 30f, energy = 30f, hygiene = 30f),
+        )
+        val rolled = Missions.rollOver(tomorrow, config, mutableListOf())
+        assertEquals(
+            "the day that is ending must be graded on how it was lived, not on the stats it " +
+                "happens to end with",
+            1,
+            rolled.careStreakDays,
+        )
+        assertEquals(1, rolled.bestCareStreak)
+    }
+
+    @Test
+    fun `a stat goal reached during the day stays finished for the rest of it`() {
+        val day = dayOffering("m_bath")
+        val pet = satisfyAll(petOnDay(day)).copy(lastTickMillis = start)
+        val lived = Simulation.advance(pet, start + 30_000L, config).state
+        val bath = Missions.today(lived).first { it.mission.id == "m_bath" }
+        assertTrue("scrubbed clean is scrubbed clean", bath.complete)
+
+        val grubbyAgain = lived.copy(stats = lived.stats.copy(hygiene = 20f))
+        assertTrue(
+            "a goal the player finished cannot un-finish itself while the day is still running",
+            Missions.today(grubbyAgain).first { it.mission.id == "m_bath" }.complete,
+        )
+    }
+
     /** Nudges every counter and stat far enough that today's three are all finished. */
     private fun satisfyAll(state: PetState): PetState {
         val l = state.dayLedger

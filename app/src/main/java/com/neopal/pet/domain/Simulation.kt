@@ -23,8 +23,16 @@ sealed interface GameEvent {
     // ---- the autonomous half -------------------------------------------------------------
     /** The brain committed to something. Carries its own reasoning so the log can show it. */
     data class Decided(val decision: Decision) : GameEvent
-    /** An activity the brain started has run its course. */
-    data class Finished(val kind: ActivityKind, val note: String) : GameEvent
+    /**
+     * An activity the brain started has run its course, and what the creature says about it.
+     *
+     * [startedAtSeconds] is the activity's own start, which is also the `atSeconds` of the
+     * [Decision] that chose it — the two are read from the same clock in the same commit. It is
+     * in the event because the kind alone cannot say *which* run of it ended: a creature that
+     * eats, finishes, and decides to eat again produces two identical-looking events, and the
+     * note belongs to the first one. See [Brain.recordOutcome].
+     */
+    data class Finished(val kind: ActivityKind, val startedAtSeconds: Long, val note: String) : GameEvent
     data class LearnedSkill(val skill: Skill) : GameEvent
     data class IntellectGrew(val from: Int, val to: Int) : GameEvent
     data class MetPal(val pal: Pal) : GameEvent
@@ -206,8 +214,23 @@ object Simulation {
             album = previous.album,
             chronicle = previous.chronicle,
             unlockedAchievements = previous.unlockedAchievements,
+            // Everything in this block belongs to the person holding the phone, not to the
+            // creature that happened to be alive while they earned it. A high score was set by
+            // the player's thumbs; the level is the one the game itself calls "keeper level";
+            // the streak counts days the player showed up, and a funeral is not a day skipped.
+            // Wiping them said the player's own history was the pet's property, which is also
+            // why "score in all seven minigames" could never be finished across two lives.
+            highScores = previous.highScores,
+            level = previous.level,
+            xp = previous.xp,
+            careStreakDays = previous.careStreakDays,
+            bestCareStreak = previous.bestCareStreak,
+            // Everything the player bought to keep stays in the house — hats, rooms and toys
+            // alike. Filtering on "cosmetic" instead dropped the toys, which are no more used
+            // up by a death than a hat is, and sent the player back to the shop to buy the same
+            // ball a second time. Food does not keep, so the new pet gets its own starter pack.
             inventory = previous.inventory.filterKeys { id ->
-                ItemCatalog[id]?.isCosmetic == true
+                ItemCatalog[id]?.isDurable == true
             } + mapOf("snack_berry" to 3, "meal_bowl" to 2, "medicine" to 1),
             // The social world outlives one pet. Everybody the last one knew is still out there,
             // now a stranger to this one — affinity resets, the acquaintance does not. The heir
@@ -215,6 +238,16 @@ object Simulation {
             pals = previous.pals
                 .filter { it.id != heir?.id }
                 .map { it.copy(affinity = 0f, present = false, relation = Relation.VISITOR) },
+            // An egg is the household's, not the dying creature's. Losing it at the funeral
+            // took away the one thing that could still come of the line the player had been
+            // breeding for, at the exact moment they had nothing else left of it. The timers
+            // are shifted onto the new pet's clock so the egg keeps the time it had left, and
+            // the name of the pet that laid it rides along on the egg so the child it becomes
+            // still knows whose it is.
+            nest = previous.nest.map { egg ->
+                egg.copy(parentName = egg.parentName.ifBlank { previous.name })
+                    .rebasedFrom(previous.ageSeconds)
+            },
             // Skills are not inherited. A child taught by its parent starts with what the parent
             // knew how to teach, and nothing else — see [Skill.TEACH], which is the only route.
             skills = heir?.skills.orEmpty(),
@@ -240,7 +273,13 @@ object Simulation {
         if (state.lastTickMillis == 0L) {
             return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
         }
-        val rawElapsed = ((nowMillis - state.lastTickMillis) / 1000L).coerceAtLeast(0L)
+        // A stamp in the future means the wall clock moved backwards — a manual date fix, an NTP
+        // correction, or the classic tamagotchi move of winding the clock forward to rush an
+        // evolution and then winding it back. Re-stamping is what makes that recoverable: leaving
+        // the future stamp alone froze the creature completely until real time caught up, and a
+        // player who moved the clock back an hour got an hour of nothing at all.
+        if (nowMillis < state.lastTickMillis) return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
+        val rawElapsed = (nowMillis - state.lastTickMillis) / 1000L
         if (rawElapsed <= 0L) return SimResult(state, emptyList())
         if (state.isDead) return SimResult(state.copy(lastTickMillis = nowMillis), emptyList())
 
@@ -276,10 +315,27 @@ object Simulation {
                 decayScale = decayScale,
                 healthFloor = if (protectHealth) config.offlineHealthFloor else 0f,
             )
+            // Today's high-water marks are taken here, inside the loop, because a stat goal is
+            // only ever true for a moment and roll-over happens after the whole catch-up has
+            // run. Guarded on the ledger still being today's: a long absence walks past the
+            // boundary mid-loop, and energy climbing back overnight belongs to the day it
+            // happened on, not to the one it is being credited against.
+            if (current.ageInPetDays(config) == current.dayLedger.dayIndex) {
+                current = Missions.observe(current)
+            }
             remaining -= dt
         }
 
-        current = current.copy(lastTickMillis = nowMillis, rngSeed = random.nextLong())
+        // The remainder is carried, not dropped. `rawElapsed` is whole seconds, so stamping
+        // `nowMillis` threw away up to 999ms every tick — and the foreground loop's real period
+        // is always over 1000ms once a persist and an event dispatch are counted. Measured at a
+        // realistic 1040ms period that is 3.9% of the creature's life lost while you watch it,
+        // and it is unrecoverable, because the offline path measures from this same stamp.
+        val consumedMillis = rawElapsed * 1000L
+        current = current.copy(
+            lastTickMillis = state.lastTickMillis + consumedMillis,
+            rngSeed = random.nextLong(),
+        )
         // Missions close out here rather than in the step loop: a long absence crosses several
         // day boundaries at once, and only the final one is the day the player is looking at.
         current = Missions.rollOver(current, config, events)
@@ -394,7 +450,12 @@ object Simulation {
         // isSleeping on, never off, and only offers a nap the cycle below would not immediately
         // undo; putting it after would let it settle the pet a step later than the cycle expects
         // and re-open exactly the fight this ordering exists to prevent.
+        val brainMark = events.size
         s = Brain.tick(s, config, dt, random, events)
+        // An activity that ended announces itself with the creature's own closing line; that line
+        // is folded into the decision it closes, here, from the events this tick produced. The
+        // index rather than a sublist because this loop runs up to two thousand times.
+        s = Brain.recordOutcome(s, events, brainMark)
         // Passive learning last, because it is the only one that cares whether the pet spent the
         // step asleep, and the two above are what decide that.
         s = Learning.observe(s, dt, events)
@@ -408,20 +469,62 @@ object Simulation {
         return s
     }
 
+    /**
+     * Falling asleep and waking up, with the two conditions kept apart.
+     *
+     * They used to overlap, and the overlap was not a corner case — it was every night. A pet
+     * asleep in a dark room fills its tank in about an hour of a two-hour night, hits the "rested"
+     * threshold, wakes, and is immediately told by the *same* rule that it should be asleep. It
+     * then flips once per tick until dawn: one measured `advance` over two hours of absence
+     * emitted 1,687 sleep and wake events out of 1,694 total. A second region did the same in
+     * daylight — an exhausted pet in a lit room collapsed at energy 8, was woken by "it is bright
+     * and the lights are on", and collapsed again, pinned at 8 for as long as anyone watched.
+     *
+     * It also quietly wrecked the autonomous half. `isSleeping` flipping under the brain makes
+     * every committed activity stale on the following tick, so fifteen minutes of night produced
+     * fifty-seven identical decisions, all abandoned, hygiene *worse* than it started, and a
+     * decision log — the feature whose entire purpose is showing the creature's reasoning — full
+     * of the same abandoned grooming.
+     *
+     * So: a creature that wants the dark is never woken by being rested. It is only woken by the
+     * dark going away, and then only once it has enough energy to be worth waking for. The two
+     * energy thresholds are deliberately far apart; a single threshold is what oscillates.
+     */
     private fun handleSleepCycle(state: PetState, config: GameConfig, events: MutableList<GameEvent>): PetState {
         val night = isNight(state, config)
+        val wantsDark = night && state.lightsOff
         return when {
-            !state.isSleeping && (state.stats.energy <= 8f || (night && state.lightsOff)) -> {
+            !state.isSleeping && (state.stats.energy <= SLEEP_EXHAUSTED || wantsDark) -> {
                 events += GameEvent.FellAsleep
                 state.copy(isSleeping = true)
             }
-            state.isSleeping && (state.stats.energy >= 98f || (!night && !state.lightsOff)) -> {
+            // Never `energy >= something` on its own: that is the flip-flop. While the room is
+            // dark and it is night, the creature simply sleeps through, however full it is.
+            state.isSleeping && !wantsDark && state.stats.energy >= SLEEP_RESTED -> {
                 events += GameEvent.WokeUp
                 state.copy(isSleeping = false)
             }
             else -> state
         }
     }
+
+    /** Below this a creature drops where it stands, whatever the room is doing. */
+    private const val SLEEP_EXHAUSTED = 8f
+
+    /**
+     * Properly rested, and the only thing that ends a sleep the room is not already ending.
+     *
+     * It has to be far above [SLEEP_EXHAUSTED] or the daylight half of the oscillation comes
+     * back: wake at a hair over the collapse threshold and the creature collapses again seconds
+     * later. Ninety-eight is also what this always was — the defect was never the number, it was
+     * that the same condition could say "sleep" and "wake" at once.
+     *
+     * A first attempt used thirty-five, and the balance suite caught it: a creature that sleeps
+     * in a dark room during the day was getting a third of the rest it used to, and a keeper
+     * checking in every two hours could no longer keep it out of trouble. The measurement is
+     * worth more than the reasoning was.
+     */
+    private const val SLEEP_RESTED = 98f
 
     private fun handlePoop(state: PetState, dt: Long, random: Random, events: MutableList<GameEvent>): PetState {
         if (state.isSleeping || state.poops >= 6) return state

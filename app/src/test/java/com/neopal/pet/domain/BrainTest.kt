@@ -139,7 +139,11 @@ class BrainTest {
 
         assertEquals(byHand.stats.satiety, after.stats.satiety, 0.001f)
         assertEquals(byHand.weightGrams, after.weightGrams, 0.001f)
-        assertEquals(byHand.mealsEaten, after.mealsEaten)
+        // "Exactly where" is about the *pet*, not about the keeper. The keeper's ledger — meals
+        // served, experience, badges — is the one thing a self-fed meal deliberately leaves alone;
+        // see [CareActions.Actor].
+        assertEquals("the record of meals served stays the keeper's", hungry.mealsEaten, after.mealsEaten)
+        assertEquals("and so does the keeper's experience", hungry.xp, after.xp)
         assertEquals("the meal came out of the tin", 1, after.inventory["meal_bowl"])
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.EAT, after.activity?.kind)
@@ -211,6 +215,64 @@ class BrainTest {
         assertTrue(
             "an activity that ran its course must announce itself",
             events.any { it is GameEvent.Finished && it.kind == ActivityKind.TIDY },
+        )
+    }
+
+    @Test
+    fun `a finished activity's closing note lands on the decision that chose it`() {
+        val messy = pet(
+            autonomy = Autonomy.ASSIST,
+            skills = setOf(Skill.TIDY_UP),
+            stats = Stats(hygiene = 60f),
+            poops = 2,
+        )
+        val events = mutableListOf<GameEvent>()
+        val random = Random(7L)
+        var s = messy
+        // The step loop in miniature: age, tick, then fold *this tick's* events back into state,
+        // which is the seam GameEvent.Finished is consumed through.
+        repeat(40) {
+            s = s.copy(ageSeconds = s.ageSeconds + 1L)
+            val mark = events.size
+            s = Brain.tick(s, config, 1L, random, events)
+            s = Brain.recordOutcome(s, events, mark)
+        }
+
+        val tidy = events.filterIsInstance<GameEvent.Finished>().firstOrNull { it.kind == ActivityKind.TIDY }
+        assertNotNull("the test needs a tidy-up that ran its course", tidy)
+        val line = s.decisions.firstOrNull { it.atSeconds == tidy!!.startedAtSeconds }
+        assertNotNull("the tidy-up it announced has to be in the log", line)
+        assertEquals(
+            "the closing note belongs to the line whose activity ended",
+            tidy!!.note,
+            line!!.outcome,
+        )
+    }
+
+    @Test
+    fun `a closing note goes to the run that ended, not the next one of the same kind`() {
+        // The nasty case the start time is in the event for: two meals, one finish.
+        val twice = pet().copy(
+            decisions = listOf(
+                Decision(atSeconds = 100L, kind = ActivityKind.EAT, reason = "First helping.", utility = 0.7f),
+                Decision(atSeconds = 200L, kind = ActivityKind.EAT, reason = "Second helping.", utility = 0.6f),
+            ),
+        )
+        val closed = Brain.recordOutcome(
+            twice,
+            listOf(GameEvent.Finished(ActivityKind.EAT, 100L, "Licked the bowl clean.")),
+        )
+        assertEquals("Licked the bowl clean.", closed.decisions[0].outcome)
+        assertNull("the meal still going has nothing to say about itself yet", closed.decisions[1].outcome)
+    }
+
+    @Test
+    fun `a finish with no log line of its own leaves the log alone`() {
+        // A second consecutive idle is deliberately never logged, so its finish has no home.
+        val quiet = pet()
+        assertEquals(
+            quiet,
+            Brain.recordOutcome(quiet, listOf(GameEvent.Finished(ActivityKind.IDLE, 5L, "Right, what next."))),
         )
     }
 
@@ -357,7 +419,7 @@ class BrainTest {
         val after = Brain.tick(ill, config, 1L, Random(11), events)
 
         assertFalse(after.isSick)
-        assertEquals(1, after.medicineDoses)
+        assertEquals("the cure is the pet's; 'cures given' is the keeper's", 0, after.medicineDoses)
         assertEquals("the dose is spent, exactly as a keeper's would be", 0, after.inventory["medicine"] ?: 0)
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.MEDICATE, after.activity?.kind)
@@ -383,7 +445,7 @@ class BrainTest {
         val after = Brain.tick(messy, config, 1L, Random(2), mutableListOf())
 
         assertEquals("a creature clears up at a creature's pace", 2, after.poops)
-        assertEquals(1, after.cleanups)
+        assertEquals("and clearing up after itself is not the keeper's cleanup count", 0, after.cleanups)
         assertEquals(1, after.selfCareActions)
         assertEquals(ActivityKind.TIDY, after.activity?.kind)
     }

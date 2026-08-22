@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -36,6 +39,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.domain.Lore
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.MinTouchTarget
 import com.neopal.pet.ui.components.PixelButton
@@ -81,6 +85,9 @@ fun MemorialScreen(
             .background(
                 Brush.verticalGradient(listOf(MemorialSky, MemorialDeep)),
             )
+            // Edge to edge: keep the content out of the status and gesture bars. The
+            // background is applied first on purpose, so it still bleeds under them.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(pixelUnits(6)),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -167,6 +174,20 @@ fun MemorialScreen(
             }
         }
         Spacer(Modifier.height(pixelUnits(3)))
+        // The narrator, once, in the one place where the line matters more than the life: the
+        // player is about to choose who continues. Descent first because it names somebody the
+        // player raised themselves, and Lore.standing only counts lives. One line, not a passage
+        // — this column is not scrollable and a phone in portrait has no room for a paragraph.
+        (Lore.descent(pet) ?: Lore.standing(pet))?.let { line ->
+            Text(
+                text = line,
+                style = MaterialTheme.typography.labelSmall,
+                color = NeoColors.OnDarkMuted,
+                textAlign = TextAlign.Center,
+                fontStyle = FontStyle.Italic,
+            )
+            Spacer(Modifier.height(pixelUnits(2)))
+        }
         Text(
             text = "${pet.mealsEaten} meals shared · ${pet.gamesWon} games won · ${pet.album.size} pictures kept",
             style = MaterialTheme.typography.labelSmall,

@@ -9,3 +9,6 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Agent worktrees created inside the repo by the tooling; never part of a change.
+.claude/worktrees/

@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.LocalFlorist
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Psychology
@@ -93,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.GameConfig
+import com.neopal.pet.domain.Memorial
 import com.neopal.pet.domain.Item
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
@@ -188,15 +190,27 @@ private class TrayDragState {
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
+fun HomeScreen(
+    viewModel: PetViewModel,
+    /**
+     * Called with [Memorial.deathKey] whenever this screen is built for a pet that has died.
+     *
+     * Whether that is *news* is not this screen's question to answer and it has nowhere to answer
+     * it from: navigating to the memorial disposes this composition, so anything remembered here
+     * comes back reset. The navigation graph holds the answer. See `NeoPalNav`.
+     */
+    onPetDied: (String) -> Unit,
+    onOpen: (String) -> Unit,
+) {
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
     var showFeedSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
     val window = rememberWindowSize()
 
-    LaunchedEffect(pet.isDead) {
-        if (pet.isDead) onOpen(Routes.MEMORIAL)
+    val deathKey = Memorial.deathKey(pet)
+    LaunchedEffect(deathKey) {
+        deathKey?.let(onPetDied)
     }
 
     // Where the scene ended up on screen, so a dragged item knows when it is over the pet.
@@ -256,7 +270,14 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
         HomeAction("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene) { onOpen(Routes.CHRONICLE) },
         HomeAction("Awards", Icons.Filled.EmojiEvents, NeoColors.NeonGreen) { onOpen(Routes.ACHIEVEMENTS) },
         HomeAction("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted) { onOpen(Routes.SETTINGS) },
-    )
+    ) + if (pet.isDead) {
+        // The way back. The memorial opens itself once per death and then stops, so without this
+        // a player who chose "Stay a moment" would be sitting in a room with no door: the next
+        // generation is started from the memorial and nowhere else.
+        listOf(HomeAction("Memorial", Icons.Filled.LocalFlorist, NeoColors.OnDarkMuted) { onOpen(Routes.MEMORIAL) })
+    } else {
+        emptyList()
+    }
 
     val quickCare = quickCareFor(pet, viewModel, onOpen)
     val inventory = pet.inventory
@@ -419,7 +440,9 @@ fun HomeScreen(viewModel: PetViewModel, onOpen: (String) -> Unit) {
             FeedSheet(
                 pet = pet,
                 onFeed = { id ->
-                    viewModel.feed(id)
+                    // Not `feed`. The sheet lists medicines too, and feeding a pill consumed the
+                    // dose without curing anything. See CareActions.use.
+                    viewModel.useItem(id)
                     showFeedSheet = false
                 },
                 onShop = {

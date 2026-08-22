@@ -23,7 +23,8 @@ data class ChronicleEntry(
  */
 object Chronicle {
 
-    private const val MAX_ENTRIES = 120
+    /** Longest the diary gets. Public because [sanitised] has to hold an imported save to it too. */
+    const val MAX_ENTRIES = 120
 
     /** Folds every event of a tick into diary lines. Returns the state with the lines appended. */
     fun record(state: PetState, events: List<GameEvent>, config: GameConfig): PetState {
@@ -63,8 +64,14 @@ object Chronicle {
     }
 
     private fun lineFor(event: GameEvent, state: PetState): Pair<String, ChronicleKind>? = when (event) {
-        is GameEvent.Hatched ->
-            "I opened my eyes. The first thing I saw was you." to ChronicleKind.MILESTONE
+        // A creature does not know what a lineage is, but it does know whose child it is, and a
+        // pet that came out of the last one should not open its diary with a founder's line.
+        // [Lore.parentInTheRecord] is what decides: a name in the parent list only counts when
+        // the keeper is the one who raised it.
+        is GameEvent.Hatched -> when (val parent = Lore.parentInTheRecord(state)) {
+            null -> "I opened my eyes. The first thing I saw was you." to ChronicleKind.MILESTONE
+            else -> "I opened my eyes. You knew ${parent.name} before you knew me." to ChronicleKind.MILESTONE
+        }
 
         is GameEvent.Evolved -> when (event.to) {
             LifeStage.CHILD -> "I grew. My old shell doesn't fit any more." to ChronicleKind.MILESTONE
@@ -124,6 +131,8 @@ object Chronicle {
             "I worked something out for myself today: ${event.lesson.kind.displayName.lowercase()}." to
                 ChronicleKind.MILESTONE
 
+        // No diary line by design — Decided and Finished are the two halves of a decision-log
+        // entry (see Brain.recordOutcome) and the diary is for the firsts and the family.
         is GameEvent.Decided,
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,

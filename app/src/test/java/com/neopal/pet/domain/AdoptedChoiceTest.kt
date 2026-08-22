@@ -117,7 +117,10 @@ class AdoptedChoiceTest {
         assertNotNull(after)
         assertTrue("the food has to actually leave the cupboard",
             (after!!.inventory["meal_bowl"] ?: 0) < (before.inventory["meal_bowl"] ?: 0))
-        assertTrue("and the meal has to count", after.mealsEaten > before.mealsEaten)
+        // ...and it lands on the creature's side of the ledger, not the keeper's: a remote mind is
+        // still the creature's own mind. See [CareActions.Actor].
+        assertTrue("and the meal has to count", after.selfCareActions > before.selfCareActions)
+        assertEquals("but not as a meal the player served", before.mealsEaten, after.mealsEaten)
     }
 
     @Test

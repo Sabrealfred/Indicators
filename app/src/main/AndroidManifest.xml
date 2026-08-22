@@ -13,8 +13,45 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 
+    <!--
+        The creature listens only while the player is holding the button down, and only if this
+        is granted at runtime. `CreatureEars` checks for it on every call and degrades to the
+        keyboard when it is absent, so a refusal costs the talking, not the app.
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+        Needed to hand a downloaded APK to the system installer. It grants nothing on its own:
+        the player still has to allow this app as an install source in Settings, and then has to
+        approve the install itself on the system's own screen. Without the permission the
+        approval screen cannot even be reached, and the updater falls back to opening the
+        release page in a browser.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+        Package visibility, API 30 and up. Text-to-speech and speech recognition are provided by
+        other apps; without these entries `queryIntentServices` returns nothing and the creature
+        appears mute and deaf on a device that is neither. Narrow by design — this asks about two
+        service actions, not for the list of what is installed.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <uses-feature android:name="android.hardware.touchscreen" android:required="true" />
 
+    <!--
+        usesCleartextTraffic: minSdk is 24, and the "no cleartext by default" rule is enforced by
+        platform code that only exists from API 28. On 24 to 27 the default is still permissive,
+        so a player who pastes an http endpoint into settings would send their bearer token in
+        plain text. This attribute is honoured from API 23, which covers the gap.
+    -->
     <application
         android:name=".NeoPalApplication"
         android:allowBackup="true"
@@ -24,6 +61,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
         android:theme="@style/Theme.NeoPal">
 
         <activity
@@ -37,5 +75,60 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!--
+            The action button on a care notification. Not exported: the only thing that can send
+            to it is a PendingIntent this app built. Android requires the flag to be explicit
+            from API 31, and stating it here rather than relying on the default is what makes
+            that non-negotiable.
+        -->
+        <receiver
+            android:name=".data.NudgeActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="neopal.nudge.MEDICINE" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            The home-screen creature. Exported because the platform is what delivers
+            APPWIDGET_UPDATE; nothing else is advertised, and the two intents the widget sends
+            itself are explicit and need no filter of their own.
+
+            Exported does mean another app could send the explicit care intent and feed the
+            pet. Everything crossing that boundary is re-validated against the save on arrival,
+            so nothing invalid can happen — but a stranger could spend a Sushi Set.
+        -->
+        <receiver
+            android:name=".widget.PetWidget"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_pet_info" />
+        </receiver>
+
+        <!--
+            Hands the downloaded APK to the installer as a content:// URI. A file:// URI would
+            throw FileUriExposedException on anything from API 24 up, which is every device this
+            app runs on.
+
+            The authority must match UpdateService.PROVIDER_SUFFIX, and it is built from
+            ${applicationId} rather than written out, because the debug build appends `.debug`
+            and a hard-coded authority would collide with the release build if both were
+            installed — the second install would simply fail.
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 </manifest>

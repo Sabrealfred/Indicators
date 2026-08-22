@@ -67,6 +67,15 @@ data class Decision(
     val utility: Float,
     /** What it nearly did instead, for the log. Null when nothing else scored. */
     val runnerUp: ActivityKind? = null,
+    /**
+     * How it went, in the creature's voice — written when the activity this line chose ends.
+     *
+     * Null while the activity is still running, and null forever for a line whose activity was
+     * cut short by the player rather than finishing. A decision is a sentence with two halves
+     * ("I'm going to tidy up" / "that is one mess fewer") and the log used to print only the
+     * first: the second half was composed on every finish and thrown away.
+     */
+    val outcome: String? = null,
 )
 
 /**
@@ -166,6 +175,29 @@ data class NestEgg(
     val hatchesAtSeconds: Long,
     val otherParentId: String,
     val otherParentName: String,
+    /**
+     * The pet that laid it, by name.
+     *
+     * Redundant while the pet that laid the egg is the pet holding the nest — which is why it
+     * was not here to begin with — and load-bearing the moment it is not. An egg outlives the
+     * creature that laid it, and the child that hatches afterwards has to be able to say whose
+     * it is; reading the current pet's name would credit a stranger with somebody else's child.
+     * Blank on a save written before this existed, meaning "whoever is holding the nest".
+     */
+    val parentName: String = "",
 ) {
     fun isReady(ageSeconds: Long): Boolean = ageSeconds >= hatchesAtSeconds
+
+    /**
+     * The same egg on a clock that restarts at zero.
+     *
+     * Both timestamps are in the *pet's* age seconds, and a new generation puts that back to
+     * zero, so an egg carried across a death has to be shifted with it. Shifting both by the
+     * same amount keeps the time it has left and the fraction already incubated, which is what
+     * the nest meter draws; a rebase to zero would silently restart the incubation.
+     */
+    fun rebasedFrom(previousAgeSeconds: Long): NestEgg = copy(
+        laidAtSeconds = laidAtSeconds - previousAgeSeconds,
+        hatchesAtSeconds = hatchesAtSeconds - previousAgeSeconds,
+    )
 }

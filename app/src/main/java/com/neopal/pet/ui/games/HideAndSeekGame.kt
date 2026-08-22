@@ -9,13 +9,16 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -180,8 +183,13 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
     // Deterministic, but not the same room twice: the save's own seed pinned to how much life
     // the pet has had. No wall clock is read during composition.
-    val seed: Long = remember(pet.rngSeed, pet.gamesPlayed, pet.ageSeconds) {
-        pet.rngSeed * 31L + pet.gamesPlayed * 7919L + pet.ageSeconds
+    // Keyed on nothing that moves. `ageSeconds` and `rngSeed` are both rewritten by the clock
+    // every second, so this used to re-deal the room once a second while the frame loop kept
+    // working on the board it captured when the game started: the props swapped identity
+    // continuously, no lid ever appeared to open, and the creature was never revealed at all,
+    // because `open` and `tell` were being written to a board nobody was drawing.
+    val seed: Long = remember {
+        pet.bornAtMillis * 31L + pet.gamesPlayed * 7919L + pet.generation * 104_729L
     }
     val board: List<HideSpot> = remember(seed) { buildHideBoard(Random(seed xor 0x5DEECE66DL)) }
     val random: Random = remember(seed) { Random(seed) }
@@ -551,6 +559,9 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            // Edge to edge: keep the content out of the status and gesture bars. The
+            // background is applied first on purpose, so it still bleeds under them.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(12.dp),
     ) {
         GameHeader(

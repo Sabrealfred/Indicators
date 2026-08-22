@@ -26,6 +26,16 @@ data class Item(
 ) {
     val isConsumable: Boolean get() = kind == ItemKind.MEAL || kind == ItemKind.SNACK || kind == ItemKind.MEDICINE
     val isCosmetic: Boolean get() = kind == ItemKind.HAT || kind == ItemKind.ROOM
+
+    /**
+     * Bought once and kept: hats, rooms and toys.
+     *
+     * Not a synonym for [isCosmetic], which is the trap this exists to close. A [ItemKind.TOY]
+     * is neither eaten nor worn, so every rule written as "cosmetic or consumable" quietly
+     * treated the three toys as a fourth thing with no rules at all — the shop was willing to
+     * sell you a second Bounce Ball, and the next generation threw the first one away.
+     */
+    val isDurable: Boolean get() = !isConsumable
 }
 
 /** Static catalog. Ids are the save-file keys, so they never change once shipped. */
