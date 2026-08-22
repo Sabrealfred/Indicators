@@ -66,7 +66,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-private const val GAME_ID = "game_hide"
+private const val GAME_ID = "hide"
 
 /** Four rounds, roles swapping every round, so both halves of the game are always played. */
 private const val ROUNDS = 4

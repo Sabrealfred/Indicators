@@ -865,4 +865,4 @@ private fun DrawScope.drawCreature(voice: Voice, singing: Boolean, clock: Float)
     )
 }
 
-private const val GAME_ID = "game_duet"
+private const val GAME_ID = "duet"

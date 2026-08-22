@@ -33,7 +33,11 @@ import com.neopal.pet.ui.screens.ShopScreen
 import com.neopal.pet.ui.screens.StatsScreen
 import com.neopal.pet.ui.screens.TalkScreen
 import com.neopal.pet.ui.games.CatchGameScreen
+import com.neopal.pet.ui.games.DuetGameScreen
+import com.neopal.pet.ui.games.FetchGameScreen
+import com.neopal.pet.ui.games.HideAndSeekGameScreen
 import com.neopal.pet.ui.games.MemoryGameScreen
+import com.neopal.pet.ui.games.PuzzleGameScreen
 import com.neopal.pet.ui.games.RhythmGameScreen
 
 object Routes {
@@ -46,6 +50,10 @@ object Routes {
     const val GAME_RHYTHM = "game_rhythm"
     const val GAME_MEMORY = "game_memory"
     const val GAME_CATCH = "game_catch"
+    const val GAME_HIDE = "game_hide"
+    const val GAME_FETCH = "game_fetch"
+    const val GAME_DUET = "game_duet"
+    const val GAME_PUZZLE = "game_puzzle"
     const val ALBUM = "album"
     const val CHRONICLE = "chronicle"
     const val ACHIEVEMENTS = "achievements"
@@ -124,6 +132,18 @@ fun NeoPalApp(viewModel: PetViewModel = viewModel(factory = PetViewModel.Factory
             }
             composable(Routes.GAME_CATCH) {
                 CatchGameScreen(viewModel) { navController.popBackStack() }
+            }
+            composable(Routes.GAME_HIDE) {
+                HideAndSeekGameScreen(viewModel) { navController.popBackStack() }
+            }
+            composable(Routes.GAME_FETCH) {
+                FetchGameScreen(viewModel) { navController.popBackStack() }
+            }
+            composable(Routes.GAME_DUET) {
+                DuetGameScreen(viewModel) { navController.popBackStack() }
+            }
+            composable(Routes.GAME_PUZZLE) {
+                PuzzleGameScreen(viewModel) { navController.popBackStack() }
             }
             composable(Routes.ALBUM) { AlbumScreen(viewModel) { navController.popBackStack() } }
             composable(Routes.CHRONICLE) { ChronicleScreen(viewModel) { navController.popBackStack() } }

@@ -152,7 +152,7 @@ private class Solver {
     }
 }
 
-private const val GAME_ID = "game_puzzle"
+private const val GAME_ID = "puzzle"
 private const val TARGET_BOARDS = 4
 private const val DURATION = 95f
 private const val BOARD_PAUSE = 0.9f

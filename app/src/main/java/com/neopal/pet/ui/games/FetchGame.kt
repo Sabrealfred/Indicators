@@ -69,7 +69,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 import kotlin.random.Random
 
-private const val GAME_ID = "game_fetch"
+private const val GAME_ID = "fetch"
 
 // ---- session shape -------------------------------------------------------------------------
 private const val THROWS = 6

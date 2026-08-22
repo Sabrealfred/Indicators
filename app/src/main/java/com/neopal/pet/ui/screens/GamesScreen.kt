@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
@@ -59,7 +61,7 @@ import com.neopal.pet.ui.theme.NeoColors
 private val TwoColumnWidth = 300.dp
 private val ThreeColumnWidth = 640.dp
 
-/** One cartridge on the shelf. Held as data so the same three render at any column count. */
+/** One cartridge on the shelf. Held as data so the whole shelf reflows at any column count. */
 private data class GameEntry(
     val title: String,
     val subtitle: String,
@@ -130,6 +132,114 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
                     topLeft = Offset(size.width * 0.25f, size.height * 0.62f),
                     size = androidx.compose.ui.geometry.Size(size.width * 0.5f, size.height * 0.34f),
                 )
+            }
+        },
+        GameEntry(
+            title = "Hide and Seek",
+            subtitle = "4 rounds · both sides\nPlayed with it, not against it — its genome hunts",
+            accent = NeoColors.NeonGreen,
+            gameId = "hide",
+            route = Routes.GAME_HIDE,
+        ) {
+            Canvas(Modifier.size(52.dp)) {
+                // A crate with a tail showing behind it: the whole game in one picture.
+                drawRect(
+                    color = NeoColors.NeonGreen,
+                    topLeft = Offset(size.width * 0.30f, size.height * 0.42f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.46f, size.height * 0.44f),
+                )
+                drawRect(
+                    color = Color(0xFF1B2B20),
+                    topLeft = Offset(size.width * 0.30f, size.height * 0.60f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.46f, size.height * 0.05f),
+                )
+                drawArc(
+                    color = NeoColors.NeonYellow,
+                    startAngle = 200f, sweepAngle = 140f, useCenter = false,
+                    topLeft = Offset(size.width * 0.05f, size.height * 0.38f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.30f, size.height * 0.34f),
+                    style = Stroke(width = size.minDimension * 0.09f),
+                )
+            }
+        },
+        GameEntry(
+            title = "Fetch",
+            subtitle = "6 throws · 60 s\nIt learns your throw — and you can watch it guess",
+            accent = NeoColors.NeonRed,
+            gameId = "fetch",
+            route = Routes.GAME_FETCH,
+        ) {
+            Canvas(Modifier.size(52.dp)) {
+                // An arc with the ball at its apex and the hunch marked where it will land.
+                drawArc(
+                    color = NeoColors.NeonRed,
+                    startAngle = 200f, sweepAngle = 140f, useCenter = false,
+                    topLeft = Offset(size.width * 0.08f, size.height * 0.16f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.84f, size.height * 0.72f),
+                    style = Stroke(width = size.minDimension * 0.07f),
+                )
+                drawCircle(NeoColors.NeonYellow, size.minDimension * 0.13f, Offset(size.width * 0.5f, size.height * 0.20f))
+                drawCircle(
+                    color = NeoColors.NeonPurple,
+                    radius = size.minDimension * 0.10f,
+                    center = Offset(size.width * 0.84f, size.height * 0.80f),
+                    style = Stroke(width = size.minDimension * 0.05f),
+                )
+            }
+        },
+        GameEntry(
+            title = "Duet",
+            subtitle = "6 verses · no wrong note\nYou sing, it answers — nothing is being scored",
+            accent = NeoColors.NeonPurple,
+            gameId = "duet",
+            route = Routes.GAME_DUET,
+        ) {
+            Canvas(Modifier.size(52.dp)) {
+                // Call and response: your bars, then its, pitched a little differently.
+                val w = size.width * 0.13f
+                listOf(0.40f, 0.24f, 0.52f).forEachIndexed { i, top ->
+                    drawRect(
+                        color = NeoColors.NeonCyan,
+                        topLeft = Offset(size.width * (0.06f + i * 0.15f), size.height * top),
+                        size = androidx.compose.ui.geometry.Size(w, size.height * (0.88f - top)),
+                    )
+                }
+                listOf(0.18f, 0.44f, 0.30f).forEachIndexed { i, top ->
+                    drawRect(
+                        color = NeoColors.NeonPurple,
+                        topLeft = Offset(size.width * (0.53f + i * 0.15f), size.height * top),
+                        size = androidx.compose.ui.geometry.Size(w, size.height * (0.88f - top)),
+                    )
+                }
+            }
+        },
+        GameEntry(
+            title = "Shape Sorter",
+            subtitle = "4 boards · 95 s\nIt can solve this one alone — if it is clever enough",
+            accent = NeoColors.NeonCyan,
+            gameId = "puzzle",
+            route = Routes.GAME_PUZZLE,
+        ) {
+            Canvas(Modifier.size(52.dp)) {
+                // A square in its hole, a triangle still looking for one.
+                drawRect(
+                    color = NeoColors.NeonCyan,
+                    topLeft = Offset(size.width * 0.08f, size.height * 0.10f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.34f, size.height * 0.34f),
+                )
+                drawRect(
+                    color = NeoColors.NeonCyan.copy(alpha = 0.30f),
+                    topLeft = Offset(size.width * 0.56f, size.height * 0.10f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.34f, size.height * 0.34f),
+                    style = Stroke(width = size.minDimension * 0.05f),
+                )
+                val path = Path().apply {
+                    moveTo(size.width * 0.30f, size.height * 0.58f)
+                    lineTo(size.width * 0.52f, size.height * 0.92f)
+                    lineTo(size.width * 0.08f, size.height * 0.92f)
+                    close()
+                }
+                drawPath(path, NeoColors.NeonYellow)
             }
         },
     )
