@@ -22,6 +22,7 @@ import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Distillation
 import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
@@ -36,6 +37,7 @@ import com.neopal.pet.domain.PetAnimation
 import com.neopal.pet.domain.PetBrief
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Relation
+import com.neopal.pet.domain.RunRecord
 import com.neopal.pet.domain.SaveCadence
 import com.neopal.pet.domain.SaveUrgency
 import com.neopal.pet.domain.Simulation
@@ -366,18 +368,45 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun startNextGeneration(name: String, species: Species, heirId: String? = null) {
         val previous = _ui.value.pet ?: return startNewGame(name, species)
         val heir = heirId?.let { id -> previous.pals.firstOrNull { it.id == id && it.relation == Relation.OFFSPRING } }
+        val nowMillis = System.currentTimeMillis()
         val state = Simulation.nextGeneration(
             previous = previous,
             name = name,
             // An heir keeps its own species; picking one is not a choice about species.
             species = heir?.species ?: species,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = nowMillis,
             heir = heir,
         )
         forgetCadence()
         _ui.update { it.copy(pet = state) }
         play(Sfx.CONFIRM)
         persist(state, SaveUrgency.NOW)
+        distilPreviousLife(previous, nowMillis)
+    }
+
+    /**
+     * Asks the remote mind what the life that just ended was about, and folds its answer into the
+     * heir that is already living.
+     *
+     * Deliberately *after* the generation has started rather than in front of it. The local
+     * distillation in [Simulation.nextGeneration] has already given the child its inheritance, so
+     * nobody waits on a network to bury a pet, and a player with no key gets the whole feature
+     * minus the wording. See [Distillation] for what an answer is allowed to do when it lands.
+     */
+    private fun distilPreviousLife(previous: PetState, endedAtMillis: Long) {
+        val config = _ui.value.config
+        if (!config.mind.usable || !config.mind.lineageLessons || !mind.isReady) return
+        val record = RunRecord.of(previous, endedAtMillis)
+        val brief = PetBrief.of(previous, config)
+        val decisions = previous.decisions
+        viewModelScope.launch {
+            val lessons = mind.distil(brief, record, decisions)
+            if (lessons.isEmpty()) return@launch
+            val heir = _ui.value.pet ?: return@launch
+            val folded = Distillation.fold(heir, previous.generation, lessons) ?: return@launch
+            _ui.update { it.copy(pet = folded) }
+            persist(folded)
+        }
     }
 
     /**
