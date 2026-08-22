@@ -132,6 +132,57 @@ object Brain {
     }
 
     /**
+     * Commits the pet to [kind] because something outside this object asked it to — today that is
+     * a language model that was shown the same options and picked differently.
+     *
+     * Returns null when the option is not available *right now*, and that re-check is the whole
+     * point of the function existing. A remote brain is asked over a network: seconds pass, the
+     * simulation keeps ticking, and the option it was shown may have been eaten, scooped, or
+     * slept through by the time its answer lands. Trusting a decision that was legal when it was
+     * made would let a model quietly do things the rules forbid — not because it lied, but
+     * because it answered a question about a world that has moved on.
+     *
+     * The reason is the model's own words, so the decision log stays in the creature's voice
+     * whether the choice came from here or from the local scoring.
+     */
+    fun adopt(
+        state: PetState,
+        kind: ActivityKind,
+        reason: String,
+        config: GameConfig,
+        random: Random,
+        events: MutableList<GameEvent>,
+    ): PetState? {
+        if (state.autonomy == Autonomy.OFF || !state.isMindAwake || state.isDead) return null
+        if (state.isSleeping) return null
+        val option = options(state, config)
+            .firstOrNull { it.kind == kind && it.blockedBy == null }
+            ?: return null
+        val spoken = reason.trim().take(MAX_ADOPTED_REASON_CHARS).ifBlank { option.reason }
+        val runnerUp = options(state, config)
+            .filter { it.blockedBy == null && it.kind != kind }
+            .maxByOrNull { it.utility }
+            ?.kind
+        return commit(
+            state = state,
+            option = Option(
+                kind = option.kind,
+                utility = option.utility,
+                durationSeconds = option.durationSeconds,
+                target = option.target,
+                reason = spoken,
+                blockedBy = null,
+            ),
+            runnerUp = runnerUp,
+            random = random,
+            events = events,
+        )
+    }
+
+    /** A reason has to fit a row in the decision log, whoever wrote it. */
+    private const val MAX_ADOPTED_REASON_CHARS = 160
+
+    /**
      * Every option the pet is weighing right now, best first, blocked ones included.
      *
      * Pure and free of the RNG, so the skills screen can show the same numbers the brain used
