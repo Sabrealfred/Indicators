@@ -199,12 +199,14 @@ private fun poseFor(
     // slug; the 0.62 span puts a maximally leggy hound's belly at about half its own height.
     val legPx = bodyR * (0.20f + 0.62f * legFrac)
 
-    // The barrel starts life as the body blob itself and flattens as the creature goes over.
-    // Because it is drawn *behind* the head and is the same size and in the same place at low
-    // [q], there is nothing to see until it has genuinely separated — hence no pop when it
-    // starts being drawn at all.
-    val trunkW = bodyR * p.bodyWidth * widthMul
-    val trunkH = lerpF(bodyR, bodyR * 0.50f, q)
+    // The barrel starts life *inside* the body blob and flattens and lengthens as the creature
+    // goes over. Starting it a whisker smaller than the head rather than the same size is what
+    // buys the crossfade its silence: for the first tenth of the stance gene the barrel is
+    // wholly hidden behind the head it is drawn beneath, so a founder with a stance of 0.05
+    // shows no second outline at all, and by the time the barrel does clear the head it is
+    // clearing it backwards — which is a body growing out behind the shoulders, not a seam.
+    val trunkW = lerpF(bodyR * p.bodyWidth * widthMul * 0.92f, bodyR * p.bodyWidth * widthMul, q)
+    val trunkH = lerpF(bodyR * 0.92f, bodyR * 0.50f, q)
     val trunkTargetY = groundY - legPx - trunkH * 0.98f
     val trunkDx = -bodyR * 0.30f * q
     val trunkDy = (trunkTargetY - bodyCenter.y) * q
@@ -756,9 +758,9 @@ private fun DrawScope.drawTrunk(
     palette: CreaturePalette,
     frame: CreatureFrame,
 ) {
-    // Under this the barrel is still the head's own size, in the head's own place, drawn behind
-    // it — invisible. Skipping it there costs nothing and means an upright creature with a
-    // morphology draws exactly the shapes it drew before it had one.
+    // Under this the barrel is smaller than the head, in the head's own place and drawn behind
+    // it, so it contributes nothing to the silhouette. Skipping it there costs nothing and
+    // spares an upright creature two dozen draw calls it would never see the result of.
     if (pose.quad < 0.04f) return
     // Squash belongs to the head. A body lying along the ground takes only a share of it,
     // because it stretches along its own length rather than upward.
@@ -1392,11 +1394,15 @@ private fun DrawScope.drawEars(
     if (pose.earPx < bodyR * 0.10f) return
     val tones = tonesFor(palette.body, palette.bodyShade)
     val inner = lerp(palette.blush, tones.shadow, 0.45f)
-    val w = bodyR * p.bodyWidth * pose.headWidth
+    // Squash and stretch belong to the head, and the ears are attached to it: the same divide
+    // and multiply the body blob uses, so they ride the bob instead of floating beside it.
+    val w = bodyR * p.bodyWidth * pose.headWidth / frame.squash
     val d = pose.earDroop
-    val base = bodyR * 0.30f
+    // A short ear must be a short *nub*, not a wide flap: capping the thickness against the
+    // ear's own length is what stops a barely-expressed ear gene drawing a paddle.
+    val base = (bodyR * 0.30f).coerceAtMost(pose.earPx * 0.62f)
     listOf(-1f, 1f).forEach { side ->
-        val anchor = Offset(center.x + side * w * 0.68f, center.y - bodyR * 0.58f)
+        val anchor = Offset(center.x + side * w * 0.68f, center.y - bodyR * 0.58f * frame.squash)
         // First segment: out of the head, upward when pricked, barely rising when floppy.
         val ax = side * lerpF(0.42f, 0.66f, d)
         val ay = lerpF(-0.92f, -0.34f, d)

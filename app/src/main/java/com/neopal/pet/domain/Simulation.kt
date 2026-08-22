@@ -360,6 +360,22 @@ object Simulation {
             careSampleSeconds = s.careSampleSeconds + dt,
         )
 
+        // The creature's own half of the tick, in a fixed order that three systems depend on.
+        //
+        // Colony first: a visitor has to be in the room before the brain can decide to go and
+        // talk to them, and running it after would mean every arrival is ignored for one whole
+        // step. It runs whatever the autonomy setting is — the world does not stop having other
+        // creatures in it because the player prefers to drive.
+        s = Colony.tick(s, config, dt, random, events)
+        // Then the brain, and specifically *before* handleSleepCycle. Brain.tick only ever sets
+        // isSleeping on, never off, and only offers a nap the cycle below would not immediately
+        // undo; putting it after would let it settle the pet a step later than the cycle expects
+        // and re-open exactly the fight this ordering exists to prevent.
+        s = Brain.tick(s, config, dt, random, events)
+        // Passive learning last, because it is the only one that cares whether the pet spent the
+        // step asleep, and the two above are what decide that.
+        s = Learning.observe(s, dt, events)
+
         s = handleSleepCycle(s, config, events)
         s = handlePoop(s, dt, random, events)
         s = handleSickness(s, dt, random, events, decayScale)
@@ -428,6 +444,16 @@ object Simulation {
     }
 
     /**
+     * True when the pet chose its own bedtime rather than being put down or collapsing.
+     *
+     * Read off the running activity rather than off the skill, because knowing how to settle and
+     * having actually done so are different things: a pet that learned the skill but was tucked
+     * in by a player who then left the light on is still a light left on.
+     */
+    private fun settledItself(state: PetState): Boolean =
+        state.activity?.kind == ActivityKind.SLEEP
+
+    /**
      * A care mistake is neglect the player could have prevented. While the app is open that is
      * once a minute; while it is closed it is once an hour, because eight hours of sleep is not
      * four hundred and eighty separate failures. Getting this wrong made every pet that was ever
@@ -444,7 +470,10 @@ object Simulation {
             state.isSick && state.ageSeconds - state.sickSinceSeconds > 180 -> "untreated illness"
             state.poops >= 4 -> "filthy room"
             state.stats.happiness <= 5f -> "left alone"
-            state.isSleeping && !state.lightsOff -> "lights left on"
+            // A pet that put itself to bed is not evidence of a keeper who forgot to. Charging
+            // this one hourly to a creature that had just handled its own bedtime punished the
+            // player for the autonomy working, which is the exact opposite of the point.
+            state.isSleeping && !state.lightsOff && !settledItself(state) -> "lights left on"
             else -> null
         } ?: return state
 
