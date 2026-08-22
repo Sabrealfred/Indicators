@@ -88,6 +88,29 @@ class LoreTest {
 
     private val record = RunRecord(generation = 1, name = "Ash", lifespanSeconds = 3600L)
 
+    private fun run(generation: Int, name: String) =
+        RunRecord(generation = generation, name = name, lifespanSeconds = 3600L)
+
+    /**
+     * A creature that came out of the last one: every generation before it is in the log, and its
+     * parent list names the run immediately behind it, exactly as [Simulation.nextGeneration]
+     * leaves it when it is handed an heir.
+     */
+    private fun heir(
+        generation: Int,
+        lessons: List<Lesson> = emptyList(),
+        stage: LifeStage = LifeStage.ADULT,
+    ): PetState {
+        val previous = (1 until generation).map { run(it, "Gen$it") }
+        return pet(
+            generation = generation,
+            stage = stage,
+            lessons = lessons,
+            previous = previous,
+            parentNames = listOf("Gen${generation - 1}", "Mira"),
+        )
+    }
+
     /** All fourteen genes at one: the far end of the drift, drawn on four legs. */
     private val houndGenome = Genome.fromList(List(Genome.GENE_COUNT) { 1f })
 
@@ -109,6 +132,12 @@ class LoreTest {
         found += Lore.generationMoment(pet(generation = 1))
         found += Lore.generationMoment(pet(generation = 2, previous = listOf(record)))
         found += Lore.generationMoment(pet(generation = Lore.DEEP_LINE_AT, previous = listOf(record)))
+        found += Lore.generationMoment(heir(generation = 2))
+        found += Lore.generationMoment(heir(generation = Lore.DEEP_LINE_AT))
+
+        Lore.inheritanceMoment(
+            pet(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 2))),
+        )?.let { found += it }
 
         listOf(LifeStage.CHILD, LifeStage.TEEN, LifeStage.ADULT, LifeStage.ELDER).forEach { to ->
             Lore.momentFor(
@@ -167,6 +196,148 @@ class LoreTest {
         Lore.shapeMoment(pet(genome = uprightButLongGenome))?.let { found += it }
 
         return found
+    }
+
+    // ---- nothing is offered to a creature it is not true of --------------------------------
+
+    /**
+     * Every state worth asking about, including the awkward ones.
+     *
+     * Deliberately mixed rather than tidy: a dead elder, an egg carrying a hound genome, a save
+     * with a generation number and no log, a parent list nothing corroborates. The selectors are
+     * asked about all of them and every answer has to survive [holds].
+     */
+    private fun states(): List<Pair<String, PetState>> = listOf(
+        "founder" to pet(generation = 1),
+        "founder with a number and no log" to pet(generation = 7, parentNames = listOf("Ash")),
+        "nursery successor" to pet(generation = 2, previous = listOf(record)),
+        "deep nursery successor" to pet(generation = 6, previous = (1..5).map { run(it, "Gen$it") }),
+        "heir" to heir(generation = 3),
+        "deep heir" to heir(generation = 6),
+        "heir of a grandparent" to heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, 2))),
+        "heir of its parent only" to heir(generation = 4, lessons = listOf(lesson(LessonKind.PLAY_MORE, 3))),
+        "own work only" to pet(generation = 3, lessons = listOf(lesson(LessonKind.PLAY_MORE, 3))),
+        "egg" to pet(stage = LifeStage.EGG, genome = houndGenome),
+        "baby with a hound genome" to pet(stage = LifeStage.BABY, genome = houndGenome),
+        "hound" to pet(genome = houndGenome),
+        "long but upright" to pet(genome = uprightButLongGenome),
+        "fresh elder" to elder(0.1f),
+        "worn elder" to elder(0.8f),
+        "dead elder" to elder(0.8f, isDead = true),
+        "dead with children" to pet(isDead = true, pals = listOf(pal("c1", Relation.OFFSPRING))),
+        "dead alone" to pet(isDead = true),
+        "alive with children" to pet(pals = listOf(pal("c1", Relation.OFFSPRING))),
+    )
+
+    /**
+     * Whether [moment] is a true thing to say about [state], restated from the simulation rather
+     * than from [Lore]'s own branches wherever the two can be told apart.
+     *
+     * Moments whose truth lives entirely in the event rather than the state — an evolution, a
+     * pairing, a death by a named reason — answer true here and are pinned by the tests above.
+     */
+    private fun holds(moment: LoreMoment, state: PetState): Boolean = when (moment) {
+        LoreMoment.FOUNDING -> state.previousGenerations.isEmpty()
+        LoreMoment.SUCCESSION ->
+            state.previousGenerations.isNotEmpty() && !Lore.descendsFromTheKeepersOwn(state)
+        LoreMoment.DEEP_LINE ->
+            state.previousGenerations.isNotEmpty() && state.generation >= Lore.DEEP_LINE_AT
+        LoreMoment.DESCENDED ->
+            Lore.descendsFromTheKeepersOwn(state) && state.generation < Lore.DEEP_LINE_AT
+        LoreMoment.LONG_DESCENT ->
+            Lore.descendsFromTheKeepersOwn(state) && state.generation >= Lore.DEEP_LINE_AT
+
+        // The shape lines are checked against the body the renderer is actually given, not
+        // against the genome: that gap is the whole reason the two shape moments are separate.
+        LoreMoment.SHAPE_DRIFTING ->
+            state.stage.isHatched && !state.isDead &&
+                state.morphology.houndliness >= Lore.DRIFTING_AT &&
+                state.morphology.quadruped < Lore.ON_FOUR_LEGS
+        LoreMoment.SHAPE_QUADRUPED ->
+            state.stage.isHatched && !state.isDead && state.morphology.quadruped >= Lore.ON_FOUR_LEGS
+
+        LoreMoment.LINE_REMEMBERS ->
+            state.stage.isHatched && state.lessons.any { it.fromGeneration in 1 until state.generation }
+        LoreMoment.FROM_BEFORE_ITS_PARENT ->
+            state.stage.isHatched && state.lessons.any { it.fromGeneration in 1..(state.generation - 2) }
+
+        LoreMoment.WEARING_OUT -> !state.isDead && state.stage == LifeStage.ELDER
+        LoreMoment.LINE_CONTINUES ->
+            state.isDead && state.pals.any { it.relation == Relation.OFFSPRING }
+        LoreMoment.HELD_WHILE_AWAY -> !state.isDead && state.stage.isHatched
+
+        // Everything else is settled by the event, and has its own test above.
+        else -> true
+    }
+
+    @Test
+    fun `no state-driven moment is offered to a creature it is not true of`() {
+        val seen = mutableSetOf<LoreMoment>()
+        states().forEach { (label, state) ->
+            listOfNotNull(
+                Lore.generationMoment(state),
+                Lore.shapeMoment(state),
+                Lore.inheritanceMoment(state),
+                Lore.lateLifeMoment(state),
+                Lore.legacyMoment(state),
+                Lore.returnMoment(wasCaughtUp = true, state = state),
+            ).forEach { moment ->
+                seen += moment
+                assertTrue("$moment is not true of the $label", holds(moment, state))
+            }
+        }
+        // A harness that produced nothing would pass every assertion above, so it has to be shown
+        // to have actually reached the moments whose truth conditions are worth guarding.
+        assertTrue(
+            "the fixtures no longer exercise the state-driven moments: $seen",
+            seen.containsAll(
+                listOf(
+                    LoreMoment.FOUNDING, LoreMoment.SUCCESSION, LoreMoment.DEEP_LINE,
+                    LoreMoment.DESCENDED, LoreMoment.LONG_DESCENT,
+                    LoreMoment.SHAPE_DRIFTING, LoreMoment.SHAPE_QUADRUPED,
+                    LoreMoment.LINE_REMEMBERS, LoreMoment.FROM_BEFORE_ITS_PARENT,
+                    LoreMoment.WEARING_OUT, LoreMoment.LINE_CONTINUES,
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `no event-driven moment is offered to a creature it is not true of`() {
+        val stranger = pal("v9")
+        val events = listOf<GameEvent>(
+            GameEvent.Hatched,
+            GameEvent.Recovered,
+            GameEvent.GotSick,
+            GameEvent.MetPal(stranger),
+            GameEvent.Befriended(stranger.copy(relation = Relation.FRIEND, affinity = 80f)),
+            GameEvent.Paired(pal("m9", Relation.MATE, affinity = 90f)),
+            GameEvent.EggLaid(egg("e9")),
+            GameEvent.ChildHatched(pal("c9", Relation.OFFSPRING)),
+            GameEvent.LearnedSkill(Skill.SELF_FEED),
+            GameEvent.LearnedSkill(Skill.TEACH),
+            GameEvent.Evolved(LifeStage.BABY, LifeStage.CHILD, EvolutionBranch.BALANCED),
+        ) + DeathReason.entries.map { GameEvent.Died(it) }
+
+        states().forEach { (label, state) ->
+            events.forEach { event ->
+                val moment = Lore.momentFor(event, state) ?: return@forEach
+                assertTrue("$moment after $event is not true of the $label", holds(moment, state))
+                // A first is a first: the moment must not fire when the subject is not the only
+                // one of its kind on the save.
+                when (event) {
+                    is GameEvent.MetPal ->
+                        if (moment == LoreMoment.FIRST_CALLER) {
+                            assertTrue(state.pals.none { it.id != event.pal.id })
+                        }
+                    is GameEvent.LearnedSkill ->
+                        if (moment == LoreMoment.LEARNED_UNAIDED) {
+                            assertTrue((state.skills - event.skill).isEmpty())
+                        }
+                    else -> Unit
+                }
+            }
+        }
     }
 
     // ---- the four the brief asks for -----------------------------------------------------
@@ -506,6 +677,114 @@ class LoreTest {
         assertNull(Lore.returnMoment(wasCaughtUp = false, state = pet()))
         assertNull(Lore.returnMoment(wasCaughtUp = true, state = pet(isDead = true)))
         assertNull(Lore.returnMoment(wasCaughtUp = true, state = pet(stage = LifeStage.EGG)))
+    }
+
+    // ---- the generational thread -----------------------------------------------------------
+
+    @Test
+    fun `a successor out of the nursery is not called anybody's child`() {
+        // Same generation number, same furnished room, two entirely different facts.
+        val nursery = pet(generation = 3, previous = listOf(record, run(2, "Bel")))
+        assertFalse(Lore.descendsFromTheKeepersOwn(nursery))
+        assertEquals(LoreMoment.SUCCESSION, Lore.generationMoment(nursery))
+        assertNull(Lore.descent(nursery))
+
+        val ofTheLine = heir(generation = 3)
+        assertTrue(Lore.descendsFromTheKeepersOwn(ofTheLine))
+        assertEquals(LoreMoment.DESCENDED, Lore.generationMoment(ofTheLine))
+        assertNotNull(Lore.descent(ofTheLine))
+    }
+
+    @Test
+    fun `descent survives being deep and outranks the depth line`() {
+        val deepStranger = pet(generation = 6, previous = (1..5).map { run(it, "Gen$it") })
+        assertEquals(LoreMoment.DEEP_LINE, Lore.generationMoment(deepStranger))
+        assertEquals(LoreMoment.LONG_DESCENT, Lore.generationMoment(heir(generation = 6)))
+        assertEquals(LoreMoment.DESCENDED, Lore.generationMoment(heir(generation = Lore.DEEP_LINE_AT - 1)))
+    }
+
+    @Test
+    fun `a parent list with nothing behind it claims no ancestor`() {
+        // A save older than the run log, or one restored from a backup: the names are there and
+        // nothing corroborates them, so the game may not say whose child this is.
+        val orphaned = pet(generation = 4, parentNames = listOf("Ash", "Mira"))
+        assertFalse(Lore.descendsFromTheKeepersOwn(orphaned))
+        assertEquals(LoreMoment.FOUNDING, Lore.generationMoment(orphaned))
+        assertNull(Lore.descent(orphaned))
+
+        // And a parent list that names nobody in the newest record is somebody else's child.
+        val mismatched = pet(
+            generation = 3,
+            previous = listOf(record, run(2, "Bel")),
+            parentNames = listOf("Nobody", "Mira"),
+        )
+        assertFalse(Lore.descendsFromTheKeepersOwn(mismatched))
+        assertEquals(LoreMoment.SUCCESSION, Lore.generationMoment(mismatched))
+    }
+
+    @Test
+    fun `a lean older than the parent is told apart from the parent's own`() {
+        // Generation 4 carrying something generation 3 worked out: its parent bought that, and
+        // this creature was in the room to see it happen.
+        val fromTheParent = heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 3)))
+        assertEquals(LoreMoment.LINE_REMEMBERS, Lore.inheritanceMoment(fromTheParent))
+
+        // Generation 4 carrying something generation 2 worked out: generation 2 had to die for
+        // generation 3 to hatch, so nothing now in the tank ever met it.
+        val fromTheGrandparent = heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 2)))
+        assertEquals(LoreMoment.FROM_BEFORE_ITS_PARENT, Lore.inheritanceMoment(fromTheGrandparent))
+
+        // The older one wins even when a fresher one is stronger: age is what the line is about.
+        val both = heir(
+            generation = 4,
+            lessons = listOf(
+                lesson(LessonKind.EAT_SOONER, from = 3, strength = 0.9f),
+                lesson(LessonKind.PLAY_MORE, from = 2, strength = 0.1f),
+            ),
+        )
+        assertEquals(LoreMoment.FROM_BEFORE_ITS_PARENT, Lore.inheritanceMoment(both))
+    }
+
+    @Test
+    fun `descent names the grandparent the creature never met`() {
+        val grandchild = heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 2)))
+        val line = Lore.descent(grandchild)
+        assertNotNull(line)
+        assertTrue("the parent has to be named: $line", line!!.contains("Gen3"))
+        assertTrue("the older one has to be named: $line", line.contains("Gen2"))
+
+        // With nothing older than the parent, the line stays about the parent and invents nobody.
+        val plain = Lore.descent(heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 3))))
+        assertNotNull(plain)
+        assertTrue(plain!!.contains("Gen3"))
+        assertFalse("nobody older than the parent exists to be named: $plain", plain.contains("Gen2"))
+
+        // A lesson older than the log can still be carried; there is then no name to give it.
+        val forgotten = heir(generation = 4, lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 1)))
+            .let { it.copy(previousGenerations = it.previousGenerations.drop(1)) }
+        val vague = Lore.descent(forgotten)
+        assertNotNull(vague)
+        assertFalse("a name the record no longer holds must not be printed: $vague", vague!!.contains("Gen1"))
+    }
+
+    @Test
+    fun `two names at the save's limit still fit a milestone card`() {
+        // Both names come out of the save, so the sentence around them has to leave room for the
+        // longest a name is allowed to be — twice.
+        val long = "x".repeat(MAX_NAME_CHARS)
+        val state = pet(
+            generation = 4,
+            previous = listOf(run(1, long), run(2, long), run(3, long)),
+            parentNames = listOf(long),
+            lessons = listOf(lesson(LessonKind.EAT_SOONER, from = 2)),
+        )
+        val line = Lore.descent(state)
+        assertNotNull(line)
+        assertTrue("descent is ${line!!.length} characters", line.length <= Lore.MAX_LINE_CHARS)
+
+        val plain = Lore.descent(state.copy(lessons = emptyList()))
+        assertNotNull(plain)
+        assertTrue("descent is ${plain!!.length} characters", plain.length <= Lore.MAX_LINE_CHARS)
     }
 
     @Test

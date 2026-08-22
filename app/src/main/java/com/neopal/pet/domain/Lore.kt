@@ -33,6 +33,10 @@ package com.neopal.pet.domain
  *    lived long enough to learn [Skill.TEACH], which is the only route out of a life.
  *  - The world outlives the creature. [Simulation.nextGeneration] keeps every [Pal] and resets its
  *    affinity to zero: everyone the last one knew is still there, and none of them know this one.
+ *  - A generation can start two ways and the game never said which. [Simulation.nextGeneration]
+ *    takes an optional heir: with one, the body, the species and whatever the parent could teach
+ *    are handed on; without one, it is a fresh roll in a furnished room. Both are "generation 5".
+ *    [descendsFromTheKeepersOwn] is that distinction, read back out of names the save already keeps.
  *  - The lid covers absence, not illness. The offline health floor is skipped outright while the
  *    creature is sick, which is why a fever is the failure that catches a careful keeper out.
  *  - Age costs. An elder drains faster than an adult and carries a flat addition to the illness
@@ -65,11 +69,17 @@ enum class LoreMoment(val voice: LoreVoice) {
     /** The first pet this save ever had, hatching with nothing behind it. */
     FOUNDING(LoreVoice.NARRATOR),
 
-    /** Any later generation hatching into a room that has been lived in. */
+    /** A later generation that came out of the nursery: the room is inherited, the body is not. */
     SUCCESSION(LoreVoice.NARRATOR),
+
+    /** A later generation that is the last one's own child, standing where its parent stood. */
+    DESCENDED(LoreVoice.NARRATOR),
 
     /** A line deep enough that the save has started to forget the beginning of it. */
     DEEP_LINE(LoreVoice.NARRATOR),
+
+    /** That, and descended the whole way: every body in the record was handed on to the next. */
+    LONG_DESCENT(LoreVoice.NARRATOR),
 
     /** Baby to child: the one change every creature makes and none of them earn. */
     FIRST_CHANGE(LoreVoice.NARRATOR),
@@ -113,8 +123,11 @@ enum class LoreMoment(val voice: LoreVoice) {
     /** A child hatching with skills, because the parent learned [Skill.TEACH] in time. */
     TAUGHT_ITS_OWN(LoreVoice.NARRATOR),
 
-    /** A life that started with a lean it was never told about. */
+    /** A life that started with a lean it was never told about, worked out by its own parent. */
     LINE_REMEMBERS(LoreVoice.NARRATOR),
+
+    /** The same, but older: a lean settled by a creature that was gone before its parent hatched. */
+    FROM_BEFORE_ITS_PARENT(LoreVoice.NARRATOR),
 
     /** The body halfway between the shape on the box and something else. */
     SHAPE_DRIFTING(LoreVoice.NARRATOR),
@@ -318,17 +331,42 @@ object Lore {
     }
 
     /**
-     * How this life opens: the first of a house, one more of a house, or one of a long line.
+     * How this life opens: the first of a house, another one out of the nursery, or the last
+     * one's own child standing where its parent stood.
      *
      * Keyed on [PetState.previousGenerations] as well as the counter, because a save restored from
      * a backup or written by an older build can carry a generation number with no runs behind it,
      * and calling such a pet the fourth of anything is a claim the game cannot support.
+     *
+     * Descent is checked before depth because it is the larger fact. A player who has bred five
+     * generations of their own is looking at a body they made; being told instead that the log
+     * only keeps eight entries is the game answering a question nobody asked.
      */
     fun generationMoment(state: PetState): LoreMoment = when {
-        state.generation >= DEEP_LINE_AT && state.previousGenerations.isNotEmpty() -> LoreMoment.DEEP_LINE
         state.previousGenerations.isEmpty() -> LoreMoment.FOUNDING
+        descendsFromTheKeepersOwn(state) ->
+            if (state.generation >= DEEP_LINE_AT) LoreMoment.LONG_DESCENT else LoreMoment.DESCENDED
+        state.generation >= DEEP_LINE_AT -> LoreMoment.DEEP_LINE
         else -> LoreMoment.SUCCESSION
     }
+
+    /**
+     * Whether this creature is the child of the pet the player last buried, rather than a fresh
+     * egg from the nursery.
+     *
+     * This is the one distinction the game makes mechanically and has never once said out loud.
+     * [Simulation.nextGeneration] takes an optional heir: given one, the new creature keeps that
+     * heir's genome, its species and whatever its parent had learned to teach, and given none it
+     * is a founder-shaped roll in a room that happens to have furniture in it. Both paths produce
+     * "generation 5" and until now both produced the same sentence.
+     *
+     * Established by name because names are what the save actually carries across the boundary:
+     * [Colony] stamps a hatchling with `listOf(parentName, otherParentName)`, and the parent's own
+     * name is sealed into [RunRecord] at the same moment. Only the newest record is consulted — an
+     * heir is always the child of the run immediately before it, so matching further back would
+     * only ever be a name collision agreeing with itself.
+     */
+    fun descendsFromTheKeepersOwn(state: PetState): Boolean = parentRecord(state) != null
 
     /**
      * The shape this creature has ended up with, or null while it still looks like the picture on
@@ -353,8 +391,44 @@ object Lore {
      * creature's behaviour without any visible cause — the brain simply weighs eating higher and
      * nothing on any screen says why. That is the moment worth naming.
      */
-    fun inheritanceMoment(state: PetState): LoreMoment? =
-        if (state.stage.isHatched && inheritedLessons(state).isNotEmpty()) LoreMoment.LINE_REMEMBERS else null
+    fun inheritanceMoment(state: PetState): LoreMoment? {
+        if (!state.stage.isHatched) return null
+        val inherited = inheritedLessons(state)
+        if (inherited.isEmpty()) return null
+        // A lean from the parent is one thing; a lean that outlived the parent is another, and it
+        // is the only place in the game where a creature is visibly carrying something from a
+        // generation it could not have overlapped with. Generations do not overlap in the tank:
+        // the run that learned a lesson had to end before the next one hatched, so a stamp two
+        // back belongs to something this creature's own parent was the last to see.
+        return if (inherited.any { it.fromGeneration <= state.generation - 2 }) {
+            LoreMoment.FROM_BEFORE_ITS_PARENT
+        } else {
+            LoreMoment.LINE_REMEMBERS
+        }
+    }
+
+    /**
+     * One narrator line naming who this creature came out of, or null when nobody did.
+     *
+     * The counterpart to [standing]: that one counts lives, this one gives them names. Null for
+     * anything the nursery sent, which is the honest answer — a successor that shares nothing but
+     * a room with the last pet should not be handed an ancestor.
+     *
+     * Both names come out of the save rather than out of the fiction, so the length is bounded by
+     * [MAX_NAME_CHARS] on each of them and the sentence around them is kept short enough that two
+     * names at the limit still fit a milestone card.
+     */
+    fun descent(state: PetState): String? {
+        val parent = parentRecord(state) ?: return null
+        val older = oldestInheritedLesson(state)
+            ?.takeIf { it.fromGeneration <= state.generation - 2 }
+            ?.let { lesson -> state.previousGenerations.firstOrNull { it.generation == lesson.fromGeneration } }
+        return if (older == null) {
+            "Out of ${parent.name}, and half of its body with it. The rest of what it is starts again from nothing."
+        } else {
+            "Out of ${parent.name}. The lean it arrived with is older than that: it is ${older.name}'s."
+        }
+    }
 
     /**
      * One narrator line for a family or lineage screen: what this creature is standing on.
@@ -394,6 +468,30 @@ object Lore {
     private fun inheritedLessons(state: PetState): List<Lesson> =
         state.lessons.filter { it.fromGeneration in 1 until state.generation }
 
+    /**
+     * The oldest thing this creature is still carrying, ties broken by strength.
+     *
+     * Oldest rather than strongest, because age is the whole point here: the strongest lesson is
+     * usually the one the parent bought and the player watched happen, while the oldest is the one
+     * nobody now alive was there for.
+     */
+    private fun oldestInheritedLesson(state: PetState): Lesson? =
+        inheritedLessons(state).minWithOrNull(
+            compareBy<Lesson> { it.fromGeneration }.thenByDescending { it.strength },
+        )
+
+    /**
+     * The run this creature came out of, or null when it did not come out of one.
+     *
+     * Only the newest record is compared: an heir is always the child of the run immediately
+     * before it, so reaching further back could only ever match a repeated name.
+     */
+    private fun parentRecord(state: PetState): RunRecord? {
+        if (state.parentNames.isEmpty()) return null
+        val previous = state.previousGenerations.lastOrNull() ?: return null
+        return if (previous.name in state.parentNames) previous else null
+    }
+
     /** "One life" reads better than "1 lives", and the narrator does not print bad grammar. */
     private fun lives(count: Int): String = if (count == 1) "One life" else "$count lives"
 
@@ -417,9 +515,22 @@ object Lore {
             "Everyone the last one knew is still out there. None of them will know this one.",
         )
 
+        // The other way a generation can start, and the one the game has always had and never
+        // said: not a replacement out of the nursery but the last one's own child, which is why
+        // the body is not starting over even though everything else is.
+        LoreMoment.DESCENDED -> listOf(
+            "Not a nursery egg. This one was in the room while the last one was alive, and half of what it is came out of it.",
+            "The name is new, nobody here remembers it, and what it knows is only what it was taught in time.",
+        )
+
         LoreMoment.DEEP_LINE -> listOf(
             "Deep enough now that the earliest ones are only names in a record, and the record itself keeps eight.",
             "None of this was aimed anywhere. It has gone somewhere all the same.",
+        )
+
+        LoreMoment.LONG_DESCENT -> listOf(
+            "Handed down the whole way. The earliest of them are names in a log now, and the body in the tank is still theirs.",
+            "Nobody steered it. Fourteen dials went one way or the other, once a generation, for as long as the line has run.",
         )
 
         LoreMoment.FIRST_CHANGE -> listOf(
@@ -498,6 +609,14 @@ object Lore {
         LoreMoment.LINE_REMEMBERS -> listOf(
             "It was never told any of this.",
             "What a line hands down is not knowledge but a lean: earlier to the bowl, quicker to the door, slower to sit in a mess.",
+        )
+
+        // Generations do not overlap in the tank. A lesson stamped two runs back was settled by
+        // something that had already died before this creature's own parent hatched, and it has
+        // survived every handover since by being the strongest wording of its kind.
+        LoreMoment.FROM_BEFORE_ITS_PARENT -> listOf(
+            "Older than its parent. Whatever settled this was finished before the last one was even in the tank.",
+            "What reached this one is the lean, not the reason. The record still has the name; the creature has never had it.",
         )
 
         LoreMoment.SHAPE_DRIFTING -> listOf(
