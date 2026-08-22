@@ -28,6 +28,13 @@ Tres reglas, aprendidas rompiendo CI cuatro veces en esta rama:
 | `scratchpad/uicheck.sh` | Frontend de todo el source set contra línea base | **No es un build**; sin SDK de Android |
 | `scratchpad/xmlcheck.sh` | Que todo XML parsee | Semántica del manifiesto |
 | `proxy/worker.test.mjs` | El Worker contra un upstream falso (`node worker.test.mjs`) | Un deploy real; nadie lo corrió con `wrangler` |
+| `scratchpad/arttest.sh` | El `CreatureArt.kt` **real** dibujando dentro de un recorder, 15 invariantes | Compose de verdad: los stubs son transcripciones de las fuentes reales, no los artefactos |
+| `scratchpad/ag/render.sh` + `raster.py` | Convierte esas mismas llamadas en un PNG | Nada — es la ayuda para *ver* por qué falló un test |
+
+Los stubs de `scratchpad/ax/stubs/` se transcribieron de las fuentes reales de Compose (bajadas de
+`raw.githubusercontent.com`, que no está bloqueado) y se comparó el conjunto de miembros abstractos
+entre dos versiones separadas por dos años: idénticos. Es la evidencia más fuerte disponible acá,
+pero **no es el artefacto real**.
 
 CI corre `:app:testDebugUnitTest` **antes** de armar el APK, así que los 260 tests —los 16 de
 socket incluidos— corren de verdad en cada commit.
@@ -184,7 +191,7 @@ pantalla de cuatro tonos no tiene más oscuro adonde ir.
 | # | Qué | Por qué sigue ahí |
 |---|---|---|
 | 6.1 | ~170 textos hardcodeados en inglés | Mover requiere decidir cómo entra `Context` a un dominio hoy puro, que es lo que lo hace testeable |
-| 6.2 | Sin tests de UI ni regresión visual | Sigue sin haberlos, pero **ya no es ciego**: hay un `DrawScope` de mentira que graba las llamadas de dibujo del `CreatureArt.kt` **real** y las rasteriza (`scratchpad/ag/`). Eso fue lo que diagnosticó el ocho de §6.4 — que resultó no ser un problema de forma. Merece entrar al repo y a CI |
+| 6.2 | ~~Sin tests de UI ni regresión visual~~ | ✅ **cerrada para la criatura**: `CreatureArtInvariantsTest` implementa el `DrawScope` real, corre el `drawCreature` real y afirma **15 propiedades** — no imágenes doradas, que se rompen con cualquier cambio legítimo y se borran al mes. La regla de la costura de §6.4 ahora es algo que una máquina revisa. Verificado por mutación: meter el bug histórico de vuelta rompe 3 assertions. **Falta**: el resto de la UI (pantallas, juegos) sigue sin tests |
 | 6.7 | Nada de lo nuevo se corrió ni se escuchó | Los cuatro juegos, las dos pantallas retro y las zonas táctiles están verificados por aritmética y por simulación en JVM, nunca por una pantalla. El dueto en particular: **no se escuchó una sola nota** |
 | 6.8 | `onTugTail` es un parámetro que nadie pasa | Costura deliberada por si tironear la cola debe costar algo. Hoy el castigo es la caricia no cobrada, que alcanza |
 | 6.3 | ~~Cabeza del cuadrúpedo de frente~~ | ✅ **arreglado** — `Pose.turn` gira la cabeza de verdad: el ojo lejano se escorza, el hocico gira con él, las orejas se pliegan sobre el cráneo y la boca corre por la mandíbula en vez de colgar del frente de la nariz |
@@ -228,9 +235,10 @@ cerrada y verde en CI. Lo que queda:
 decisiones tuyas o hardware que acá no hay.
 
 **Lo que yo elegiría hacer después, si seguimos:**
-1. Traer el rasterizador de `scratchpad/ag/` al repo y correrlo en CI (§6.2) — es lo más cerca de
-   un test visual que tuvo este proyecto, y ya encontró un bug real
-2. Los ~170 textos hardcodeados (§6.1)
+1. Los ~170 textos hardcodeados (§6.1) — mover requiere decidir cómo entra `Context` a un dominio
+   hoy puro, que es justo lo que lo hace testeable
+2. Extender el patrón de `CreatureArtInvariantsTest` a las pantallas y a los siete juegos: es la
+   mitad de §6.2 que sigue abierta, y ahora hay un molde que se sabe que funciona
 
 
 **Bloqueado por decisión tuya:**
