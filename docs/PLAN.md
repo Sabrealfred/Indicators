@@ -262,6 +262,32 @@ anotación; acá sobraba una versión. Regla que sale de las dos: un banco de pr
 por lo que compila, vale por lo que *rechaza igual que CI*, y eso hay que demostrarlo rompiendo
 algo a propósito.
 
+### El commit que git mezcló sin conflicto y rompió igual
+
+Ocho agentes trabajaron en paralelo, cada uno en su propio worktree, y siete se integraron
+limpios. El octavo rompió `:app:compileDebugKotlin` con un solo error:
+
+```
+e: .../ui/PetViewModel.kt:890:75 No parameter with name 'immediate' found.
+```
+
+El re-reloj del día se escribió contra `persist(state, immediate = true)`, que era la firma
+cuando ese agente arrancó. El trabajo de cadencia de guardado la había cambiado antes en la rama a
+`persist(state, SaveUrgency.NOW)`. Las dos ediciones caen en partes distintas del fichero, así que
+**git las mezcló sin marcar conflicto** y dejó una llamada a un parámetro que ya no se declara.
+Un conflicto se ve; esto no.
+
+Y no lo vio nada local, porque **`mindtest.sh` no compila `PetViewModel`**: es Android, y aquí no
+hay SDK. La etapa 1 dio limpio, 616 tests pasaron, la suite de juegos pasó — y ninguna de las tres
+mira ese fichero. El único control local capaz de verlo es el diff de dos árboles, y "no existe
+ese parámetro" es exactamente el tipo de mensaje nuevo que ese diff existe para sacar. Lo salté.
+
+Regla que sale de acá, y es la tercera vez que la misma forma aparece (§ el comentario XML dentro
+de la etiqueta, § el banco que compilaba contra 1.9.0): **el diff de dos árboles no es opcional
+para nada bajo `ui/`, `data/` o `work/`, y menos aún para código mezclado desde una base vieja.**
+Los tests puros cubren el dominio; para todo lo demás, la ausencia de conflicto no es evidencia de
+nada.
+
 ---
 
 ## 7. Orden sugerido
