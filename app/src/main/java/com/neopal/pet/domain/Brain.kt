@@ -139,7 +139,22 @@ object Brain {
                     random = random,
                     events = events,
                 )
-                if (started != null) return Errands.advance(started, events)
+                if (started != null) {
+                    // Errands decides *whether* a working plan should grow; the next step has to
+                    // come from here, because this is the only place that knows what is currently
+                    // legal. A plan that grew itself an impossible step would be abandoned on the
+                    // very next tick, which is a worse creature than one that simply stopped.
+                    return Errands.advance(started, events) { after, plan ->
+                        options(after, config)
+                            .filter {
+                                it.blockedBy == null &&
+                                    it.kind != ActivityKind.IDLE &&
+                                    it.kind != plan.steps.last().kind
+                            }
+                            .maxByOrNull { it.utility }
+                            ?.let { PlanStep(it.kind, it.reason) }
+                    }
+                }
             }
             // The step cannot be done. Abandon the plan rather than retrying it: a creature that
             // insists on lunch in front of an empty pantry is not persistent, it is stuck.

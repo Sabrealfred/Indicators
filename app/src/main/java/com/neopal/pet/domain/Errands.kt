@@ -48,20 +48,40 @@ data class Plan(
     /** How many steps have been carried out. Never rewound. */
     val done: Int = 0,
     /**
-     * The creature's care score when the plan was made, 0..1.
+     * The creature's care score when the plan was made, 0..1, or [Errands.UNGRADED].
      *
      * Kept so the plan can be *graded* when it finishes rather than merely ticked off. Without a
      * before, "did that help?" is unanswerable, and a creature that cannot answer it can only ever
      * learn from what happened to its parents — never from anything it did itself.
+     *
+     * The default is deliberately not zero. A plan that arrives without this field — from an older
+     * save, or from any caller that did not go through [Errands.sanitise] — would otherwise appear
+     * to have started from total neglect, so every such plan would look like a triumph: a lesson
+     * every time, and a plan that extended itself until it hit its cap. Better to say plainly that
+     * there is no before, and grade nothing.
      */
-    val careAtStart: Float = 0f,
+    val careAtStart: Float = Errands.UNGRADED,
+    /**
+     * How many times the creature has grown this plan a further step for itself.
+     *
+     * Bounded by [Errands.MAX_EXTENSIONS]. A plan that could extend without limit would be a
+     * creature that never finished anything and therefore never graded anything — the opposite of
+     * the point, which is to let a plan that is evidently working run its course.
+     */
+    val extensions: Int = 0,
 ) {
     val remaining: List<PlanStep> get() = steps.drop(done)
     val isFinished: Boolean get() = done >= steps.size
 
-    /** Expired plans are abandoned rather than resumed; see [Errands.PLAN_LIFETIME_SECONDS]. */
+    /**
+     * Expired plans are abandoned rather than resumed; see [Errands.lifetimeFor].
+     *
+     * The budget is per step rather than per plan, because a six-step plan given a three-step
+     * plan's clock would be abandoned halfway every single time — and it would look like the
+     * creature losing interest rather than like a deadline nobody could have met.
+     */
     fun isStale(ageSeconds: Long): Boolean =
-        ageSeconds - madeAtSeconds > Errands.PLAN_LIFETIME_SECONDS
+        ageSeconds - madeAtSeconds > Errands.lifetimeFor(steps.size)
 }
 
 /**
@@ -75,20 +95,61 @@ data class Plan(
 object Errands {
 
     /**
-     * Longest plan a creature will hold. Three steps is roughly an afternoon at this game's pace,
-     * and it is short enough that the world has not changed out from under the last step.
+     * Longest plan a newly hatched creature will hold. Three steps is roughly an afternoon at this
+     * game's pace, and it is short enough that the world has not changed out from under the last
+     * step.
      */
     const val MAX_STEPS = 3
 
     /**
-     * A plan older than this is abandoned. Needs move; a plan made two hours ago was made about a
-     * creature that no longer exists, and following it would look less like intent than like
-     * sleepwalking.
+     * Longest plan a fully clever one will hold.
+     *
+     * Intellect has to buy something you can see, and this is the most visible thing it buys: a
+     * bright creature does not merely think more often, it holds a longer thought. The ceiling is
+     * six rather than open-ended because every step is re-checked against a world that keeps
+     * moving, and past six the tail of a plan is reliably about a creature that no longer exists.
      */
-    const val PLAN_LIFETIME_SECONDS = 2_700L
+    const val MAX_STEPS_BRIGHT = 6
+
+    /** Below this, a plan is followed but never grown. */
+    const val MIN_INTELLECT_TO_EXTEND = 55f
+
+    /**
+     * How many times one plan may grow itself.
+     *
+     * A plan that could extend forever would never be graded, and grading is where the creature
+     * learns from its own afternoons rather than only from its parents' deaths.
+     */
+    const val MAX_EXTENSIONS = 3
+
+    /**
+     * How long each step of a plan gets before the whole thing is abandoned. Needs move; a step
+     * still pending an hour later was queued for a creature that no longer exists, and following
+     * it would look less like intent than like sleepwalking.
+     */
+    const val SECONDS_PER_STEP = 900L
+
+    /** The clock a plan of this many steps is held to. */
+    fun lifetimeFor(steps: Int): Long = SECONDS_PER_STEP * steps.coerceAtLeast(1)
+
+    /**
+     * Longest plan this creature can hold, from three steps at hatching to [MAX_STEPS_BRIGHT] at
+     * full intellect.
+     */
+    fun maxStepsFor(intellect: Float): Int {
+        val t = intellect.coerceIn(0f, 100f) / 100f
+        return MAX_STEPS + ((MAX_STEPS_BRIGHT - MAX_STEPS) * t).toInt()
+    }
 
     /** A goal has to fit a line on the screen. */
     const val MAX_GOAL_CHARS = 120
+
+    /**
+     * "There is no before." A plan carrying this is followed but never graded — no lesson from it,
+     * and no growing itself a further step, because both of those are claims about improvement and
+     * there is nothing to measure the improvement against.
+     */
+    const val UNGRADED = -1f
 
     /** Answers a read-only tool. Pure: looking never changes anything. */
     fun answer(tool: ToolId, state: PetState, config: GameConfig): String = when (tool) {
@@ -152,7 +213,7 @@ object Errands {
      *
      * It takes the creature rather than a bare number of seconds, and that is the whole reason
      * the signature looks like this. The stamp decides staleness: a plan stamped zero is instantly
-     * expired for any creature older than [PLAN_LIFETIME_SECONDS], which is most of them, and the
+     * expired for any creature older than a step's worth of seconds, which is most of them, and the
      * failure is silent because the local brain covers for it perfectly — no crash, no log, just a
      * creature that mysteriously never has an errand. A `Long` parameter accepts any number a
      * caller happens to have; a `PetState` can only be the creature this plan is for.
@@ -165,7 +226,7 @@ object Errands {
             // letting it through would park the creature for the whole plan's lifetime.
             .filter { it.kind != ActivityKind.IDLE }
             .map { PlanStep(it.kind, it.why.trim().take(MAX_GOAL_CHARS)) }
-            .take(MAX_STEPS)
+            .take(maxStepsFor(state.intellect))
         if (steps.isEmpty()) return null
         return Plan(
             goal = goal,
@@ -201,13 +262,31 @@ object Errands {
      * Only clear improvement teaches anything. Needs drift on their own, so a threshold below the
      * noise would reward the creature for the passage of time and the lesson would mean nothing.
      */
-    fun advance(state: PetState, events: MutableList<GameEvent>): PetState {
+    fun advance(
+        state: PetState,
+        events: MutableList<GameEvent>,
+        grow: (PetState, Plan) -> PlanStep? = { _, _ -> null },
+    ): PetState {
         val plan = state.plan ?: return state
         val moved = plan.copy(done = plan.done + 1)
         if (!moved.isFinished) return state.copy(plan = moved)
 
+        // An ungraded plan reports no gain rather than a huge one; see [Plan.careAtStart].
+        val gained = if (plan.careAtStart < 0f) 0f else state.stats.careScore - plan.careAtStart
+
+        // A plan that is visibly working, in a creature bright enough to notice, grows rather than
+        // ends. This is the one place the creature decides for itself how long a thought is, and
+        // it deliberately needs no model at all: the same evidence that would earn it a lesson is
+        // the evidence that it is worth carrying on.
+        if (mayExtend(state, moved, gained)) {
+            grow(state, moved)?.let { next ->
+                val grown = moved.copy(steps = moved.steps + next, extensions = moved.extensions + 1)
+                events += GameEvent.PlanExtended(grown.goal, grown.steps.size)
+                return state.copy(plan = grown)
+            }
+        }
+
         var s = state.copy(plan = null, plansFinished = state.plansFinished + 1)
-        val gained = s.stats.careScore - plan.careAtStart
         if (gained < WORTH_LEARNING_FROM) return s
 
         // Credited to what the plan actually spent its steps on. The commonest kind wins, because
@@ -235,6 +314,21 @@ object Errands {
         }
         return s
     }
+
+    /**
+     * Whether a finished plan should carry on instead of stopping.
+     *
+     * Three conditions, and each one is load-bearing. It has to be *working*, or the creature is
+     * merely stubborn. It has to be bright enough, or intellect buys nothing visible. And it has
+     * to be under [MAX_EXTENSIONS], because a plan that never ends is never graded — and the
+     * grading is the only way the creature learns from an afternoon of its own.
+     */
+    fun mayExtend(state: PetState, plan: Plan, gained: Float): Boolean =
+        gained >= WORTH_LEARNING_FROM &&
+            state.intellect >= MIN_INTELLECT_TO_EXTEND &&
+            plan.extensions < MAX_EXTENSIONS &&
+            plan.steps.size < maxStepsFor(state.intellect) + MAX_EXTENSIONS &&
+            !plan.isStale(state.ageSeconds)
 
     /** Which lesson an activity speaks to, or null when it teaches nothing in particular. */
     private fun lessonKindFor(kind: ActivityKind): LessonKind? = when (kind) {

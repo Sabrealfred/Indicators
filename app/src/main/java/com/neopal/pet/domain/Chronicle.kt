@@ -130,6 +130,7 @@ object Chronicle {
         is GameEvent.PalLeft,
         is GameEvent.PlanAbandoned,
         is GameEvent.PlanMade,
+        is GameEvent.PlanExtended,
         -> null
 
         is GameEvent.Unlocked -> null

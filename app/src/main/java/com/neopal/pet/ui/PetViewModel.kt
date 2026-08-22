@@ -766,6 +766,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 is GameEvent.PalLeft,
                 is GameEvent.PlanAbandoned,
                 is GameEvent.PlanMade,
+                is GameEvent.PlanExtended,
                 -> Unit
 
                 is GameEvent.CareMistake, is GameEvent.FellAsleep, is GameEvent.WokeUp -> Unit

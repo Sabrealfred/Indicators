@@ -91,7 +91,7 @@ class ErrandsTest {
         )
         val clean = Errands.sanitise(long, pet())
         assertNotNull(clean)
-        assertTrue(clean!!.steps.size <= Errands.MAX_STEPS)
+        assertTrue(clean!!.steps.size <= Errands.maxStepsFor(pet().intellect))
         assertTrue(clean.goal.length <= Errands.MAX_GOAL_CHARS)
         assertEquals("a plan may not arrive half spent", 0, clean.done)
         assertEquals("and it is stamped against the creature it is for", pet().ageSeconds, clean.madeAtSeconds)
@@ -272,6 +272,130 @@ class ErrandsTest {
         val done = Errands.advance(midway, mutableListOf())
         assertNull(done.plan)
         assertTrue("graded at the end", done.lessons.isNotEmpty())
+    }
+
+    // ---- how long a thought is -----------------------------------------------------------
+
+    @Test
+    fun `a brighter creature holds a longer thought`() {
+        val newborn = Errands.maxStepsFor(0f)
+        val clever = Errands.maxStepsFor(100f)
+        assertEquals("three steps is where everyone starts", Errands.MAX_STEPS, newborn)
+        assertEquals(Errands.MAX_STEPS_BRIGHT, clever)
+        assertTrue(clever > newborn)
+    }
+
+    @Test
+    fun `plan length is monotone in intellect and never leaves its band`() {
+        var previous = 0
+        (0..100 step 5).forEach { i ->
+            val steps = Errands.maxStepsFor(i.toFloat())
+            assertTrue("intellect $i went backwards", steps >= previous)
+            assertTrue(steps in Errands.MAX_STEPS..Errands.MAX_STEPS_BRIGHT)
+            previous = steps
+        }
+        // A corrupted save must not buy an unbounded plan.
+        assertEquals(Errands.MAX_STEPS, Errands.maxStepsFor(-900f))
+        assertEquals(Errands.MAX_STEPS_BRIGHT, Errands.maxStepsFor(9_000f))
+    }
+
+    @Test
+    fun `a longer plan gets a longer clock, per step rather than per plan`() {
+        // Otherwise a six-step plan on a three-step deadline is abandoned halfway, every time,
+        // and it reads as the creature losing interest rather than as an impossible deadline.
+        assertTrue(Errands.lifetimeFor(6) > Errands.lifetimeFor(3))
+        assertEquals(Errands.SECONDS_PER_STEP * 3, Errands.lifetimeFor(3))
+        assertTrue("an empty plan still gets a clock", Errands.lifetimeFor(0) > 0L)
+    }
+
+    // ---- growing one ---------------------------------------------------------------------
+
+    /** A plan whose last step is about to land, started from [from] care. */
+    private fun finishing(intellect: Float, from: Float, now: Float): PetState {
+        val base = pet(stats = Stats(satiety = now, happiness = now, energy = now, hygiene = now))
+        return base.copy(
+            intellect = intellect,
+            plan = Plan(
+                goal = "Sort myself out.",
+                steps = listOf(PlanStep(ActivityKind.EAT, "hungry")),
+                madeAtSeconds = base.ageSeconds,
+                careAtStart = from,
+            ),
+        )
+    }
+
+    @Test
+    fun `a plan that is visibly working grows itself another step`() {
+        val events = mutableListOf<GameEvent>()
+        val after = Errands.advance(finishing(intellect = 90f, from = 0.2f, now = 95f), events) { _, _ ->
+            PlanStep(ActivityKind.PLAY, "and now something nice")
+        }
+        assertEquals("it carried on rather than stopping", 2, after.plan?.steps?.size)
+        assertEquals(1, after.plan?.extensions)
+        assertTrue(events.any { it is GameEvent.PlanExtended })
+        assertEquals("carrying on is not finishing", 0, after.plansFinished)
+    }
+
+    @Test
+    fun `a plan that changed nothing stops rather than growing`() {
+        val events = mutableListOf<GameEvent>()
+        // Bright enough, but the care score has not moved.
+        val flat = finishing(intellect = 90f, from = 0.9f, now = 90f)
+        val after = Errands.advance(flat, events) { _, _ -> PlanStep(ActivityKind.PLAY, "more") }
+        assertNull("stubbornness is not intelligence", after.plan)
+        assertEquals(1, after.plansFinished)
+    }
+
+    @Test
+    fun `a newborn follows a plan but never grows one`() {
+        val after = Errands.advance(finishing(intellect = 10f, from = 0.2f, now = 95f), mutableListOf()) { _, _ ->
+            PlanStep(ActivityKind.PLAY, "more")
+        }
+        assertNull("intellect has to buy it", after.plan)
+    }
+
+    @Test
+    fun `growing stops at the cap so the plan is eventually graded`() {
+        val base = finishing(intellect = 100f, from = 0.1f, now = 100f)
+        val maxed = base.copy(plan = base.plan!!.copy(extensions = Errands.MAX_EXTENSIONS))
+        val after = Errands.advance(maxed, mutableListOf()) { _, _ -> PlanStep(ActivityKind.PLAY, "more") }
+        assertNull("a plan that never ends is a plan that never teaches", after.plan)
+        assertTrue("and ending it is where the lesson comes from", after.lessons.isNotEmpty())
+    }
+
+    @Test
+    fun `a plan with nowhere legal to go stops instead of growing an impossible step`() {
+        val after = Errands.advance(finishing(intellect = 90f, from = 0.2f, now = 95f), mutableListOf()) { _, _ ->
+            null
+        }
+        assertNull(after.plan)
+    }
+
+    @Test
+    fun `a plan that arrived with no before is followed but never graded`() {
+        // The default `careAtStart`. Treating it as zero would make every such plan a triumph:
+        // a lesson every time, and growth right up to the cap.
+        val ungraded = pet(stats = Stats(satiety = 95f, happiness = 95f, energy = 95f, hygiene = 95f))
+            .let {
+                it.copy(
+                    intellect = 100f,
+                    plan = Plan("Whatever this was.", listOf(PlanStep(ActivityKind.EAT, "x")), it.ageSeconds),
+                )
+            }
+        val events = mutableListOf<GameEvent>()
+        val after = Errands.advance(ungraded, events)
+        assertNull("it ends", after.plan)
+        assertTrue("and teaches nothing it cannot prove", after.lessons.isEmpty())
+        assertTrue(events.none { it is GameEvent.LearnedFromExperience })
+    }
+
+    @Test
+    fun `a stale plan is never grown, however well it was going`() {
+        val base = finishing(intellect = 100f, from = 0.1f, now = 100f)
+        val old = base.copy(plan = base.plan!!.copy(madeAtSeconds = 0L))
+        assertTrue(old.plan!!.isStale(old.ageSeconds))
+        val after = Errands.advance(old, mutableListOf()) { _, _ -> PlanStep(ActivityKind.PLAY, "more") }
+        assertNull("a plan out of time does not get more time by succeeding", after.plan)
     }
 
     @Test

@@ -36,6 +36,8 @@ sealed interface GameEvent {
     /** A plan was dropped: refused, or simply too old to still be about this creature. */
     data class PlanAbandoned(val goal: String) : GameEvent
     data class PlanMade(val goal: String, val steps: Int) : GameEvent
+    /** A plan that was evidently working grew itself a further step instead of ending. */
+    data class PlanExtended(val goal: String, val steps: Int) : GameEvent
     /** The creature drew a lesson from something it did itself, rather than from a parent. */
     data class LearnedFromExperience(val lesson: Lesson) : GameEvent
 }

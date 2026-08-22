@@ -150,7 +150,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
      * in days, which is far too coarse to time a plan by. So it is stamped zero here and the
      * caller must re-stamp it against `state.ageSeconds` before storing it. A plan left at zero is
      * not merely inaccurate: [Plan.isStale] measures from that field, so any creature older than
-     * [Errands.PLAN_LIFETIME_SECONDS] would find every remote plan already expired on arrival.
+     * [Errands.lifetimeFor] would find every remote plan already expired on arrival.
      */
     override suspend fun plan(
         brief: PetBrief,
