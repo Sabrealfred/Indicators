@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
+import com.neopal.pet.domain.PetClock
 import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.components.PixelButton
 import com.neopal.pet.ui.components.PixelChip
@@ -455,21 +456,24 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(pixelUnits(3)))
             Text(
-                "Clock: one pet day lasts ${config.secondsPerPetDay / 60} minutes.",
+                "Clock: one pet day lasts ${PetClock.minutesOf(config)} minutes.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(1)))
             PixelSlider(
-                value = (config.secondsPerPetDay / 60f),
+                value = PetClock.minutesOf(config).toFloat(),
                 onValueChange = { minutes ->
-                    viewModel.updateConfig { it.copy(secondsPerPetDay = (minutes.toLong().coerceAtLeast(5L)) * 60L) }
+                    viewModel.updateConfig { PetClock.withMinutes(it, minutes) }
                 },
                 label = "Minutes per pet day",
-                valueLabel = "${config.secondsPerPetDay / 60} minutes",
-                valueRange = 5f..240f,
-                // 47 notches of five minutes — the same stops the Material slider's 46 steps had.
-                notches = 47,
+                valueLabel = "${PetClock.minutesOf(config)} minutes",
+                // Range and stops come from the domain, which has a test tying the top of the
+                // range to GameConfig's own default. They were literals here, and they did not
+                // include it: the control opened pinned to its maximum, two hours short of the
+                // truth, and the first touch anywhere on it cut the day by a third.
+                valueRange = PetClock.MIN_MINUTES_PER_DAY.toFloat()..PetClock.MAX_MINUTES_PER_DAY.toFloat(),
+                notches = PetClock.NOTCHES,
                 accent = NeoAccents.cyan,
             )
             Spacer(Modifier.height(pixelUnits(1)))

@@ -29,6 +29,7 @@ import com.neopal.pet.domain.GameEvent
 import com.neopal.pet.domain.Learning
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.MindProvider
+import com.neopal.pet.domain.PetClock
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
 import com.neopal.pet.domain.NoMind
@@ -872,11 +873,21 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun markTutorialSeen() = updateConfig { it.copy(tutorialSeen = true) }
 
     fun updateConfig(transform: (GameConfig) -> GameConfig) {
-        val updated = transform(_ui.value.config)
+        val previous = _ui.value.config
+        val updated = transform(previous)
         ChiptuneEngine.enabled = updated.soundEnabled
         ChiptuneEngine.volume = updated.sfxVolume
-        _ui.update { it.copy(config = updated) }
+        // Moving the day length moves the ruler the day counter is measured with, and the mission
+        // roll-over reads any jump in that counter as days the player was not there for -- so
+        // changing this setting used to cost them their care streak on the next tick. Re-base the
+        // day index onto the new clock here, at the moment the setting changes, which is the only
+        // moment both clocks are in hand. See [PetClock.reclock]: it is a no-op unless the day
+        // length actually moved, and it re-labels the day rather than restarting it.
+        val before = _ui.value.pet
+        val reclocked = before?.let { PetClock.reclock(it, previous, updated) }
+        _ui.update { state -> state.copy(config = updated, pet = reclocked ?: state.pet) }
         viewModelScope.launch { repository.saveConfig(updated) }
+        if (reclocked != null && reclocked !== before) persist(reclocked, immediate = true)
     }
 
     suspend fun exportSave(): String = repository.exportSave()
