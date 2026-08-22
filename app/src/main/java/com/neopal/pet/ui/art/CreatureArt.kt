@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.lerp
 import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
+import com.neopal.pet.domain.Morphology
 import com.neopal.pet.domain.Species
 import kotlin.math.PI
 import kotlin.math.abs
@@ -22,6 +23,7 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /** Everything the renderer needs to know about *who* the creature is. */
 data class CreatureSpec(
@@ -32,6 +34,15 @@ data class CreatureSpec(
     val hatId: String? = null,
     /** Body weight in grams; fattens the silhouette between 6 g and 120 g. */
     val weightGrams: Float = 12f,
+    /**
+     * The expressed genome, if this creature has one.
+     *
+     * Null is not "an average creature": it is the pre-genetics silhouette, drawn exactly as it
+     * always was. Anything derived from a morphology is therefore reached only through a
+     * non-null [Pose], and every crossfade in this file is written so that a morphology whose
+     * genes all sit at zero lands back on the same numbers the null path uses.
+     */
+    val morphology: com.neopal.pet.domain.Morphology? = null,
 )
 
 /** Everything the renderer needs to know about *what it is doing* this frame. */
@@ -100,6 +111,204 @@ private fun proportionsFor(stage: LifeStage, branch: EvolutionBranch, weight: Fl
         else -> 0f
     }
     return base.copy(bodyWidth = base.bodyWidth + fat * 0.30f + branchWidth)
+}
+
+// ------------------------------------------------------------------ inherited shape
+//
+// A [Morphology] arrives in fractions of the creature's own *height*. This drawing thinks in
+// bodyR, which is half that height, so everything is converted once here — at the top of the
+// frame, before a single shape is drawn — and handed on as a [Pose]. That keeps the knowledge
+// of what a gene is out of every draw function, and it keeps the conversion in one place where
+// the buffer-pixel budget can be checked against it.
+
+/** Creature height in bodyR: the blob reaches bodyR above its centre and about as far below. */
+private const val HEIGHT_IN_BODY_R = 2f
+
+/**
+ * Where every part of one creature goes this frame, with the genome already spent.
+ *
+ * The upright and four-legged poses are not two drawings. They are one set of anchors that
+ * crossfade: at [quad] 0 the head *is* the body and the trunk is the same blob hidden exactly
+ * behind it, and at 1 the head has walked forward onto a neck while the trunk has flattened
+ * into a barrel carried on four legs. Every value below is written so that [quad] = 0 reproduces
+ * the pre-genetics numbers exactly, which is what lets an intermediate value read as a crouch
+ * rather than as a broken halfway house.
+ */
+private class Pose(
+    /** 0 = upright, 1 = on all fours. */
+    val quad: Float,
+    /** Centre of the head blob — the body's own centre while [quad] is 0. */
+    val headCenter: Offset,
+    val headR: Float,
+    /** Multiplier on the head's width: a muzzled head narrows as it comes forward. */
+    val headWidth: Float,
+    val trunkCenter: Offset,
+    /** Half-width and half-height of the barrel. */
+    val trunkW: Float,
+    val trunkH: Float,
+    /** The purely genetic part of body width, with weight and branch already removed. */
+    val widthMul: Float,
+    /** Leg length as a fraction of its own ceiling; 0.34 is the value the old art was drawn at. */
+    val legFrac: Float,
+    /** Ground clearance the barrel is carried at once the creature is fully four-legged. */
+    val legPx: Float,
+    val muzzlePx: Float,
+    val muzzleFrac: Float,
+    val earPx: Float,
+    val earDroop: Float,
+    /** Tail length in the same units the old [Proportions.tail] used: multiples of bodyR. */
+    val tailUnits: Float,
+    val shag: Float,
+    /** The line the feet stand on. Fixed, so growing legs raises the body instead of sinking it. */
+    val groundY: Float,
+)
+
+/**
+ * Resolves [m] against the body this frame.
+ *
+ * Offsets from the body centre are rounded to whole art pixels for the same reason the bob is:
+ * a head sitting on a half pixel resamples its own outline. They are rounded as *offsets* and
+ * not as absolute positions, so a zero offset stays bit-for-bit zero and the creature never
+ * shifts by half a pixel relative to where it used to be drawn.
+ */
+private fun poseFor(
+    m: Morphology,
+    bodyCenter: Offset,
+    bodyR: Float,
+    p: Proportions,
+    spec: CreatureSpec,
+): Pose {
+    val q = m.quadruped.coerceIn(0f, 1f)
+    // Matches the ground shadow's own y, so the feet land where the contact shadow is drawn.
+    val groundY = bodyCenter.y + bodyR * 1.15f
+
+    // p.bodyWidth already carries weight and branch, and Morphology.bodyWidth carries the same
+    // two plus the build gene. Dividing by what Morphology would have produced for a *mid-build*
+    // creature of this weight and branch leaves only the genetic part, so nothing is counted
+    // twice and a mid-build creature comes out at exactly 1.
+    val fat = ((spec.weightGrams - 12f) / 108f).coerceIn(0f, 1f)
+    val branchWidth = when (spec.branch) {
+        EvolutionBranch.ATHLETIC -> -0.06f
+        EvolutionBranch.GOURMAND -> 0.10f
+        else -> 0f
+    }
+    val widthMul = (m.bodyWidth / (0.98f + fat * 0.30f + branchWidth)).coerceIn(0.78f, 1.28f)
+
+    val legFrac = (m.legLength / Morphology.MAX_LEG).coerceIn(0f, 1f)
+    // Ground clearance. The floor of 0.20 is there because a quadruped with no legs at all is a
+    // slug; the 0.62 span puts a maximally leggy hound's belly at about half its own height.
+    val legPx = bodyR * (0.20f + 0.62f * legFrac)
+
+    // The barrel starts life as the body blob itself and flattens as the creature goes over.
+    // Because it is drawn *behind* the head and is the same size and in the same place at low
+    // [q], there is nothing to see until it has genuinely separated — hence no pop when it
+    // starts being drawn at all.
+    val trunkW = bodyR * p.bodyWidth * widthMul
+    val trunkH = lerpF(bodyR, bodyR * 0.50f, q)
+    val trunkTargetY = groundY - legPx - trunkH * 0.98f
+    val trunkDx = -bodyR * 0.30f * q
+    val trunkDy = (trunkTargetY - bodyCenter.y) * q
+    val trunkCenter = Offset(
+        bodyCenter.x + trunkDx.roundToInt().toFloat(),
+        bodyCenter.y + trunkDy.roundToInt().toFloat(),
+    )
+
+    // The head keeps the face, so it shrinks rather than vanishes: at full quadruped it is 70%
+    // of the old blob, far enough forward to clear the shoulder and a little above the back.
+    val headDx = bodyR * 0.66f * q
+    val headDy = (trunkTargetY - bodyR * 0.20f - bodyCenter.y) * q
+    val headCenter = Offset(
+        bodyCenter.x + headDx.roundToInt().toFloat(),
+        bodyCenter.y + headDy.roundToInt().toFloat(),
+    )
+
+    return Pose(
+        quad = q,
+        headCenter = headCenter,
+        headR = bodyR * (1f - 0.30f * q),
+        headWidth = 1f - 0.12f * q,
+        trunkCenter = trunkCenter,
+        trunkW = trunkW,
+        trunkH = trunkH,
+        widthMul = widthMul,
+        legFrac = legFrac,
+        legPx = legPx,
+        // A snout that juts at the viewer out of a front-facing face reads as a chin, so an
+        // upright creature only spends about two thirds of its muzzle gene; the rest arrives as
+        // the head turns side-on and the snout has somewhere to go.
+        muzzlePx = bodyR * HEIGHT_IN_BODY_R * m.muzzleLength * lerpF(0.55f, 0.86f, q),
+        muzzleFrac = (m.muzzleLength / Morphology.MAX_MUZZLE).coerceIn(0f, 1f),
+        earPx = bodyR * HEIGHT_IN_BODY_R * m.earLength * 0.80f,
+        earDroop = m.earDroop.coerceIn(0f, 1f),
+        tailUnits = HEIGHT_IN_BODY_R * m.tailLength,
+        shag = m.shagginess.coerceIn(0f, 1f),
+        groundY = groundY,
+    )
+}
+
+/** Blends two anchors. At [t] = 0 the result is [a] to the bit, which several crossfades rely on. */
+private fun lerpOffset(a: Offset, b: Offset, t: Float) =
+    Offset(lerpF(a.x, b.x, t), lerpF(a.y, b.y, t))
+
+/** 1/|v|, so a hand-picked direction can be made a unit vector without a vector type. */
+private fun invLength(dx: Float, dy: Float): Float {
+    val d = dx * dx + dy * dy
+    return if (d < 1e-6f) 0f else 1f / sqrt(d)
+}
+
+/**
+ * Deterministic 0..1 from an index. Fur has to sit in exactly the same place every frame — a
+ * tuft that redraws itself somewhere new is the one thing worse than no tuft at all — and this
+ * is cheaper and more predictable than carrying a seeded generator through the draw call.
+ */
+private fun hashUnit(i: Int): Float {
+    var h = i * 374761393 + 668265263
+    h = (h xor (h shr 13)) * 1274126177
+    return ((h xor (h shr 16)) and 0xFFFF) / 65535f
+}
+
+/**
+ * Rotates one colour's hue by a precomputed angle, on the usual luminance-preserving RGB matrix.
+ *
+ * A proper HSV round trip would be more correct and would cost three branches per channel; at
+ * the ±15° this is ever asked for, the matrix is indistinguishable and allocation-free, because
+ * [Color] is a value class over a packed long.
+ */
+private fun hueRotate(c: Color, cosA: Float, sinA: Float): Color {
+    val flat = (1f - cosA) / 3f
+    val skew = 0.57735f * sinA
+    val m0 = cosA + flat
+    val m1 = flat - skew
+    val m2 = flat + skew
+    return Color(
+        (c.red * m0 + c.green * m1 + c.blue * m2).coerceIn(0f, 1f),
+        (c.red * m2 + c.green * m0 + c.blue * m1).coerceIn(0f, 1f),
+        (c.red * m1 + c.green * m2 + c.blue * m0).coerceIn(0f, 1f),
+        c.alpha,
+    )
+}
+
+/**
+ * The species palette, rotated far enough that two siblings are told apart and not so far that
+ * either stops being its own species.
+ *
+ * `Morphology.hueShift` is centred on 0 and only ever reaches about ±0.25, so 60° of gain gives
+ * a real lineage roughly ±15° — a blue that has gone slightly green, not a blue that has gone
+ * purple. The eye colour is left alone: it is nearly black, and rotating a near-black tints it
+ * without ever changing its hue in a way anyone can see.
+ */
+private fun hueShifted(p: CreaturePalette, shift: Float): CreaturePalette {
+    val rad = shift.coerceIn(-1f, 1f) * 60f * PI.toFloat() / 180f
+    val ca = cos(rad)
+    val sa = sin(rad)
+    return p.copy(
+        body = hueRotate(p.body, ca, sa),
+        bodyShade = hueRotate(p.bodyShade, ca, sa),
+        belly = hueRotate(p.belly, ca, sa),
+        accent = hueRotate(p.accent, ca, sa),
+        outline = hueRotate(p.outline, ca, sa),
+        blush = hueRotate(p.blush, ca, sa),
+    )
 }
 
 // ------------------------------------------------------------------ light and tone
@@ -218,7 +427,12 @@ fun DrawScope.drawCreature(
     spec: CreatureSpec,
     frame: CreatureFrame,
 ) {
-    val palette = Palettes.creature(spec.species, spec.branch)
+    val morph = spec.morphology
+    val palette = Palettes.creature(spec.species, spec.branch).let {
+        // Below a quarter of a degree the rotation cannot survive the downscale, and skipping it
+        // is also what guarantees an ungenomed creature keeps the palette it has always had.
+        if (morph == null || abs(morph.hueShift) < 0.004f) it else hueShifted(it, morph.hueShift)
+    }
     if (spec.stage == LifeStage.EGG) {
         drawEgg(center, unit, palette, frame)
         return
@@ -232,29 +446,39 @@ fun DrawScope.drawCreature(
     val tremor = (frame.shiver * unit * 0.007f).roundToInt().toFloat()
     val bodyCenter = Offset(center.x + tremor, cy)
 
+    val pose = morph?.let { poseFor(it, bodyCenter, bodyR, p, spec) }
+    // Everything the face wears — eyes, ears, snout, hat, sweat, glasses — hangs off these two
+    // instead of off the body. With no morphology they *are* the body, which is what keeps the
+    // ungenomed render identical: same anchors, same arguments, same calls.
+    val headC = pose?.headCenter ?: bodyCenter
+    val headR = pose?.headR ?: bodyR
+
     // Height is only legible through the shadow: it tightens and thins on the way up and is
-    // back at full weight the instant the feet land.
+    // back at full weight the instant the feet land. A creature on four feet spreads its
+    // contact patch over a body's length instead of a body's width, so the pool grows with it.
     val lift = (-frame.bobY * 6.25f).coerceIn(0f, 1f)
     drawGroundShadow(
         x = center.x,
         y = center.y + bodyR * 1.15f,
-        radius = bodyR * (1.05f - lift * 0.40f),
+        radius = bodyR * (1.05f - lift * 0.40f) * (1f + (pose?.quad ?: 0f) * 0.42f),
         palette = palette,
         strength = 1f - lift * 0.58f,
     )
 
     rotate(degrees = frame.lean, pivot = Offset(center.x + tremor, center.y + bodyR)) {
         // Back-most parts first: tail, then back limbs, then body, then face, then hat.
-        drawTail(bodyCenter, bodyR, p, spec, palette, frame)
-        drawLimbs(bodyCenter, bodyR, p, palette, frame, back = true)
-        drawBody(bodyCenter, bodyR, p, spec, palette, frame)
-        drawSpeciesFeatures(bodyCenter, bodyR, p, spec, palette, frame)
-        drawLimbs(bodyCenter, bodyR, p, palette, frame, back = false)
-        drawFace(bodyCenter, bodyR, p, spec, palette, frame)
-        drawBranchMarks(bodyCenter, bodyR, p, spec, palette)
-        spec.hatId?.let { drawHat(it, bodyCenter, bodyR, p, frame) }
-        drawSweat(bodyCenter, bodyR, p, frame)
-        if (spec.stage == LifeStage.ELDER) drawElderMarks(bodyCenter, bodyR, palette)
+        drawTail(bodyCenter, bodyR, p, spec, palette, frame, pose)
+        drawLimbs(bodyCenter, bodyR, p, palette, frame, back = true, pose = pose)
+        if (pose != null) drawTrunk(pose, bodyR, spec, palette, frame)
+        drawBody(headC, headR, p, spec, palette, frame, bandR = bodyR, pose = pose)
+        drawSpeciesFeatures(headC, headR, p, spec, palette, frame)
+        if (pose != null) drawEars(headC, headR, p, pose, palette, frame)
+        drawLimbs(bodyCenter, bodyR, p, palette, frame, back = false, pose = pose)
+        drawFace(headC, headR, p, spec, palette, frame, pose)
+        drawBranchMarks(headC, headR, p, spec, palette)
+        spec.hatId?.let { drawHat(it, headC, headR, p, frame) }
+        drawSweat(headC, headR, p, frame)
+        if (spec.stage == LifeStage.ELDER) drawElderMarks(headC, headR, palette)
     }
 
     if (frame.flash > 0.01f) {
@@ -359,6 +583,14 @@ private fun rimPath(c: Offset, w: Float, h: Float, core: Boolean): Path {
     }
 }
 
+/**
+ * The body blob, unchanged in every particular except where it is drawn and how wide.
+ *
+ * [bandR] is the radius every stroke width is measured against, and it is deliberately *not*
+ * this shape's own radius: a quadruped's head is 70% of the old body, and letting its outline
+ * shrink with it would drop the key line under a buffer pixel while the barrel beside it kept
+ * a fat one. One creature, one line weight.
+ */
 private fun DrawScope.drawBody(
     center: Offset,
     bodyR: Float,
@@ -366,28 +598,64 @@ private fun DrawScope.drawBody(
     spec: CreatureSpec,
     palette: CreaturePalette,
     frame: CreatureFrame,
+    bandR: Float = bodyR,
+    pose: Pose? = null,
 ) {
-    val w = bodyR * p.bodyWidth / frame.squash
+    val w = bodyR * p.bodyWidth * (pose?.headWidth ?: 1f) * (pose?.widthMul ?: 1f) / frame.squash
     val h = bodyR * frame.squash
-    val tones = tonesFor(palette.body, palette.bodyShade)
+    drawBlob(
+        c = center,
+        w = w,
+        h = h,
+        bandR = bandR,
+        mood = spec.mood,
+        palette = palette,
+        shag = pose?.shag ?: 0f,
+        // The crown and the back of the neck: the arc a hand would run the wrong way up.
+        furFrom = 196f,
+        furTo = 322f,
+    )
+}
 
-    val body = bodyPath(center, w, h)
+/**
+ * One shaded egg — the shape the head, and on a quadruped the barrel too, are both made of.
+ *
+ * Split out of [drawBody] verbatim so that a second blob costs nothing new. Note that the
+ * fills are opaque: where the head overlaps the trunk it paints over it completely, which is
+ * why the mood wash and the belly never double up in the overlap.
+ */
+private fun DrawScope.drawBlob(
+    c: Offset,
+    w: Float,
+    h: Float,
+    bandR: Float,
+    mood: Mood,
+    palette: CreaturePalette,
+    shag: Float,
+    furFrom: Float,
+    furTo: Float,
+) {
+    val tones = tonesFor(palette.body, palette.bodyShade)
+    // Fur first, so the tufts are rooted *under* the silhouette and only their ends show.
+    if (shag > 0.02f) drawFur(c, w, h, bandR, shag, furFrom, furTo, tones)
+
+    val body = bodyPath(c, w, h)
     drawPath(body, tones.mid, style = Fill)
 
     // Key light from the upper left: one mid tone, one shadow that wraps the lower right and
     // the underside, one lit crescent. Both bands are ~20 px across at this size — broad enough
     // to read as form rather than as noise.
-    val shadow = shadowPath(center, w, h)
+    val shadow = shadowPath(c, w, h)
     drawPath(shadow, tones.shadow, style = Fill)
-    drawPath(litPath(center, w, h), tones.light, style = Fill)
+    drawPath(litPath(c, w, h), tones.light, style = Fill)
 
-    drawBelly(center, w, h, palette, tones)
+    drawBelly(c, w, h, palette, tones)
     // Same shadow again over the belly. Shadow-over-shadow is a no-op, so this only bends the
     // belly patch into the same light without needing a second, differently shaped path.
     drawPath(shadow, tones.shadow.copy(alpha = 0.16f), style = Fill)
 
     // Mood reads first as colour, before any animation: a glance should be enough.
-    val wash = when (spec.mood) {
+    val wash = when (mood) {
         Mood.SICK -> Color(0xFF7FBF6A).copy(alpha = 0.30f)
         Mood.HUNGRY -> Color(0xFFFFF4D6).copy(alpha = 0.22f)
         Mood.TIRED -> Color(0xFF5C6BA8).copy(alpha = 0.20f)
@@ -398,17 +666,17 @@ private fun DrawScope.drawBody(
     }
     if (wash.alpha > 0f) drawPath(body, wash, style = Fill)
 
-    drawPath(body, tones.line, style = Stroke(width = band(bodyR, 0.055f)))
+    drawPath(body, tones.line, style = Stroke(width = band(bandR, 0.055f)))
     // Rim last, on top of the inner half of the outline, so the edge catches the light.
     drawPath(
-        rimPath(center, w, h, core = false),
+        rimPath(c, w, h, core = false),
         tones.rim.copy(alpha = 0.42f),
-        style = Stroke(width = band(bodyR, 0.035f), cap = StrokeCap.Round),
+        style = Stroke(width = band(bandR, 0.035f), cap = StrokeCap.Round),
     )
     drawPath(
-        rimPath(center, w, h, core = true),
+        rimPath(c, w, h, core = true),
         tones.rim.copy(alpha = 0.90f),
-        style = Stroke(width = band(bodyR, 0.030f), cap = StrokeCap.Round),
+        style = Stroke(width = band(bandR, 0.030f), cap = StrokeCap.Round),
     )
 }
 
@@ -432,6 +700,114 @@ private fun DrawScope.drawBelly(c: Offset, w: Float, h: Float, palette: Creature
     }
 }
 
+/**
+ * Chunky fur tufts poking out past the outline.
+ *
+ * Coat is the one gene with no room to be subtle: at bodyR ≈ 60 px a strand of fur is a third
+ * of a pixel and downsamples into a smear, so the coat is spent on a handful of tufts three to
+ * six pixels long instead — few enough to count, big enough to survive. They are drawn as
+ * round-capped lines rather than paths so that a shaggy creature costs no allocations at all,
+ * and they lean backward, because fur that radiates evenly reads as a sea urchin.
+ */
+private fun DrawScope.drawFur(
+    c: Offset,
+    w: Float,
+    h: Float,
+    bandR: Float,
+    shag: Float,
+    fromDeg: Float,
+    toDeg: Float,
+    tones: Tones,
+) {
+    val count = 3 + (shag * 5f).roundToInt()
+    for (i in 0 until count) {
+        val t = if (count == 1) 0.5f else i / (count - 1f)
+        val jitter = hashUnit(i)
+        // ±5° of scatter: enough that the row is not a comb, small enough that it is still a row.
+        val a = (lerpF(fromDeg, toDeg, t) + (jitter - 0.5f) * 10f) * PI.toFloat() / 180f
+        val ca = cos(a)
+        val sa = sin(a)
+        // 0.94 sinks the root a pixel inside the silhouette so no tuft floats free of the body.
+        val root = Offset(c.x + w * ca * 0.94f, c.y + h * sa * 0.94f)
+        val dx = ca - 0.26f
+        val dy = sa - 0.06f
+        val inv = invLength(dx, dy)
+        val len = bandR * (0.09f + 0.15f * shag) * (0.74f + jitter * 0.52f)
+        val tip = Offset(root.x + dx * inv * len, root.y + dy * inv * len)
+        drawLine(tones.lineSoft, root, tip, strokeWidth = band(bandR, 0.075f), cap = StrokeCap.Round)
+        drawLine(tones.shadow, root, tip, strokeWidth = band(bandR, 0.045f), cap = StrokeCap.Round)
+    }
+}
+
+/**
+ * The barrel a four-legged creature carries between its legs, and the neck that reaches from it
+ * to the head.
+ *
+ * Rotating the upright body toward horizontal is the obvious implementation and the wrong one:
+ * every shading path in this file is a baked sub-segment of the silhouette, so the whole tone
+ * ladder would rotate with the shape and the key light would end up coming from underneath.
+ * The barrel is therefore the same egg drawn wide and shallow. The silhouette is what the eye
+ * reads as a body lying along the ground; the light stays where it belongs.
+ */
+private fun DrawScope.drawTrunk(
+    pose: Pose,
+    bodyR: Float,
+    spec: CreatureSpec,
+    palette: CreaturePalette,
+    frame: CreatureFrame,
+) {
+    // Under this the barrel is still the head's own size, in the head's own place, drawn behind
+    // it — invisible. Skipping it there costs nothing and means an upright creature with a
+    // morphology draws exactly the shapes it drew before it had one.
+    if (pose.quad < 0.04f) return
+    // Squash belongs to the head. A body lying along the ground takes only a share of it,
+    // because it stretches along its own length rather than upward.
+    val s = 1f + (frame.squash - 1f) * (1f - pose.quad * 0.65f)
+    drawBlob(
+        c = pose.trunkCenter,
+        w = pose.trunkW / s,
+        h = pose.trunkH * s,
+        bandR = bodyR,
+        mood = spec.mood,
+        palette = palette,
+        shag = pose.shag,
+        // Rump, up over the back, stopping short of the shoulder where the neck lands.
+        furFrom = 150f,
+        furTo = 296f,
+    )
+
+    // Neck. A plain capsule: it is only ever seen in the gap between two blobs that are already
+    // shaded, so tone bands of its own would be three pixels of detail nobody can read.
+    val tones = tonesFor(palette.body, palette.bodyShade)
+    val shoulder = Offset(
+        pose.trunkCenter.x + pose.trunkW * 0.44f,
+        pose.trunkCenter.y - pose.trunkH * 0.30f,
+    )
+    val nape = Offset(
+        pose.headCenter.x - pose.headR * 0.22f,
+        pose.headCenter.y + pose.headR * 0.30f,
+    )
+    val thick = pose.headR * (0.48f + 0.24f * (1f - pose.quad))
+    drawLine(tones.lineSoft, shoulder, nape, strokeWidth = thick + band(bodyR, 0.06f), cap = StrokeCap.Round)
+    drawLine(tones.mid, shoulder, nape, strokeWidth = thick, cap = StrokeCap.Round)
+    drawLine(
+        tones.light,
+        Offset(shoulder.x, shoulder.y - thick * 0.24f),
+        Offset(nape.x, nape.y - thick * 0.24f),
+        strokeWidth = thick * 0.30f,
+        cap = StrokeCap.Round,
+    )
+}
+
+/**
+ * Arms and feet — or, once the genome says so, four legs.
+ *
+ * The crossfade is the point: a biped already has four limbs, so nothing is grown or discarded.
+ * The arms swing down and forward into the front legs, the feet walk back under the rump and
+ * grow a shank each, and every position between is a real intermediate rather than a dissolve
+ * between two drawings. Every quadruped target is reached through [lerpOffset] at [Pose.quad],
+ * so a stance of 0 lands on the biped numbers exactly.
+ */
 private fun DrawScope.drawLimbs(
     center: Offset,
     bodyR: Float,
@@ -439,13 +815,18 @@ private fun DrawScope.drawLimbs(
     palette: CreaturePalette,
     frame: CreatureFrame,
     back: Boolean,
+    pose: Pose?,
 ) {
     if (p.limbLength <= 0.001f) return
     val tones = tonesFor(palette.body, palette.bodyShade)
-    val w = bodyR * p.bodyWidth
+    val q = pose?.quad ?: 0f
+    // 0.34 is the leg gene the old proportions were drawn at, so an average creature keeps the
+    // limbs it always had and only a deviation from average lengthens or shortens them.
+    val legFrac = pose?.legFrac ?: 0.34f
+    val w = bodyR * p.bodyWidth * (pose?.widthMul ?: 1f)
     val swing = frame.armSwing * bodyR * 0.35f
     val armY = center.y + bodyR * 0.18f
-    val len = bodyR * p.limbLength
+    val len = bodyR * p.limbLength * (1f + 0.55f * (legFrac - 0.34f))
     val thickness = bodyR * 0.20f
     val dir = if (back) -1f else 1f
     // Reaching up pulls the hands in as well as up, which is what stops a stretch reading as a
@@ -454,11 +835,27 @@ private fun DrawScope.drawLimbs(
 
     // Arms
     listOf(-1f, 1f).forEach { side ->
-        val start = Offset(center.x + side * w * 0.86f, armY)
-        val end = Offset(
+        var start = Offset(center.x + side * w * 0.86f, armY)
+        var end = Offset(
             start.x + side * len * (1f - reach * 0.55f),
             armY + swing * side * dir - reach * (len + bodyR * 0.55f),
         )
+        if (pose != null) {
+            // Front legs hang off the chest, at the shoulder end of the barrel. The two sides
+            // are pushed a pixel or two apart in x rather than mirrored: at this size that is
+            // the whole of the depth cue, and mirroring would put the far leg through the near.
+            val shoulder = Offset(
+                pose.trunkCenter.x + pose.trunkW * 0.52f + side * bodyR * 0.10f,
+                pose.trunkCenter.y + pose.trunkH * 0.42f,
+            )
+            val paw = Offset(
+                shoulder.x + side * bodyR * 0.05f + swing * 0.55f * dir,
+                // Rearing keeps working on all fours: armsUp lifts the front feet off the floor.
+                pose.groundY - bodyR * 0.06f - reach * (pose.legPx + bodyR * 0.5f),
+            )
+            start = lerpOffset(start, shoulder, q)
+            end = lerpOffset(end, paw, q)
+        }
         if (back) {
             // Behind the body: shadow tone only, so the arm sits back instead of competing.
             drawLine(tones.shadow.copy(alpha = 0.85f), start, end, strokeWidth = thickness, cap = StrokeCap.Round)
@@ -482,10 +879,31 @@ private fun DrawScope.drawLimbs(
     }
 
     if (back) return
-    // Feet
+    // Feet, which are also the hind paws: they walk back under the rump as the stance drops.
     listOf(-1f, 1f).forEach { side ->
-        val fx = center.x + side * w * 0.42f
-        val fy = center.y + bodyR * 1.02f
+        // A leggy biped stands a little taller off its feet, a stubby one sits down on them.
+        // The swing is small on purpose — the feet must not leave the contact shadow.
+        var fx = center.x + side * w * 0.42f
+        var fy = center.y + bodyR * (1.02f + 0.16f * (legFrac - 0.34f))
+        var top = tones.mid
+        if (pose != null) {
+            val hip = Offset(
+                pose.trunkCenter.x - pose.trunkW * 0.50f + side * bodyR * 0.10f,
+                pose.trunkCenter.y + pose.trunkH * 0.40f,
+            )
+            // Contra-lateral to the front paw, so a walk cycle reads as a walk and not a hop.
+            val paw = Offset(hip.x - bodyR * 0.04f - swing * 0.55f * side, pose.groundY - bodyR * 0.08f)
+            fx = lerpF(fx, paw.x, q)
+            fy = lerpF(fy, paw.y, q)
+            // The far hind leg sinks toward the shadow tone rather than being drawn again in a
+            // separate pass: one flat tone step is all the depth two pixels of offset can carry.
+            if (side < 0f) top = lerp(tones.mid, tones.shadow, q * 0.75f)
+            if (q > 0.04f) {
+                val shank = band(bodyR, 0.19f * q)
+                drawLine(tones.lineSoft, hip, Offset(fx, fy), strokeWidth = shank + band(bodyR, 0.05f), cap = StrokeCap.Round)
+                drawLine(if (side < 0f) tones.shadow else tones.mid, hip, Offset(fx, fy), strokeWidth = shank, cap = StrokeCap.Round)
+            }
+        }
         drawOval(
             color = tones.shadow,
             topLeft = Offset(fx - bodyR * 0.24f, fy - bodyR * 0.10f),
@@ -493,7 +911,7 @@ private fun DrawScope.drawLimbs(
         )
         // Lit top of the foot, ~2 px in from the edge on every side.
         drawOval(
-            color = tones.mid,
+            color = top,
             topLeft = Offset(fx - bodyR * 0.21f, fy - bodyR * 0.085f),
             size = Size(bodyR * 0.40f, bodyR * 0.17f),
         )
@@ -513,16 +931,26 @@ private fun DrawScope.drawTail(
     spec: CreatureSpec,
     palette: CreaturePalette,
     frame: CreatureFrame,
+    pose: Pose?,
 ) {
-    if (p.tail <= 0.01f) return
-    val w = bodyR * p.bodyWidth
+    // The tail gene is a fraction of height; [Proportions.tail] is a multiple of bodyR, which is
+    // half of it. Converting once here means the four species tails below are untouched.
+    val tailUnits = pose?.tailUnits ?: p.tail
+    if (tailUnits <= 0.01f) return
+    val w = bodyR * p.bodyWidth * (pose?.widthMul ?: 1f)
     // The wag is the pose; [CreatureFrame.tailSwing] is the spring that lets the tip carry on
     // after the body has stopped.
     val wag = (frame.armSwing * 0.5f + frame.tailSwing).coerceIn(-1.6f, 1.6f)
-    val baseX = center.x - w * 0.85f
-    val baseY = center.y + bodyR * 0.45f
-    val tipX = baseX - bodyR * p.tail * (1f + wag * 0.20f)
-    val tipY = baseY - bodyR * p.tail * (0.5f + wag * 0.5f)
+    var baseX = center.x - w * 0.85f
+    var baseY = center.y + bodyR * 0.45f
+    if (pose != null) {
+        // Off the back of the barrel and slightly above it, so a wagging tail clears the rump
+        // instead of sweeping through it.
+        baseX = lerpF(baseX, pose.trunkCenter.x - pose.trunkW * 0.88f, pose.quad)
+        baseY = lerpF(baseY, pose.trunkCenter.y - pose.trunkH * 0.34f, pose.quad)
+    }
+    val tipX = baseX - bodyR * tailUnits * (1f + wag * 0.20f)
+    val tipY = baseY - bodyR * tailUnits * (0.5f + wag * 0.5f)
     val accent = tonesFor(palette.accent)
 
     when (spec.species) {
@@ -768,6 +1196,7 @@ private fun DrawScope.drawFace(
     spec: CreatureSpec,
     palette: CreaturePalette,
     frame: CreatureFrame,
+    pose: Pose?,
 ) {
     val eyeY = center.y + bodyR * p.eyeHeight
     val spread = bodyR * p.eyeSpread
@@ -781,6 +1210,18 @@ private fun DrawScope.drawFace(
     val faceLine = tones.lineSoft
     // Not pure white — a sclera tinted toward the belly keeps the eye inside the palette.
     val sclera = lerp(Color.White, palette.belly, 0.30f)
+
+    // The snout goes on before the eyes, so its root passes under them rather than over them,
+    // and it takes the mouth with it: a nose and a mouth left flat on the body while a muzzle
+    // grows out beneath them is the single thing that stops a long face reading as a long face.
+    // Under about four buffer pixels there is no snout worth drawing and the face is the old one.
+    var mouthAt = center
+    var mouthY = eyeY + r * 1.5f
+    if (pose != null && pose.muzzlePx > bodyR * 0.06f) {
+        val tip = drawMuzzle(center, bodyR, pose, palette, frame, eyeY)
+        mouthAt = Offset(tip.x, center.y)
+        mouthY = tip.y + bodyR * 0.07f
+    }
 
     listOf(-1f, 1f).forEach { side ->
         val ex = center.x + side * spread
@@ -882,7 +1323,102 @@ private fun DrawScope.drawFace(
 
     // The mouth carries expression, so it keeps most of the full-strength line; only the eye
     // ring, which lies directly on the pale sclera, takes the fully lifted one.
-    drawMouth(center, bodyR, eyeY + r * 1.5f, spec.mood, frame, lerp(tones.line, faceLine, 0.4f))
+    drawMouth(mouthAt, bodyR, mouthY, spec.mood, frame, lerp(tones.line, faceLine, 0.4f))
+}
+
+/**
+ * The snout, and the nose riding on the end of it. Returns the tip, because the mouth has to
+ * follow it there.
+ *
+ * It is a capsule — a fat round-capped line with a thicker line of outline underneath it and a
+ * thin lit one along the top — for the same reason the arms are: three [drawLine] calls survive
+ * the downscale as a shaded tube, cost nothing, and cannot come apart at the join the way a
+ * separate path and outline can. Its direction is the other half of the quadruped crossfade:
+ * on an upright, front-facing head it hangs down the face like a shallow chin, and as the head
+ * turns side-on it swings forward into a proper muzzle.
+ */
+private fun DrawScope.drawMuzzle(
+    center: Offset,
+    bodyR: Float,
+    pose: Pose,
+    palette: CreaturePalette,
+    frame: CreatureFrame,
+    eyeY: Float,
+): Offset {
+    val tones = tonesFor(palette.body, palette.bodyShade)
+    // Gaze pulls the snout with the eyes, by about a pixel at full deflection.
+    val dx = lerpF(0.20f, 0.94f, pose.quad) + frame.gaze * 0.14f
+    val dy = lerpF(0.94f, 0.26f, pose.quad)
+    val inv = invLength(dx, dy)
+    val root = Offset(center.x + dx * inv * bodyR * 0.10f, eyeY + bodyR * 0.26f)
+    val tip = Offset(root.x + dx * inv * pose.muzzlePx, root.y + dy * inv * pose.muzzlePx)
+    // A long snout is a narrow snout; a short one is a broad pad across the whole lower face.
+    val thick = bodyR * (0.52f - 0.14f * pose.muzzleFrac)
+    drawLine(tones.lineSoft, root, tip, strokeWidth = thick + band(bodyR, 0.06f), cap = StrokeCap.Round)
+    drawLine(tones.mid, root, tip, strokeWidth = thick, cap = StrokeCap.Round)
+    drawLine(
+        tones.light,
+        Offset(root.x, root.y - thick * 0.24f),
+        Offset(tip.x, tip.y - thick * 0.24f),
+        strokeWidth = thick * 0.30f,
+        cap = StrokeCap.Round,
+    )
+    // Nose: on top of the tip, not centred on it, so it reads as sitting on the snout.
+    val noseR = bodyR * 0.13f
+    val nose = Offset(tip.x + dx * inv * noseR * 0.30f, tip.y - noseR * 0.45f)
+    drawCircle(tones.line, noseR, nose)
+    drawCircle(lerp(tones.line, SCENE_LIGHT, 0.40f), noseR * 0.36f, Offset(nose.x - noseR * 0.28f, nose.y - noseR * 0.30f))
+    return tip
+}
+
+/**
+ * Inherited ears, on top of whatever crest the species already wears.
+ *
+ * Two segments, not one: the bend between them is where droop lives. A pricked ear runs almost
+ * straight out and up from the head; a hound's goes out first and then falls, and because the
+ * fall is expressed as +y in the creature's own space it keeps hanging correctly when the body
+ * has gone horizontal and when the whole creature is leaning. They are anchored on the sides of
+ * the head rather than its crown so they do not fight the species crest for the same pixels.
+ */
+private fun DrawScope.drawEars(
+    center: Offset,
+    bodyR: Float,
+    p: Proportions,
+    pose: Pose,
+    palette: CreaturePalette,
+    frame: CreatureFrame,
+) {
+    // Below six buffer pixels an ear is a bump on the outline and not worth the two draw calls.
+    if (pose.earPx < bodyR * 0.10f) return
+    val tones = tonesFor(palette.body, palette.bodyShade)
+    val inner = lerp(palette.blush, tones.shadow, 0.45f)
+    val w = bodyR * p.bodyWidth * pose.headWidth
+    val d = pose.earDroop
+    val base = bodyR * 0.30f
+    listOf(-1f, 1f).forEach { side ->
+        val anchor = Offset(center.x + side * w * 0.68f, center.y - bodyR * 0.58f)
+        // First segment: out of the head, upward when pricked, barely rising when floppy.
+        val ax = side * lerpF(0.42f, 0.66f, d)
+        val ay = lerpF(-0.92f, -0.34f, d)
+        val ai = invLength(ax, ay)
+        val joint = Offset(anchor.x + ax * ai * pose.earPx * 0.42f, anchor.y + ay * ai * pose.earPx * 0.42f)
+        // Second segment: still climbing when pricked, straight down under its own weight when
+        // not. The swing term is what makes long ears flap a beat behind a walking creature.
+        val bx = side * lerpF(0.30f, 0.20f, d) + frame.armSwing * 0.12f * d
+        val by = lerpF(-0.95f, 0.96f, d)
+        val bi = invLength(bx, by)
+        val tip = Offset(joint.x + bx * bi * pose.earPx * 0.58f, joint.y + by * bi * pose.earPx * 0.58f)
+        // Far ear one tone down: the same flat depth step the far hind leg takes.
+        val skin = if (side < 0f) lerp(tones.mid, tones.shadow, 0.55f) else tones.mid
+        drawLine(tones.lineSoft, anchor, joint, strokeWidth = base + band(bodyR, 0.06f), cap = StrokeCap.Round)
+        drawLine(tones.lineSoft, joint, tip, strokeWidth = base * 0.74f + band(bodyR, 0.06f), cap = StrokeCap.Round)
+        drawLine(skin, anchor, joint, strokeWidth = base, cap = StrokeCap.Round)
+        drawLine(skin, joint, tip, strokeWidth = base * 0.74f, cap = StrokeCap.Round)
+        // A single pixel of inner ear down the middle of the near one. Any more and it is noise.
+        if (side > 0f) {
+            drawLine(inner, anchor, joint, strokeWidth = base * 0.34f, cap = StrokeCap.Round)
+        }
+    }
 }
 
 private fun DrawScope.drawMouth(
