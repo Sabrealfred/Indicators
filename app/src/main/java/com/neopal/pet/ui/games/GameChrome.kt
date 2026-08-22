@@ -55,7 +55,15 @@ fun GameHeader(
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onExit) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = NeoColors.OnDark)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    // The header sits on colorScheme.background, so the arrow has to be
+                    // onBackground. The fixed NeoColors.OnDark it used to carry is a
+                    // dark-theme near-white: 16.71:1 on the dark chassis, 1.01:1 on the
+                    // light surface — the only way out of a game, invisible.
+                    tint = MaterialTheme.colorScheme.onBackground,
+                )
             }
             Text(title, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.weight(1f))
