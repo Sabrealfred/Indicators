@@ -21,6 +21,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -43,6 +44,17 @@ data class CreatureSpec(
      * genes all sit at zero lands back on the same numbers the null path uses.
      */
     val morphology: com.neopal.pet.domain.Morphology? = null,
+    /**
+     * How far through its current life stage this creature is, 0..1 — the same number the
+     * screen already computes for the hatch timer.
+     *
+     * A stage used to be a step function: identical for the whole of it, then a jump. This is
+     * the only thing in the file that makes a creature change while nothing is happening to it,
+     * so it is spent on proportion rather than on decoration. Zero means "do not drift", which
+     * is both the start of a stage and the pre-wiring default, and reproduces the old numbers
+     * exactly.
+     */
+    val stageProgress: Float = 0f,
 )
 
 /** Everything the renderer needs to know about *what it is doing* this frame. */
@@ -81,6 +93,16 @@ data class CreatureFrame(
     val shiver: Float = 0f,
     /** Accessory lag in degrees; a hat keeps leaning after the head has stopped. */
     val hatTilt: Float = 0f,
+    /**
+     * 0..1: how much of the creature's attention something edible has right now.
+     *
+     * This is the food the scene is already drawing, not a new thing to know about the pet —
+     * the caller has the served item and the action in hand and turns them into one number.
+     * It is spent on the pupil, which swells and eats into the iris ring the way a real one
+     * does, because at this size an eye is the only part of the face with room for a reaction
+     * that is not also a whole pose.
+     */
+    val foodFocus: Float = 0f,
 )
 
 /** Per-stage proportions. Babies are all head and eyes; elders shrink and droop. */
@@ -95,14 +117,53 @@ private data class Proportions(
     val tail: Float,
 )
 
-private fun proportionsFor(stage: LifeStage, branch: EvolutionBranch, weight: Float): Proportions {
-    val base = when (stage) {
-        LifeStage.EGG, LifeStage.BABY -> Proportions(0.30f, 1.02f, 0.098f, 0.34f, -0.05f, 0.10f, 0.05f, 0.22f)
-        LifeStage.CHILD -> Proportions(0.31f, 1.00f, 0.082f, 0.36f, -0.06f, 0.16f, 0.12f, 0.30f)
-        LifeStage.TEEN -> Proportions(0.32f, 0.96f, 0.070f, 0.37f, -0.08f, 0.24f, 0.22f, 0.40f)
-        LifeStage.ADULT -> Proportions(0.34f, 0.96f, 0.064f, 0.38f, -0.09f, 0.28f, 0.30f, 0.46f)
-        LifeStage.ELDER -> Proportions(0.32f, 1.00f, 0.055f, 0.36f, -0.07f, 0.24f, 0.26f, 0.42f)
-    }
+/** The numbers a stage arrives at. Where it goes from there is [driftTarget]'s business. */
+private fun baseProportions(stage: LifeStage): Proportions = when (stage) {
+    LifeStage.EGG, LifeStage.BABY -> Proportions(0.30f, 1.02f, 0.098f, 0.34f, -0.05f, 0.10f, 0.05f, 0.22f)
+    LifeStage.CHILD -> Proportions(0.31f, 1.00f, 0.082f, 0.36f, -0.06f, 0.16f, 0.12f, 0.30f)
+    LifeStage.TEEN -> Proportions(0.32f, 0.96f, 0.070f, 0.37f, -0.08f, 0.24f, 0.22f, 0.40f)
+    LifeStage.ADULT -> Proportions(0.34f, 0.96f, 0.064f, 0.38f, -0.09f, 0.28f, 0.30f, 0.46f)
+    LifeStage.ELDER -> Proportions(0.32f, 1.00f, 0.055f, 0.36f, -0.07f, 0.24f, 0.26f, 0.42f)
+}
+
+/**
+ * Where a stage is heading by the time it ends.
+ *
+ * For the four growing stages this is simply the next stage's numbers: a creature spends its
+ * childhood turning into what it is about to be, which is both the truthful thing to draw and
+ * the thing that takes most of the shock out of the boundary. Only [STAGE_DRIFT] of the
+ * distance is ever travelled, so the change of stage is still an event and not an anticlimax.
+ *
+ * The last two stages have nowhere to grow into and are written out by hand instead. An adult
+ * is not on its way to being old — it broadens and settles, and the eyes come down off the
+ * child's saucer size — and an elder simply keeps going the way it was already going.
+ */
+private fun driftTarget(stage: LifeStage): Proportions = when (stage) {
+    LifeStage.EGG, LifeStage.BABY -> baseProportions(LifeStage.CHILD)
+    LifeStage.CHILD -> baseProportions(LifeStage.TEEN)
+    LifeStage.TEEN -> baseProportions(LifeStage.ADULT)
+    LifeStage.ADULT -> Proportions(0.331f, 1.06f, 0.056f, 0.375f, -0.078f, 0.255f, 0.30f, 0.46f)
+    LifeStage.ELDER -> Proportions(0.305f, 1.04f, 0.049f, 0.350f, -0.055f, 0.215f, 0.22f, 0.39f)
+}
+
+/**
+ * How far toward [driftTarget] a stage gets before it ends. Two fifths is the largest share
+ * that still leaves the stage change itself visible; past that a teen simply becomes an adult
+ * quietly and the moment is gone.
+ */
+private const val STAGE_DRIFT = 0.40f
+
+private fun proportionsFor(
+    stage: LifeStage,
+    branch: EvolutionBranch,
+    weight: Float,
+    stageProgress: Float = 0f,
+): Proportions {
+    val base = baseProportions(stage)
+    // Smoothstepped, so nobody catches the creature mid-change: it is standing still, then it
+    // has been growing for a while, then it has stopped. A linear ramp has a visible start.
+    val d = smoothstep(stageProgress) * STAGE_DRIFT
+    val to = if (d > 0.002f) driftTarget(stage) else base
     // Weight widens the body without changing its height.
     val fat = ((weight - 12f) / 108f).coerceIn(0f, 1f)
     val branchWidth = when (branch) {
@@ -110,7 +171,16 @@ private fun proportionsFor(stage: LifeStage, branch: EvolutionBranch, weight: Fl
         EvolutionBranch.GOURMAND -> 0.10f
         else -> 0f
     }
-    return base.copy(bodyWidth = base.bodyWidth + fat * 0.30f + branchWidth)
+    return Proportions(
+        bodyRadius = lerpF(base.bodyRadius, to.bodyRadius, d),
+        bodyWidth = lerpF(base.bodyWidth, to.bodyWidth, d) + fat * 0.30f + branchWidth,
+        eyeRadius = lerpF(base.eyeRadius, to.eyeRadius, d),
+        eyeSpread = lerpF(base.eyeSpread, to.eyeSpread, d),
+        eyeHeight = lerpF(base.eyeHeight, to.eyeHeight, d),
+        limbLength = lerpF(base.limbLength, to.limbLength, d),
+        crest = lerpF(base.crest, to.crest, d),
+        tail = lerpF(base.tail, to.tail, d),
+    )
 }
 
 // ------------------------------------------------------------------ inherited shape
@@ -137,6 +207,16 @@ private const val HEIGHT_IN_BODY_R = 2f
 private class Pose(
     /** 0 = upright, 1 = on all fours. */
     val quad: Float,
+    /**
+     * How far the head has turned side-on, 0..1. Runs ahead of [quad], because an animal
+     * going down onto its front feet turns its head before its shoulders have gone anywhere.
+     */
+    val turn: Float,
+    /**
+     * How far the head and the barrel have pulled apart, 0..1. Runs *behind* [quad]: see
+     * [poseFor] for why the two are not the same clock.
+     */
+    val moveT: Float,
     /** Centre of the head blob — the body's own centre while [quad] is 0. */
     val headCenter: Offset,
     val headR: Float,
@@ -199,36 +279,48 @@ private fun poseFor(
     // slug; the 0.62 span puts a maximally leggy hound's belly at about half its own height.
     val legPx = bodyR * (0.20f + 0.62f * legFrac)
 
-    // The barrel starts life *inside* the body blob and flattens and lengthens as the creature
-    // goes over. Starting it a whisker smaller than the head rather than the same size is what
-    // buys the crossfade its silence: for the first tenth of the stance gene the barrel is
-    // wholly hidden behind the head it is drawn beneath, so a founder with a stance of 0.05
-    // shows no second outline at all, and by the time the barrel does clear the head it is
-    // clearing it backwards — which is a body growing out behind the shoulders, not a seam.
-    val trunkW = lerpF(bodyR * p.bodyWidth * widthMul * 0.92f, bodyR * p.bodyWidth * widthMul, q)
-    val trunkH = lerpF(bodyR * 0.92f, bodyR * 0.50f, q)
+    // Two clocks, not one. The stance gene says *how* quadrupedal a creature is; these say what
+    // happens first, and getting that order wrong is the whole of the old figure-of-eight.
+    //
+    // Shape runs early: the head takes its smaller, narrower form and the barrel flattens while
+    // both are still in the same place. Travel runs late: the two only pull apart once they no
+    // longer look alike. A creature halfway along is then a hunched animal whose body has not
+    // yet come out from behind its head, instead of two blobs of the same size side by side —
+    // which is what the middle of the sweep used to draw, and what read as an eight.
+    val qShape = q.pow(0.70f)
+    val qMove = q.pow(1.70f)
+
+    val trunkH = lerpF(bodyR * 0.92f, bodyR * 0.50f, qShape)
     val trunkTargetY = groundY - legPx - trunkH * 0.98f
-    val trunkDx = -bodyR * 0.30f * q
-    val trunkDy = (trunkTargetY - bodyCenter.y) * q
-    val trunkCenter = Offset(
-        bodyCenter.x + trunkDx.roundToInt().toFloat(),
-        bodyCenter.y + trunkDy.roundToInt().toFloat(),
-    )
+    val trunkDx = (-bodyR * 0.30f * qMove).roundToInt().toFloat()
+    val trunkDy = ((trunkTargetY - bodyCenter.y) * qMove).roundToInt().toFloat()
+    val trunkCenter = Offset(bodyCenter.x + trunkDx, bodyCenter.y + trunkDy)
 
     // The head keeps the face, so it shrinks rather than vanishes: at full quadruped it is 70%
     // of the old blob, far enough forward to clear the shoulder and a little above the back.
-    val headDx = bodyR * 0.66f * q
-    val headDy = (trunkTargetY - bodyR * 0.20f - bodyCenter.y) * q
-    val headCenter = Offset(
-        bodyCenter.x + headDx.roundToInt().toFloat(),
-        bodyCenter.y + headDy.roundToInt().toFloat(),
-    )
+    val headDx = (bodyR * 0.66f * qMove).roundToInt().toFloat()
+    val headDy = ((trunkTargetY - bodyR * 0.20f - bodyCenter.y) * qMove).roundToInt().toFloat()
+    val headCenter = Offset(bodyCenter.x + headDx, bodyCenter.y + headDy)
+    val headR = bodyR * (1f - 0.30f * qShape)
+    val headWidth = 1f - 0.12f * qShape
+
+    // The barrel is only ever allowed to clear the head *backwards*. While it is still emerging
+    // it is clamped to the widest it can be and stay inside the head's own outline, measured
+    // against where both of them actually are this frame — because a barrel that pokes past the
+    // head lays a second key line a few pixels outside the first, and that is not a body, it is
+    // a seam. Bodies grow out behind the shoulders; seams appear on both sides at once.
+    val fullW = bodyR * p.bodyWidth * widthMul
+    val headHalfW = headR * p.bodyWidth * headWidth * widthMul
+    val hidden = (headDx + headHalfW - trunkDx).coerceAtMost(headHalfW - headDx + trunkDx)
+    val trunkW = lerpF((hidden * 0.94f).coerceIn(0f, fullW), fullW, qMove)
 
     return Pose(
         quad = q,
+        turn = qShape,
+        moveT = qMove,
         headCenter = headCenter,
-        headR = bodyR * (1f - 0.30f * q),
-        headWidth = 1f - 0.12f * q,
+        headR = headR,
+        headWidth = headWidth,
         trunkCenter = trunkCenter,
         trunkW = trunkW,
         trunkH = trunkH,
@@ -238,7 +330,7 @@ private fun poseFor(
         // A snout that juts at the viewer out of a front-facing face reads as a chin, so an
         // upright creature only spends about two thirds of its muzzle gene; the rest arrives as
         // the head turns side-on and the snout has somewhere to go.
-        muzzlePx = bodyR * HEIGHT_IN_BODY_R * m.muzzleLength * lerpF(0.55f, 0.86f, q),
+        muzzlePx = bodyR * HEIGHT_IN_BODY_R * m.muzzleLength * lerpF(0.55f, 0.86f, qShape),
         muzzleFrac = (m.muzzleLength / Morphology.MAX_MUZZLE).coerceIn(0f, 1f),
         earPx = bodyR * HEIGHT_IN_BODY_R * m.earLength * 0.80f,
         earDroop = m.earDroop.coerceIn(0f, 1f),
@@ -359,6 +451,16 @@ private fun desaturate(c: Color, t: Float): Color {
     return Color(lerpF(c.red, mean, t), lerpF(c.green, mean, t), lerpF(c.blue, mean, t), c.alpha)
 }
 
+/**
+ * A coat that has gone pale with the years.
+ *
+ * Only the fur and the whiskers ever take this. Greying the hide itself would be the obvious
+ * move and the wrong one: a creature whose whole body drains of colour reads as ill, and this
+ * game already spends a colour wash on ill. Grey at the ends of the coat is old.
+ */
+private fun agedFur(c: Color, amount: Float): Color =
+    lerp(desaturate(c, 0.65f * amount), SCENE_LIGHT, 0.26f * amount)
+
 private fun darken(c: Color, amount: Float): Color {
     val k = (1f - amount).coerceIn(0f, 1f)
     return Color(c.red * k, c.green * k, c.blue * k, c.alpha)
@@ -440,8 +542,14 @@ fun DrawScope.drawCreature(
         return
     }
 
-    val p = proportionsFor(spec.stage, spec.branch, spec.weightGrams)
+    val p = proportionsFor(spec.stage, spec.branch, spec.weightGrams, spec.stageProgress)
     val bodyR = unit * p.bodyRadius
+    // How far the creature has settled into the stage it is in. Proportion is already carrying
+    // most of this through [proportionsFor]; what is left are the two things a table of numbers
+    // cannot say — a coat that comes in over the stage, and, in the last stage only, the fact
+    // that it comes in pale.
+    val settled = smoothstep(spec.stageProgress)
+    val greying = if (spec.stage == LifeStage.ELDER) settled else 0f
     // Whole art pixels only. A body that bobs in fractions of a pixel resamples its own outline
     // every frame, which reads as a shimmer rather than as breathing.
     val cy = center.y + (frame.bobY * unit).roundToInt()
@@ -462,7 +570,9 @@ fun DrawScope.drawCreature(
     drawGroundShadow(
         x = center.x,
         y = center.y + bodyR * 1.15f,
-        radius = bodyR * (1.05f - lift * 0.40f) * (1f + (pose?.quad ?: 0f) * 0.42f),
+        // The pool follows the body, not the gene: a creature whose barrel has not come out
+        // from behind its head yet has not spread its weight over anything.
+        radius = bodyR * (1.05f - lift * 0.40f) * (1f + (pose?.moveT ?: 0f) * 0.42f),
         palette = palette,
         strength = 1f - lift * 0.58f,
     )
@@ -471,16 +581,16 @@ fun DrawScope.drawCreature(
         // Back-most parts first: tail, then back limbs, then body, then face, then hat.
         drawTail(bodyCenter, bodyR, p, spec, palette, frame, pose)
         drawLimbs(bodyCenter, bodyR, p, palette, frame, back = true, pose = pose)
-        if (pose != null) drawTrunk(pose, bodyR, spec, palette, frame)
-        drawBody(headC, headR, p, spec, palette, frame, bandR = bodyR, pose = pose)
-        drawSpeciesFeatures(headC, headR, p, spec, palette, frame)
+        if (pose != null) drawTrunk(pose, bodyR, spec, palette, frame, settled, greying)
+        drawBody(headC, headR, p, spec, palette, frame, bandR = bodyR, pose = pose, coat = settled, grey = greying)
+        drawSpeciesFeatures(headC, headR, p, spec, palette, frame, turn = pose?.turn ?: 0f)
         if (pose != null) drawEars(headC, headR, p, pose, palette, frame)
         drawLimbs(bodyCenter, bodyR, p, palette, frame, back = false, pose = pose)
-        drawFace(headC, headR, p, spec, palette, frame, pose)
+        drawFace(headC, headR, p, spec, palette, frame, pose, settled)
         drawBranchMarks(headC, headR, p, spec, palette)
         spec.hatId?.let { drawHat(it, headC, headR, p, frame) }
         drawSweat(headC, headR, p, frame)
-        if (spec.stage == LifeStage.ELDER) drawElderMarks(headC, headR, palette)
+        if (spec.stage == LifeStage.ELDER) drawElderMarks(headC, headR, palette, greying)
     }
 
     if (frame.flash > 0.01f) {
@@ -602,6 +712,8 @@ private fun DrawScope.drawBody(
     frame: CreatureFrame,
     bandR: Float = bodyR,
     pose: Pose? = null,
+    coat: Float = 0f,
+    grey: Float = 0f,
 ) {
     val w = bodyR * p.bodyWidth * (pose?.headWidth ?: 1f) * (pose?.widthMul ?: 1f) / frame.squash
     val h = bodyR * frame.squash
@@ -616,6 +728,8 @@ private fun DrawScope.drawBody(
         // The crown and the back of the neck: the arc a hand would run the wrong way up.
         furFrom = 196f,
         furTo = 322f,
+        coat = coat,
+        grey = grey,
     )
 }
 
@@ -636,10 +750,12 @@ private fun DrawScope.drawBlob(
     shag: Float,
     furFrom: Float,
     furTo: Float,
+    coat: Float = 0f,
+    grey: Float = 0f,
 ) {
     val tones = tonesFor(palette.body, palette.bodyShade)
     // Fur first, so the tufts are rooted *under* the silhouette and only their ends show.
-    if (shag > 0.02f) drawFur(c, w, h, bandR, shag, furFrom, furTo, tones)
+    if (shag > 0.02f) drawFur(c, w, h, bandR, shag, furFrom, furTo, tones, coat, grey)
 
     val body = bodyPath(c, w, h)
     drawPath(body, tones.mid, style = Fill)
@@ -720,8 +836,17 @@ private fun DrawScope.drawFur(
     fromDeg: Float,
     toDeg: Float,
     tones: Tones,
+    /** 0..1 through the stage: the coat comes in over it. Length only — see below. */
+    coat: Float = 0f,
+    /** 0..1: how far the coat has gone pale. Only ever non-zero in the last stage. */
+    grey: Float = 0f,
 ) {
+    // The coat grows by getting *longer*, never by growing another tuft. The count sets every
+    // tuft's angle through i/(count-1), so one more tuft re-combs the whole row in a single
+    // frame, and a coat that rearranges itself is worse than a coat that never changed.
     val count = 3 + (shag * 5f).roundToInt()
+    val soft = if (grey < 0.02f) tones.lineSoft else agedFur(tones.lineSoft, grey)
+    val deep = if (grey < 0.02f) tones.shadow else agedFur(tones.shadow, grey)
     for (i in 0 until count) {
         val t = if (count == 1) 0.5f else i / (count - 1f)
         val jitter = hashUnit(i)
@@ -734,10 +859,10 @@ private fun DrawScope.drawFur(
         val dx = ca - 0.26f
         val dy = sa - 0.06f
         val inv = invLength(dx, dy)
-        val len = bandR * (0.09f + 0.15f * shag) * (0.74f + jitter * 0.52f)
+        val len = bandR * (0.09f + 0.15f * shag) * (0.74f + jitter * 0.52f) * (1f + 0.28f * coat)
         val tip = Offset(root.x + dx * inv * len, root.y + dy * inv * len)
-        drawLine(tones.lineSoft, root, tip, strokeWidth = band(bandR, 0.075f), cap = StrokeCap.Round)
-        drawLine(tones.shadow, root, tip, strokeWidth = band(bandR, 0.045f), cap = StrokeCap.Round)
+        drawLine(soft, root, tip, strokeWidth = band(bandR, 0.075f), cap = StrokeCap.Round)
+        drawLine(deep, root, tip, strokeWidth = band(bandR, 0.045f), cap = StrokeCap.Round)
     }
 }
 
@@ -757,6 +882,8 @@ private fun DrawScope.drawTrunk(
     spec: CreatureSpec,
     palette: CreaturePalette,
     frame: CreatureFrame,
+    coat: Float = 0f,
+    grey: Float = 0f,
 ) {
     // Under this the barrel is smaller than the head, in the head's own place and drawn behind
     // it, so it contributes nothing to the silhouette. Skipping it there costs nothing and
@@ -776,6 +903,8 @@ private fun DrawScope.drawTrunk(
         // Rump, up over the back, stopping short of the shoulder where the neck lands.
         furFrom = 150f,
         furTo = 296f,
+        coat = coat,
+        grey = grey,
     )
 
     // Neck. A plain capsule: it is only ever seen in the gap between two blobs that are already
@@ -948,8 +1077,8 @@ private fun DrawScope.drawTail(
     if (pose != null) {
         // Off the back of the barrel and slightly above it, so a wagging tail clears the rump
         // instead of sweeping through it.
-        baseX = lerpF(baseX, pose.trunkCenter.x - pose.trunkW * 0.88f, pose.quad)
-        baseY = lerpF(baseY, pose.trunkCenter.y - pose.trunkH * 0.34f, pose.quad)
+        baseX = lerpF(baseX, pose.trunkCenter.x - pose.trunkW * 0.88f, pose.moveT)
+        baseY = lerpF(baseY, pose.trunkCenter.y - pose.trunkH * 0.34f, pose.moveT)
     }
     val tipX = baseX - bodyR * tailUnits * (1f + wag * 0.20f)
     val tipY = baseY - bodyR * tailUnits * (0.5f + wag * 0.5f)
@@ -1035,16 +1164,27 @@ private fun DrawScope.drawTail(
     }
 }
 
-/** Ears, fins, crests — the silhouette cue that tells the four families apart at a glance. */
+/**
+ * Ears, fins, crests — the silhouette cue that tells the four families apart at a glance.
+ *
+ * [turn] turns them with the head. A crest is drawn symmetrically about a centre line, and a
+ * head that has gone side-on no longer has that line down the middle of the face: it has it
+ * down the back of the skull. So the whole set slides backward and its spread closes up, which
+ * is all the foreshortening a pair of horns needs at this size. At 0 nothing moves and the
+ * front-facing creature keeps the features it has always had.
+ */
 private fun DrawScope.drawSpeciesFeatures(
-    center: Offset,
+    headCenter: Offset,
     bodyR: Float,
     p: Proportions,
     spec: CreatureSpec,
     palette: CreaturePalette,
     frame: CreatureFrame,
+    turn: Float = 0f,
 ) {
-    val w = bodyR * p.bodyWidth
+    val center =
+        if (turn < 0.01f) headCenter else Offset(headCenter.x - bodyR * 0.20f * turn, headCenter.y)
+    val w = bodyR * p.bodyWidth * lerpF(1f, 0.58f, turn)
     val topY = center.y - bodyR * frame.squash
     val accent = tonesFor(palette.accent)
     val body = tonesFor(palette.body, palette.bodyShade)
@@ -1191,6 +1331,17 @@ private fun DrawScope.drawSpeciesFeatures(
     }
 }
 
+/**
+ * The face: two eyes, two brows, the blush, and — through [drawMuzzle] — the snout and the
+ * mouth that has to follow it.
+ *
+ * The head this is painted on may be facing the viewer or standing side-on over a body in
+ * profile, and the difference between those is not a different drawing but a set of amounts.
+ * A turning head foreshortens: the near eye barely moves, the far one closes on the centre
+ * line and squeezes to an almond, both slide toward the snout, and the whole row climbs, which
+ * is where a muzzled animal's eyes are. That is all [Pose.turn] does here, and at 0 every
+ * number below is the one this face has always used.
+ */
 private fun DrawScope.drawFace(
     center: Offset,
     bodyR: Float,
@@ -1199,13 +1350,26 @@ private fun DrawScope.drawFace(
     palette: CreaturePalette,
     frame: CreatureFrame,
     pose: Pose?,
+    /** 0..1 through the life stage; the lids come down a fraction of a pixel across it. */
+    settled: Float = 0f,
 ) {
-    val eyeY = center.y + bodyR * p.eyeHeight
+    val turn = pose?.turn ?: 0f
+    // The snout hangs off the face row; the eyes climb away from it as the head comes round.
+    val faceY = center.y + bodyR * p.eyeHeight
+    val eyeY = faceY - bodyR * 0.10f * turn
     val spread = bodyR * p.eyeSpread
     val r = bodyR * p.eyeRadius * 3.2f
     val gaze = frame.gaze * r * 0.28f
     val gazeUp = frame.gazeY * r * 0.22f
-    val open = frame.eyeOpen.coerceIn(0f, 1f)
+    // A settled creature's lids sit a hair lower. It is under a pixel on its own; it is here so
+    // that the eye is not the one part of the face that ignores the stage it is halfway through.
+    val open = (frame.eyeOpen * (1f - 0.07f * settled)).coerceIn(0f, 1f)
+    // How much of the eye something edible has. The pupil swells and the coloured ring is eaten
+    // from the inside, which is what dilation looks like; growing the whole eye would just look
+    // like surprise, and surprise is already spelled with the brows.
+    val dilate = frame.foodFocus.coerceIn(0f, 1f)
+    val pupil = 1f + 0.22f * dilate
+    val ring = 1f - 0.62f * dilate
     val tones = tonesFor(palette.body, palette.bodyShade)
     // The face sits on the belly, so its lines use the lifted outline: a dark key line against
     // a pale patch is exactly where near-black looks worst.
@@ -1218,15 +1382,27 @@ private fun DrawScope.drawFace(
     // grows out beneath them is the single thing that stops a long face reading as a long face.
     // Under about four buffer pixels there is no snout worth drawing and the face is the old one.
     var mouthAt = center
-    var mouthY = eyeY + r * 1.5f
+    var mouthY = faceY + r * 1.5f
     if (pose != null && pose.muzzlePx > bodyR * 0.06f) {
-        val tip = drawMuzzle(center, bodyR, pose, palette, frame, eyeY)
+        val tip = drawMuzzle(center, bodyR, pose, palette, frame, faceY)
         mouthAt = Offset(tip.x, center.y)
         mouthY = tip.y + bodyR * 0.07f
     }
 
+    // Everything the turn does to one eye, as two numbers: where its centre goes, and how wide
+    // it still is. The far eye is the one carrying the foreshortening; the near one only drifts.
+    fun eyeX(side: Float) =
+        center.x + side * spread * (if (side > 0f) lerpF(1f, 0.85f, turn) else lerpF(1f, 0.38f, turn)) +
+            bodyR * 0.20f * turn
+    fun eyeSquash(side: Float) = if (side > 0f) 1f else lerpF(1f, 0.42f, turn)
+
     listOf(-1f, 1f).forEach { side ->
-        val ex = center.x + side * spread
+        val ex = eyeX(side)
+        // Horizontal and vertical radii part company on a turned head: an eye seen at an angle
+        // narrows without getting any shorter, so only the width really collapses.
+        val rx = r * eyeSquash(side)
+        val ry = r * (if (side > 0f) 1f else lerpF(1f, 0.86f, turn))
+        val gx = gaze * eyeSquash(side)
         if (spec.mood == Mood.SLEEPING || open < 0.06f) {
             // Closed eyes: a calm downward arc.
             drawArc(
@@ -1234,15 +1410,15 @@ private fun DrawScope.drawFace(
                 startAngle = 200f,
                 sweepAngle = 140f,
                 useCenter = false,
-                topLeft = Offset(ex - r, eyeY - r * 0.7f),
-                size = Size(r * 2f, r * 1.4f),
+                topLeft = Offset(ex - rx, eyeY - ry * 0.7f),
+                size = Size(rx * 2f, ry * 1.4f),
                 style = Stroke(width = band(bodyR, 0.045f), cap = StrokeCap.Round),
             )
         } else {
             drawOval(
                 color = sclera,
-                topLeft = Offset(ex - r, eyeY - r * open),
-                size = Size(r * 2f, r * 2f * open),
+                topLeft = Offset(ex - rx, eyeY - ry * open),
+                size = Size(rx * 2f, ry * 2f * open),
             )
             // Lid shadow inside the top of the eye. An arc, not a filled oval: an oval wide
             // enough to read would bulge past the sclera at its waist. Inset 0.86 leaves more
@@ -1251,51 +1427,59 @@ private fun DrawScope.drawFace(
             drawArc(
                 color = lerp(sclera, tones.shadow, 0.35f),
                 startAngle = 195f, sweepAngle = 150f, useCenter = false,
-                topLeft = Offset(ex - r * 0.86f, eyeY - r * 0.86f * open),
-                size = Size(r * 1.72f, r * 1.72f * open),
+                topLeft = Offset(ex - rx * 0.86f, eyeY - ry * 0.86f * open),
+                size = Size(rx * 1.72f, ry * 1.72f * open),
                 style = Stroke(width = band(bodyR, 0.05f * (0.5f + 0.5f * open)), cap = StrokeCap.Round),
             )
             // Iris in two tones: dark top, lighter lower half, which is what makes an eye read
-            // as glass rather than as a hole.
-            val ix = ex - r * 0.52f + gaze
-            val iy = eyeY - r * 0.60f * open + gazeUp
-            val iw = r * 1.04f
-            val ih = r * 1.2f * open
-            drawOval(color = palette.eye, topLeft = Offset(ix, iy), size = Size(iw, ih))
+            // as glass rather than as a hole. Both are centred on the eye, so dilation is a
+            // scale about that centre and nothing has to be re-anchored.
+            val icx = ex + gx
+            val icy = eyeY + gazeUp
+            val iw = rx * 1.04f * pupil
+            val ih = ry * 1.20f * open * pupil
+            drawOval(
+                color = palette.eye,
+                topLeft = Offset(icx - iw / 2f, icy - ih / 2f),
+                size = Size(iw, ih),
+            )
+            val lw = iw * 0.80f * ring
+            val lh = ih * 0.52f * ring
             drawOval(
                 color = lerp(palette.eye, palette.body, 0.55f),
-                topLeft = Offset(ix + iw * 0.10f, iy + ih * 0.42f),
-                size = Size(iw * 0.80f, ih * 0.52f),
+                topLeft = Offset(icx - lw / 2f, icy + ih * 0.18f - lh / 2f),
+                size = Size(lw, lh),
             )
             drawCircle(
                 color = Color.White.copy(alpha = 0.9f),
-                radius = r * 0.22f * open,
-                center = Offset(ex - r * 0.18f + gaze, eyeY - r * 0.28f * open + gazeUp),
+                radius = rx * 0.22f * open,
+                center = Offset(ex - rx * 0.18f + gx, eyeY - ry * 0.28f * open + gazeUp),
             )
             // Second catchlight opposite the first: two points of light is the whole trick.
             drawCircle(
                 color = lerp(Color.White, palette.belly, 0.4f).copy(alpha = 0.55f),
-                radius = r * 0.12f * open,
-                center = Offset(ex + r * 0.26f + gaze, eyeY + r * 0.30f * open + gazeUp),
+                radius = rx * 0.12f * open,
+                center = Offset(ex + rx * 0.26f + gx, eyeY + ry * 0.30f * open + gazeUp),
             )
             drawOval(
                 color = faceLine,
-                topLeft = Offset(ex - r, eyeY - r * open),
-                size = Size(r * 2f, r * 2f * open),
+                topLeft = Offset(ex - rx, eyeY - ry * open),
+                size = Size(rx * 2f, ry * 2f * open),
                 style = Stroke(width = band(bodyR, 0.035f)),
             )
         }
-        // Eyebrows carry a lot of the mood.
+        // Eyebrows carry a lot of the mood. Interest lifts them: a creature watching a plate
+        // arrive has its brows up, and without that the dilated pupil alone reads as a stare.
         val browOffset = when (spec.mood) {
             Mood.SAD, Mood.SICK -> bodyR * 0.06f
             Mood.HUNGRY, Mood.TIRED -> bodyR * 0.04f
             else -> bodyR * 0.02f
-        }
+        } + bodyR * 0.028f * dilate
         if (spec.mood != Mood.SLEEPING && spec.mood != Mood.HAPPY) {
             drawLine(
                 color = tones.line,
-                start = Offset(ex - r * 0.9f, eyeY - r - browOffset + if (spec.mood == Mood.SAD) 0f else bodyR * 0.03f * side),
-                end = Offset(ex + r * 0.9f, eyeY - r - browOffset - if (spec.mood == Mood.SAD) bodyR * 0.05f * side else 0f),
+                start = Offset(ex - rx * 0.9f, eyeY - ry - browOffset + if (spec.mood == Mood.SAD) 0f else bodyR * 0.03f * side),
+                end = Offset(ex + rx * 0.9f, eyeY - ry - browOffset - if (spec.mood == Mood.SAD) bodyR * 0.05f * side else 0f),
                 strokeWidth = band(bodyR, 0.04f),
                 cap = StrokeCap.Round,
             )
@@ -1304,16 +1488,17 @@ private fun DrawScope.drawFace(
 
     // Blush: three nested ovals so it fades outward like a soft airbrush instead of sitting
     // there as a flat sticker. Each ring is about a pixel of falloff at bodyR ≈ 60. Intensity
-    // is continuous, so a new pet is barely pink and an old friend is properly warm.
+    // is continuous, so a new pet is barely pink and an old friend is properly warm. The cheeks
+    // ride the same turn the eyes do, or a side-on creature blushes behind its own ear.
     val blush = frame.blush.coerceIn(0f, 1f)
     if (blush > 0.03f) {
         val grow = 0.80f + blush * 0.26f
         for (s in 0..1) {
             val side = if (s == 0) -1f else 1f
-            val bx = center.x + side * spread * 1.55f
+            val bx = center.x + (eyeX(side) - center.x) * 1.55f
             val by = eyeY + r * 0.7f + bodyR * 0.06f
             for (i in 0..2) {
-                val k = (1f - i * 0.28f) * grow
+                val k = (1f - i * 0.28f) * grow * eyeSquash(side)
                 drawOval(
                     color = palette.blush.copy(alpha = (0.10f + i * 0.06f) * blush),
                     topLeft = Offset(bx - bodyR * 0.10f * k, by - bodyR * 0.06f * k),
@@ -1325,7 +1510,7 @@ private fun DrawScope.drawFace(
 
     // The mouth carries expression, so it keeps most of the full-strength line; only the eye
     // ring, which lies directly on the pale sclera, takes the fully lifted one.
-    drawMouth(mouthAt, bodyR, mouthY, spec.mood, frame, lerp(tones.line, faceLine, 0.4f))
+    drawMouth(mouthAt, bodyR, mouthY, spec.mood, frame, lerp(tones.line, faceLine, 0.4f), turn)
 }
 
 /**
@@ -1348,9 +1533,10 @@ private fun DrawScope.drawMuzzle(
     eyeY: Float,
 ): Offset {
     val tones = tonesFor(palette.body, palette.bodyShade)
-    // Gaze pulls the snout with the eyes, by about a pixel at full deflection.
-    val dx = lerpF(0.20f, 0.94f, pose.quad) + frame.gaze * 0.14f
-    val dy = lerpF(0.94f, 0.26f, pose.quad)
+    // Gaze pulls the snout with the eyes, by about a pixel at full deflection. The snout swings
+    // on the head's own clock, not the stance gene's, so the face turns as one thing.
+    val dx = lerpF(0.20f, 0.94f, pose.turn) + frame.gaze * 0.14f
+    val dy = lerpF(0.94f, 0.26f, pose.turn)
     val inv = invLength(dx, dy)
     val root = Offset(center.x + dx * inv * bodyR * 0.10f, eyeY + bodyR * 0.26f)
     val tip = Offset(root.x + dx * inv * pose.muzzlePx, root.y + dy * inv * pose.muzzlePx)
@@ -1401,8 +1587,14 @@ private fun DrawScope.drawEars(
     // A short ear must be a short *nub*, not a wide flap: capping the thickness against the
     // ear's own length is what stops a barely-expressed ear gene drawing a paddle.
     val base = (bodyR * 0.30f).coerceAtMost(pose.earPx * 0.62f)
+    // Ears sit either side of a face while there is a face to sit either side of. As the head
+    // turns they close up and slide back onto the skull, which is where a dog's ears are when
+    // you are looking at its muzzle — and it is also what stops the far ear reading as a second
+    // near ear on a head that no longer has two symmetric sides.
+    val spread = w * lerpF(0.68f, 0.42f, pose.turn)
+    val backward = bodyR * 0.17f * pose.turn
     listOf(-1f, 1f).forEach { side ->
-        val anchor = Offset(center.x + side * w * 0.68f, center.y - bodyR * 0.58f * frame.squash)
+        val anchor = Offset(center.x + side * spread - backward, center.y - bodyR * 0.58f * frame.squash)
         // First segment: out of the head, upward when pricked, barely rising when floppy.
         val ax = side * lerpF(0.42f, 0.66f, d)
         val ay = lerpF(-0.92f, -0.34f, d)
@@ -1427,16 +1619,26 @@ private fun DrawScope.drawEars(
     }
 }
 
+/**
+ * The mouth, wherever the snout has taken it.
+ *
+ * [turn] slides it back along the jaw. A mouth is centred under the nose on a face looking at
+ * you, but on a head in profile half of that circle would hang off the front of the muzzle in
+ * mid-air; running it backwards instead is the difference between a snout with a mouth and a
+ * snout with a hole drawn on the end.
+ */
 private fun DrawScope.drawMouth(
-    center: Offset,
+    at: Offset,
     bodyR: Float,
     mouthY: Float,
     mood: Mood,
     frame: CreatureFrame,
     line: Color,
+    turn: Float = 0f,
 ) {
     val open = frame.mouthOpen.coerceIn(0f, 1f)
     val w = bodyR * 0.30f
+    val center = Offset(at.x - w * 0.55f * turn, at.y)
     when {
         open > 0.08f -> {
             // Open mouth: a filled ellipse with a tongue.
@@ -1575,17 +1777,41 @@ private fun DrawScope.drawBranchMarks(
     }
 }
 
-private fun DrawScope.drawElderMarks(center: Offset, bodyR: Float, palette: CreaturePalette) {
-    // Whiskers and a small walking stick.
-    val line = outlineFor(palette.body, lift = 0.5f)
+/**
+ * The whiskers an elder wears, and the only place in the file where age is drawn as such.
+ *
+ * [aged] runs the length of the last stage. The first pair is there from the day the creature
+ * turns elder; the second fades in and both grow, which is a slow enough change that nobody
+ * watches it happen and a large enough one that an old friend and a new elder are not the same
+ * drawing. Nothing here sags: an elder should read as distinguished, not as failing.
+ */
+private fun DrawScope.drawElderMarks(
+    center: Offset,
+    bodyR: Float,
+    palette: CreaturePalette,
+    aged: Float = 0f,
+) {
+    val line = agedFur(outlineFor(palette.body, lift = 0.5f), aged)
     listOf(-1f, 1f).forEach { side ->
         drawLine(
             color = line.copy(alpha = 0.7f),
             start = Offset(center.x + side * bodyR * 0.30f, center.y + bodyR * 0.30f),
-            end = Offset(center.x + side * bodyR * 0.72f, center.y + bodyR * 0.24f),
+            end = Offset(center.x + side * bodyR * (0.72f + 0.16f * aged), center.y + bodyR * 0.24f),
             strokeWidth = band(bodyR, 0.028f),
             cap = StrokeCap.Round,
         )
+        // Below a fifth of a stage the second whisker is one faint pixel; the fade starts there
+        // rather than at zero so it arrives as a whisker instead of as a smudge.
+        if (aged > 0.20f) {
+            val second = ((aged - 0.20f) / 0.80f).coerceIn(0f, 1f)
+            drawLine(
+                color = line.copy(alpha = 0.55f * second),
+                start = Offset(center.x + side * bodyR * 0.30f, center.y + bodyR * 0.38f),
+                end = Offset(center.x + side * bodyR * (0.58f + 0.18f * second), center.y + bodyR * 0.42f),
+                strokeWidth = band(bodyR, 0.026f),
+                cap = StrokeCap.Round,
+            )
+        }
     }
 }
 
@@ -1784,6 +2010,15 @@ private fun DrawScope.drawHatShape(
 // ------------------------------------------------------------------ small helpers
 
 private fun lerpF(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+/**
+ * Zero slope at both ends. Anything that changes over hours rather than over frames uses this,
+ * so the player never catches the moment it started.
+ */
+private fun smoothstep(t: Float): Float {
+    val x = t.coerceIn(0f, 1f)
+    return x * x * (3f - 2f * x)
+}
 
 /** A soft wobble used by several idle animations. */
 fun wobble(timeSeconds: Float, speed: Float = 1f, amplitude: Float = 1f): Float =
