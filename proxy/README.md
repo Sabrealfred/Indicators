@@ -51,22 +51,41 @@ your key is a way of giving your key away slowly. It forwards exactly one shape 
 
 ## Rate limiting, and being honest about it
 
-Rate limiting only works if you bind a KV namespace:
+`wrangler.toml` binds Cloudflare's rate limiter by default, so a deploy as-shipped is limited
+without you doing anything. That is deliberate: the default ought to be the safe one, and the
+first version of this shipped with the limiter commented out, which meant deploying as documented
+handed strangers an unlimited endpoint on your key.
 
-```
-wrangler kv namespace create RATE
-```
+The binding is an **atomic counter**, and that is the whole reason it is the default. There is
+also a KV fallback in `worker.js` for accounts without the limiter, and it is **advisory only** —
+its read-modify-write is not atomic, so a concurrent burst all reads zero, all passes, and the
+counter lands on one. It fails in exactly the case a limiter exists for. Real KV is worse than
+that sounds, being eventually consistent across colos with up to a minute of propagation, so even
+serial requests from different regions do not see each other. It is kept because it does slow a
+naive serial loop from one address, which is the commonest abuse. It is not a defence.
 
-then uncomment the `kv_namespaces` block in `wrangler.toml` and paste the id.
+Both paths **fail open** on error: a store having a bad minute must not lock every player out.
 
-**Without it the endpoint is unlimited.** That is deliberate and it is not a safe default — it is
-a choice between failing open and failing shut, and an endpoint that locks every player out
-because a storage backend had a bad minute is worse than one that is briefly generous. The same
-reasoning applies inside the limiter: a KV error is treated as "not limited" rather than
-"limited".
+Rejected requests are counted too. Counting only well-formed ones let somebody burn this Worker's
+own request allowance with malformed posts, for free, without ever touching a counter.
 
-If you share the URL publicly, bind the namespace. The limit is per IP per hour and both numbers
-are constants at the top of `worker.js`.
+## What a rate limit cannot fix
+
+A shared endpoint is a shared quota. A free tier is a small number of requests a day across
+everyone using it, so a popular shared brain runs out and every player sees the same thing — a
+creature that has gone quiet. That is why the app treats a failed call as completely ordinary and
+why the local brain is the default rather than the fallback.
+
+There is a second thing worth being clear-eyed about, and it is larger than the quota. Anyone who
+learns this URL gets an unauthenticated language model **running under your OpenRouter identity**.
+If someone drives prohibited prompts through it, the account that gets actioned is yours, not
+theirs. The key cannot be spent on money — `MODELS` is free-tier only and the caller cannot choose
+the model — but attribution is not something a spending cap protects.
+
+If you are going to share the URL widely, put a shared secret in front of it: have the app send a
+header the Worker checks. Baked into an APK it only raises the bar from "anyone with the URL" to
+"anyone who unpacks the APK", but that is the difference between casual discovery and deliberate
+effort.
 
 One thing a rate limit cannot fix: a shared endpoint is a shared quota. A free tier is a small
 number of requests a day across everyone using it, so a popular shared brain runs out and every
@@ -79,7 +98,7 @@ call as completely ordinary and why the local brain is the default rather than t
 node worker.test.mjs
 ```
 
-Twelve tests, no key and no network needed — the upstream `fetch` is stubbed. They cover the
+Seventeen tests, no key and no network needed — the upstream `fetch` is stubbed. They cover the
 things that cannot be checked by reading: that the key goes up and never comes back, that an
 upstream error naming the account does not reach a player's screen, that a caller cannot choose
 the model or the ceiling or smuggle a field through, and that a refused request costs nothing.

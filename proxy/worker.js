@@ -59,9 +59,22 @@ export default {
     if (request.method !== 'POST') return deny(405, 'post only');
     if (new URL(request.url).pathname !== PATH) return deny(404, 'no');
 
+    // Counted before anything else, so a flood of malformed requests costs the attacker the
+    // same as a flood of well-formed ones. Rejecting first and counting afterwards let someone
+    // burn this Worker's own request quota for free without ever touching a counter.
+    if (await overRate(request, env)) return deny(429, 'slow down');
+
+    // The declared length is checked *before* the body is read. Reading first meant a 40MB post
+    // was fully buffered — and then encoded a second time just to measure it — for about 250MB
+    // of heap before the 413 came back, which is past the per-isolate limit. One upload, one
+    // crashed isolate, repeatable.
+    const declared = Number(request.headers.get('Content-Length'));
+    if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return deny(413, 'too long');
+
     const raw = await request.text();
-    // Measured in bytes, not characters: these prompts are full of multi-byte punctuation and a
-    // character count would let roughly twice as much through as intended.
+    // Still measured after the fact, in bytes rather than characters, because Content-Length can
+    // be absent or lie: these prompts are full of multi-byte punctuation and a character count
+    // would let roughly three times as much through as intended.
     if (new TextEncoder().encode(raw).length > MAX_BODY_BYTES) return deny(413, 'too long');
 
     let body;
@@ -70,10 +83,11 @@ export default {
     } catch {
       return deny(400, 'not json');
     }
+    // `JSON.parse('null')` succeeds and returns null, and reading a field off it throws out of
+    // the handler — which Cloudflare turns into a 1101 error page rather than the clean 400
+    // intended here, and counts against the script's error rate.
+    if (!body || typeof body !== 'object') return deny(400, 'not json');
     if (!Array.isArray(body.messages) || body.messages.length === 0) return deny(400, 'no messages');
-
-    const limited = await overRate(request, env);
-    if (limited) return deny(429, 'slow down');
 
     // Rebuilt field by field rather than forwarded with edits. A pass-through would carry
     // anything the caller added — a tool definition, a longer ceiling, a different upstream
@@ -84,7 +98,9 @@ export default {
         role: m.role === 'system' || m.role === 'assistant' ? m.role : 'user',
         content: String(m.content ?? '').slice(0, 8000),
       })),
-      max_tokens: Math.min(Number(body.max_tokens) || 220, MAX_TOKENS),
+      // Clamped at both ends. `Number(-1) || 220` is -1, and `Math.min(-1, 320)` is -1, which
+      // the upstream simply rejects — a 502 for the caller instead of an answer.
+      max_tokens: Math.min(Math.max(Math.trunc(Number(body.max_tokens)) || 220, 1), MAX_TOKENS),
       temperature: 0.8,
       stream: false,
     };
@@ -128,14 +144,33 @@ export default {
 /**
  * True when this caller has had enough for now.
  *
- * Needs a KV namespace bound as RATE. Without one this returns false and the endpoint is
- * unlimited, which is a real decision and not a safe default — see the README. It is written to
- * fail open on a KV error rather than locking everyone out when the store has a bad minute.
+ * Two backings, and they are not equivalent. If a `LIMITER` binding is present it is used, and
+ * it is the only one that actually works: Cloudflare's rate limiter is an atomic counter, so a
+ * burst is counted once per request.
+ *
+ * The KV path is a fallback and it is **advisory only**. Its read-modify-write is not atomic, so
+ * a concurrent burst all reads zero, all passes, and the counter lands on one — it fails exactly
+ * in the case it exists for. Real KV is worse than that description suggests, being eventually
+ * consistent across colos with up to a minute of propagation, so even serial requests from
+ * different regions will not see each other. It is kept because it does slow a naive serial
+ * loop from one address, which is the commonest abuse, and because some accounts have KV and not
+ * the limiter. It is not a defence and the README says so.
+ *
+ * Both fail open on error rather than locking everyone out when a store has a bad minute.
  */
 async function overRate(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') ?? 'unknown';
+
+  if (env.LIMITER) {
+    try {
+      const { success } = await env.LIMITER.limit({ key: ip });
+      return !success;
+    } catch {
+      return false;
+    }
+  }
+
   if (!env.RATE) return false;
-  const ip = request.headers.get('CF-Connecting-IP');
-  if (!ip) return false;
   const window = Math.floor(Date.now() / 1000 / RATE_WINDOW_SECONDS);
   const key = `${window}:${ip}`;
   try {

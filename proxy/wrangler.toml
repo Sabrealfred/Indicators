@@ -2,12 +2,22 @@ name = "neopal-brain"
 main = "worker.js"
 compatibility_date = "2026-01-01"
 
-# Rate limiting needs a KV namespace. Create one and paste its id here:
+# The rate limiter. This one is on by default, because the default ought to be the safe one:
+# deploying as-shipped should not hand strangers an unlimited endpoint on your key.
+#
+# This binding is an atomic counter, which is the only kind that works. The KV fallback in
+# worker.js is advisory — its read-modify-write is not atomic, so a concurrent burst all reads
+# zero and all passes, which is precisely the case a limiter exists for.
+[[unsafe.bindings]]
+name = "LIMITER"
+type = "ratelimit"
+namespace_id = "1001"
+simple = { limit = 40, period = 60 }
+
+# Optional KV fallback, for an account without the rate limiter. Advisory only — read the note
+# above and in README.md before relying on it.
 #
 #   wrangler kv namespace create RATE
-#
-# Without it the worker runs unlimited, which is fine for a private endpoint and a bad idea for
-# one you have shared. See README.md.
 #
 # [[kv_namespaces]]
 # binding = "RATE"
