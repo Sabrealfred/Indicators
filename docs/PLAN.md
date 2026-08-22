@@ -34,7 +34,17 @@ Tres reglas, aprendidas rompiendo CI cuatro veces en esta rama:
 Los stubs de `scratchpad/ax/stubs/` se transcribieron de las fuentes reales de Compose (bajadas de
 `raw.githubusercontent.com`, que no está bloqueado) y se comparó el conjunto de miembros abstractos
 entre dos versiones separadas por dos años: idénticos. Es la evidencia más fuerte disponible acá,
-pero **no es el artefacto real**.
+pero **no es el artefacto real**, y eso ya costó un build rojo:
+
+> **Un stub puede tener el conjunto de firmas perfecto y aun así aceptar código que el artefacto
+> real rechaza.** `DrawScope` y `DrawTransform` llevan `@DrawScopeMarker`, que es un `@DslMarker`:
+> desde adentro del transform no se puede llegar implícitamente a los miembros del recorder que lo
+> contiene. El stub tenía los nueve `fun` y los seis `val` exactos — nadie comparó las
+> **anotaciones**, y esa cambia lo que compila. Siete errores en CI, cero local.
+>
+> Lo que salió de ahí: cuando un check no puede fallar como falló la cosa real, no es el check que
+> creías tener. Después de arreglarlo volví a poner los receivers implícitos para confirmar que el
+> harness ahora **sí** reproduce el error de CI, exacto, antes de arreglarlo de nuevo.
 
 CI corre `:app:testDebugUnitTest` **antes** de armar el APK, así que los 260 tests —los 16 de
 socket incluidos— corren de verdad en cada commit.
