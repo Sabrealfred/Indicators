@@ -35,7 +35,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -131,9 +130,11 @@ fun ColonyScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     // hands us a fresh PetState every second and neither the tree nor a preview depends on time.
     val tree = remember(pet.name, pet.parentNames, pet.pals, pet.nest) { Colony.familyTree(pet) }
 
-    // Who the breeding panel is talking about. Saved rather than merely remembered so that
-    // rotating the phone does not silently move the preview onto somebody else.
-    var chosenId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Who the breeding panel is talking about. Held here rather than derived, so that the
+    // once-a-second tick underneath cannot quietly move the preview onto somebody else. Plain
+    // remember is enough: the activity declares orientation in its own configChanges, so a
+    // rotation never rebuilds this screen in the first place.
+    var chosenId by remember { mutableStateOf<String?>(null) }
     val chosen = pals.firstOrNull { it.id == chosenId }
         ?: pals.firstOrNull { it.canCourt && it.present }
         ?: pals.firstOrNull { it.canCourt }
