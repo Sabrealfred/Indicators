@@ -768,6 +768,7 @@ internal object MindWire {
         val goal = (obj.text("goal") ?: obj.text("aim") ?: obj.text("errand"))?.trim() ?: return null
         val proposed = (obj["steps"] ?: obj["plan"] ?: obj["actions"]) as? JsonArray ?: return null
 
+        if (goal.isBlank()) return null
         val steps = ArrayList<PlanStep>(Errands.MAX_STEPS)
         for (element in proposed.take(MAX_STEPS_CONSIDERED)) {
             val entry = element as? JsonObject ?: continue
@@ -781,7 +782,11 @@ internal object MindWire {
         }
         if (steps.isEmpty()) return null
 
-        return Errands.sanitise(Plan(goal = goal, steps = steps, madeAtSeconds = UNSTAMPED), UNSTAMPED)
+        // Deliberately not stamped or sanitised here. Errands.sanitise now takes the creature
+        // rather than a number of seconds, precisely so that the stamp can only be applied where
+        // the clock is; this returns a proposal, and the caller decides whether it is one the
+        // creature can hold. What comes back has been checked for *shape* only.
+        return Plan(goal = goal, steps = steps, madeAtSeconds = UNSTAMPED)
     }
 
     // ------------------------------------------------------------------ defensive parsing

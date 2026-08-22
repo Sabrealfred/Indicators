@@ -77,7 +77,7 @@ class ErrandsTest {
     @Test
     fun `a plan of nothing but idling is not a plan`() {
         val idle = Plan("Do nothing", listOf(PlanStep(ActivityKind.IDLE, "x")), 0L)
-        assertNull("three shrugs is not an afternoon", Errands.sanitise(idle, 100L))
+        assertNull("three shrugs is not an afternoon", Errands.sanitise(idle, pet()))
     }
 
     @Test
@@ -89,17 +89,17 @@ class ErrandsTest {
             // A mind marking its own steps done would skip the ones it did not want checked.
             done = 15,
         )
-        val clean = Errands.sanitise(long, 100L)
+        val clean = Errands.sanitise(long, pet())
         assertNotNull(clean)
         assertTrue(clean!!.steps.size <= Errands.MAX_STEPS)
         assertTrue(clean.goal.length <= Errands.MAX_GOAL_CHARS)
         assertEquals("a plan may not arrive half spent", 0, clean.done)
-        assertEquals("and it is stamped when it is accepted", 100L, clean.madeAtSeconds)
+        assertEquals("and it is stamped against the creature it is for", pet().ageSeconds, clean.madeAtSeconds)
     }
 
     @Test
     fun `a blank goal is refused`() {
-        assertNull(Errands.sanitise(Plan("   ", listOf(PlanStep(ActivityKind.PLAY, "x")), 0L), 5L))
+        assertNull(Errands.sanitise(Plan("   ", listOf(PlanStep(ActivityKind.PLAY, "x")), 0L), pet()))
     }
 
     // ---- following one -------------------------------------------------------------------

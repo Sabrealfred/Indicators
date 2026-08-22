@@ -240,7 +240,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
             val now = _ui.value.pet ?: return@launch
             // Stamped against the creature as it is now, not as it was when the request went out,
             // so a plan is never born already halfway to expiring.
-            val accepted = Errands.sanitise(proposed, now.ageSeconds) ?: return@launch
+            val accepted = Errands.sanitise(proposed, now) ?: return@launch
             if (now.plan != null) return@launch
             val planned = now.copy(plan = accepted)
             _ui.update { it.copy(pet = planned) }

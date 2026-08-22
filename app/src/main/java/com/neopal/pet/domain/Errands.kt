@@ -136,13 +136,20 @@ object Errands {
     }
 
     /**
-     * Bounds a plan that arrived from a mind somewhere else.
+     * Bounds a plan that arrived from a mind somewhere else, and stamps it against [state].
      *
      * Returns null for anything that is not worth holding onto. As with [Lineage.sanitise], every
      * route in passes through here — a model, a save from an older build, or a future local
      * planner — so there is one place where a plan is decided to be reasonable.
+     *
+     * It takes the creature rather than a bare number of seconds, and that is the whole reason
+     * the signature looks like this. The stamp decides staleness: a plan stamped zero is instantly
+     * expired for any creature older than [PLAN_LIFETIME_SECONDS], which is most of them, and the
+     * failure is silent because the local brain covers for it perfectly — no crash, no log, just a
+     * creature that mysteriously never has an errand. A `Long` parameter accepts any number a
+     * caller happens to have; a `PetState` can only be the creature this plan is for.
      */
-    fun sanitise(plan: Plan, ageSeconds: Long): Plan? {
+    fun sanitise(plan: Plan, state: PetState): Plan? {
         val goal = plan.goal.trim().take(MAX_GOAL_CHARS)
         if (goal.isEmpty()) return null
         val steps = plan.steps
@@ -155,7 +162,7 @@ object Errands {
         return Plan(
             goal = goal,
             steps = steps,
-            madeAtSeconds = ageSeconds,
+            madeAtSeconds = state.ageSeconds,
             // Always starts unspent; a plan arriving with steps already marked done would let a
             // mind skip past the ones it did not want checked.
             done = 0,

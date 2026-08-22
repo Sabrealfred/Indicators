@@ -2,10 +2,18 @@ package com.neopal.pet.data
 
 import com.neopal.pet.domain.ActivityKind
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.LessonKind
 import com.neopal.pet.domain.Lineage
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.GameConfig
+import com.neopal.pet.domain.LifeStage
+import com.neopal.pet.domain.PetState
+import com.neopal.pet.domain.Simulation
+import com.neopal.pet.domain.Species
+import com.neopal.pet.domain.ToolId
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -20,6 +28,18 @@ import org.junit.Test
  * the ones that ask what happens when it lies.
  */
 class RemoteMindClientTest {
+
+    /**
+     * A grown creature to stamp plans against.
+     *
+     * Needed because policy moved: [Errands.sanitise] takes the creature rather than a number of
+     * seconds, so that a plan can only ever be dated by something that knows what time it is.
+     */
+    private fun petForPlans(): PetState = Simulation
+        .advance(Simulation.newGame("T", Species.LEAF, 1_000_000L), 1_120_000L, GameConfig.Default)
+        .state
+        .copy(stage = LifeStage.ADULT, ageSeconds = 10_800L)
+
 
     private val brief = PetBrief(
         name = "Mossling",
@@ -303,6 +323,201 @@ class RemoteMindClientTest {
         val lessons = MindWire.interpretLessons(raw, generation = 4)
         assertEquals(1, lessons.size)
         assertEquals("hard won", lessons[0].text)
+    }
+
+    // ------------------------------------------------------------------ errands
+
+    private val tools = mapOf(
+        ToolId.CHECK_SELF to "Satiety 23%, happiness 61%, energy 44%, hygiene 80%, health 91%.",
+        ToolId.LOOK_IN_PANTRY to "In the pantry: Berry x2.",
+        ToolId.CHECK_COMPANY to "Bramble (friend, 70%)",
+    )
+
+    @Test
+    fun `a plan is read back with its goal and its steps in order`() {
+        val raw = """
+            {"goal": "I want my tea and then a tidy room.",
+             "steps": [{"kind": "EAT", "why": "There are berries and I am on 23%."},
+                       {"kind": "TIDY", "why": "The floor is a disgrace."}]}
+        """.trimIndent()
+        val plan = MindWire.interpretPlan(raw)
+        assertNotNull(plan)
+        assertEquals("I want my tea and then a tidy room.", plan!!.goal)
+        assertEquals(listOf(ActivityKind.EAT, ActivityKind.TIDY), plan.steps.map { it.kind })
+        assertEquals("There are berries and I am on 23%.", plan.steps[0].why)
+        assertEquals("a fresh plan has never been acted on", 0, plan.done)
+    }
+
+    @Test
+    fun `an activity name the game does not know is dropped rather than guessed at`() {
+        val raw = """
+            {"goal": "A productive afternoon.",
+             "steps": [{"kind": "FORAGE_IN_THE_WOODS", "why": "invented"},
+                       {"kind": "eat", "why": "right word, wrong case"},
+                       {"kind": "Eating", "why": "the friendly label"},
+                       {"kind": "STUDY", "why": "I want to learn the pantry latch."},
+                       {"kind": null, "why": "no kind at all"},
+                       {"why": "no kind field"}]}
+        """.trimIndent()
+        val plan = MindWire.interpretPlan(raw)
+        assertNotNull(plan)
+        assertEquals(listOf(ActivityKind.STUDY), plan!!.steps.map { it.kind })
+    }
+
+    @Test
+    fun `a plan of nothing but idling is no plan at all`() {
+        val raw = """
+            {"goal": "I shall have a lovely sit down.",
+             "steps": [{"kind": "IDLE", "why": "nothing needs me"},
+                       {"kind": "IDLE", "why": "still nothing"},
+                       {"kind": "IDLE", "why": "and again"}]}
+        """.trimIndent()
+        // The client reads the shape; Errands decides what a plan is allowed to be. A reply of
+        // nothing but idling parses fine and is refused a step later, by the one place that
+        // refuses it however it arrived.
+        val parsed = MindWire.interpretPlan(raw)
+        assertNull(
+            "three ways of doing nothing would park the creature for the plan's whole lifetime",
+            parsed?.let { Errands.sanitise(it, petForPlans()) },
+        )
+    }
+
+    @Test
+    fun `idling is stripped out of a plan that also means to do something`() {
+        val raw = """
+            {"goal": "Tea, eventually.",
+             "steps": [{"kind": "IDLE", "why": "a moment first"},
+                       {"kind": "EAT", "why": "then my tea."}]}
+        """.trimIndent()
+        val plan = MindWire.interpretPlan(raw)?.let { Errands.sanitise(it, petForPlans()) }
+        assertEquals(listOf(ActivityKind.EAT), plan?.steps?.map { it.kind })
+    }
+
+    @Test
+    fun `an over-long goal and an over-long step list are both bounded`() {
+        val flood = "and then a bit more ".repeat(60)
+        val many = (1..40).joinToString(",") { """{"kind": "PLAY", "why": "$flood"}""" }
+        val plan = MindWire.interpretPlan("""{"goal": "$flood", "steps": [$many]}""")
+            ?.let { Errands.sanitise(it, petForPlans()) }
+        assertNotNull(plan)
+        assertEquals(Errands.MAX_GOAL_CHARS, plan!!.goal.length)
+        assertEquals(Errands.MAX_STEPS, plan.steps.size)
+        for (step in plan.steps) assertTrue(step.why.length <= Errands.MAX_GOAL_CHARS)
+    }
+
+    @Test
+    fun `a step with no reason of its own borrows the goal`() {
+        val plan = MindWire.interpretPlan("""{"goal": "I want a wash.", "steps": [{"kind": "GROOM"}]}""")
+        assertEquals("I want a wash.", plan?.steps?.single()?.why)
+    }
+
+    @Test
+    fun `a plan arrives unstamped, for the caller to date`() {
+        val plan = MindWire.interpretPlan("""{"goal": "Tea.", "steps": [{"kind": "EAT", "why": "hungry"}]}""")
+        assertEquals(
+            "this layer has no clock, and a plausible invented time would look stamped",
+            0L,
+            plan?.madeAtSeconds,
+        )
+    }
+
+    @Test
+    fun `progress a model claims to have already made is thrown away`() {
+        val raw = """{"goal": "Tea.", "steps": [{"kind": "EAT", "why": "hungry"}], "done": 1}"""
+        assertEquals("a plan cannot arrive with its steps already ticked off", 0, MindWire.interpretPlan(raw)?.done)
+    }
+
+    @Test
+    fun `a malformed or empty plan yields nothing rather than throwing`() {
+        val duds = listOf(
+            "",
+            "   ",
+            "I have thought about it and I would rather not say.",
+            "{",
+            "```json\n```",
+            "[]",
+            """{"goal": "Tea."}""",
+            """{"steps": [{"kind": "EAT", "why": "hungry"}]}""",
+            """{"goal": "   ", "steps": [{"kind": "EAT", "why": "hungry"}]}""",
+            """{"goal": "Tea.", "steps": []}""",
+            """{"goal": "Tea.", "steps": "eat then sleep"}""",
+            """{"goal": "Tea.", "steps": ["EAT", "SLEEP"]}""",
+        )
+        for (dud in duds) {
+            assertNull("a plan of <$dud> must not reach the creature", MindWire.interpretPlan(dud))
+        }
+    }
+
+    @Test
+    fun `a plan survives a fenced block with prose around it`() {
+        val raw = """
+            Here is what Mossling has in mind:
+
+            ```json
+            {"goal": "Eat, then find Bramble.", "steps": [{"kind": "EAT", "why": "I am on 23%."},
+             {"kind": "SOCIALISE", "why": "Bramble is here and I would like the company."}]}
+            ```
+
+            Hope that helps!
+        """.trimIndent()
+        val plan = MindWire.interpretPlan(raw)
+        assertNotNull(plan)
+        assertEquals(listOf(ActivityKind.EAT, ActivityKind.SOCIALISE), plan!!.steps.map { it.kind })
+    }
+
+    @Test
+    fun `the planning prompt offers the activity names it will parse back, and never idling`() {
+        val prompt = MindWire.planSystemPrompt(brief)
+        for (kind in ActivityKind.entries) {
+            if (kind == ActivityKind.IDLE) continue
+            assertTrue("$kind must be offered by name", prompt.contains(kind.name))
+        }
+        assertFalse("offering IDLE invites the one plan that is not a plan", prompt.contains("IDLE"))
+        assertTrue(prompt.contains("break character"))
+    }
+
+    @Test
+    fun `the planning prompt carries what looking around found, in a fixed order`() {
+        val prompt = MindWire.planUserPrompt(brief, tools, options)
+        assertTrue(prompt.contains("In the pantry: Berry x2."))
+        assertTrue(prompt.contains("Bramble (friend, 70%)"))
+        assertTrue("the creature still has to know its own state", prompt.contains("Mossling"))
+
+        val shuffled = linkedMapOf(
+            ToolId.CHECK_COMPANY to tools.getValue(ToolId.CHECK_COMPANY),
+            ToolId.LOOK_IN_PANTRY to tools.getValue(ToolId.LOOK_IN_PANTRY),
+            ToolId.CHECK_SELF to tools.getValue(ToolId.CHECK_SELF),
+        )
+        assertEquals(
+            "the same look around must produce the same prompt, whatever order the map was built in",
+            prompt,
+            MindWire.planUserPrompt(brief, shuffled, options),
+        )
+    }
+
+    @Test
+    fun `the planning prompt marks the options it cannot begin right now`() {
+        val prompt = MindWire.planUserPrompt(brief, tools, options)
+        assertTrue(prompt.contains("NOT NOW: it is broad daylight"))
+        assertTrue(prompt.contains("EAT"))
+    }
+
+    @Test
+    fun `a player who turned planning off is never charged for a plan`() = runBlocking {
+        val client = RemoteMindClient { keyedConfig.copy(makesPlans = false) }
+        assertNull(
+            "the flag has to be honoured here, where no caller can forget it",
+            client.plan(brief, tools, options),
+        )
+    }
+
+    @Test
+    fun `no plan is asked for when nothing could legally be begun`() = runBlocking {
+        val blockedOnly = options.map { it.copy(blockedBy = "not learned yet") }
+        val client = RemoteMindClient { keyedConfig }
+        assertNull(client.plan(brief, tools, blockedOnly))
+        assertNull("and none at all when the whole feature is off", RemoteMindClient { MindConfig() }
+            .plan(brief, tools, options))
     }
 
     // ------------------------------------------------------------------ the envelope
