@@ -2,6 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- Care reminders while the app is closed. Optional: the game runs fine without it. -->
+    <!--
+        Needed only by the remote brain, which is off by default and inert until the player sets
+        a route. Everything else in this app -- the whole simulation, all of the art, all of the
+        audio -- runs with no network at all, and did so with no INTERNET permission before this
+        line existed. Anyone reading the manifest to find out what leaves the device should find
+        the answer here: nothing, unless the creature has been given somewhere to think.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
 

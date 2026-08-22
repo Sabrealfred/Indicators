@@ -19,7 +19,12 @@ import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
+import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Learning
+import com.neopal.pet.domain.MindConfig
+import com.neopal.pet.domain.MindProvider
+import com.neopal.pet.domain.NoMind
+import com.neopal.pet.domain.PetBrief
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
 import com.neopal.pet.domain.PetAnimation
@@ -67,6 +72,20 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     data class OfflineReport(val minutesAway: Long, val lines: List<String>, val petName: String)
 
     private val repository = PetRepository(application)
+
+    /**
+     * The remote brain, or the one that never answers.
+     *
+     * Held as the interface rather than the concrete client so the game is complete without one:
+     * with [NoMind] every call returns null, the local [com.neopal.pet.domain.Brain] answers
+     * instead, and nothing anywhere has to branch on whether a model is configured.
+     */
+    private var mind: MindProvider = NoMind
+
+    /** True while a reply is in flight. One at a time; a second send would race the first. */
+    private var thinking = false
+    private var chatJob: Job? = null
+
     private val _ui = MutableStateFlow(UiState())
     val ui: StateFlow<UiState> = _ui.asStateFlow()
 
@@ -361,6 +380,89 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         }
         return _ui.value.pet?.pals.orEmpty()
             .sortedWith(compareBy<Pal> { rank(it) }.thenByDescending { it.affinity })
+    }
+
+    // ---------------------------------------------------------------- talking to it
+
+    /** True while the creature is composing a reply. */
+    fun isThinking(): Boolean = thinking
+
+    /**
+     * Says something to the creature.
+     *
+     * The player's line is stored immediately and the reply arrives later or not at all. That
+     * ordering matters: a message that only appears once the network answers looks like the app
+     * dropped it, and on a free model tier "does not answer" is a normal outcome rather than an
+     * exceptional one.
+     */
+    fun say(message: String) {
+        val text = message.trim().take(MAX_MESSAGE_CHARS)
+        if (text.isEmpty() || thinking) return
+        val pet = _ui.value.pet ?: return
+        val config = _ui.value.config
+
+        val asked = pet.copy(
+            chat = (pet.chat + ChatTurn(fromPet = false, text = text, atSeconds = pet.ageSeconds))
+                .takeLast(Simulation.MAX_CHAT_TURNS),
+        )
+        _ui.update { it.copy(pet = asked) }
+        persist(asked)
+
+        if (!config.mind.usable || !config.mind.conversation || !mind.isReady) {
+            play(Sfx.DENY)
+            showToast("${pet.name} has nowhere to think yet. Connect a brain in Settings.")
+            return
+        }
+
+        thinking = true
+        chatJob?.cancel()
+        chatJob = viewModelScope.launch {
+            val brief = PetBrief.of(asked, config)
+            val reply = mind.speak(brief, asked.chat, text)
+            thinking = false
+            // Read the pet again rather than closing over `asked`: the simulation ticks once a
+            // second and the state that went into the request is stale by the time it returns.
+            val now = _ui.value.pet ?: return@launch
+            if (reply == null) {
+                play(Sfx.DENY)
+                showToast("${now.name} did not answer.")
+                return@launch
+            }
+            val answered = now.copy(
+                chat = (now.chat + ChatTurn(fromPet = true, text = reply.text, atSeconds = now.ageSeconds))
+                    .takeLast(Simulation.MAX_CHAT_TURNS),
+                // A model may nudge the mood a little, and only a little: warmth is clamped at the
+                // source and applied to happiness and bond alone. Letting a reply move satiety or
+                // health would put the simulation's rules behind a text box.
+                stats = now.stats.copy(
+                    happiness = now.stats.happiness + reply.warmth.coerceIn(-1f, 1f) * 3f,
+                    bond = now.stats.bond + reply.warmth.coerceIn(0f, 1f) * 1.5f,
+                ).coerced(),
+            )
+            play(Sfx.SELECT)
+            _ui.update { it.copy(pet = answered) }
+            persist(answered)
+        }
+    }
+
+    /** Forgets the conversation. The creature's diary is untouched; this is only the talking. */
+    fun clearChat() {
+        val pet = _ui.value.pet ?: return
+        if (pet.chat.isEmpty()) return
+        chatJob?.cancel()
+        thinking = false
+        val cleared = pet.copy(chat = emptyList())
+        play(Sfx.BACK)
+        _ui.update { it.copy(pet = cleared) }
+        persist(cleared, immediate = true)
+    }
+
+    /** Longest thing the player can say in one go. Free models charge for every token of it. */
+    private val MAX_MESSAGE_CHARS = 400
+
+    /** Points the creature's brain somewhere, or nowhere. Persisted immediately. */
+    fun updateMind(transform: (MindConfig) -> MindConfig) {
+        updateConfig { it.copy(mind = transform(it.mind)) }
     }
 
     /** Runs one pure action against the current state and folds the result into the UI. */
