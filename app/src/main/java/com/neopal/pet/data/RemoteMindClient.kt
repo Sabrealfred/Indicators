@@ -18,6 +18,7 @@ import com.neopal.pet.domain.Plan
 import com.neopal.pet.domain.PlanStep
 import com.neopal.pet.domain.RunRecord
 import com.neopal.pet.domain.ToolId
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -221,6 +222,15 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
      * process, and the remote brain silently off with the local one covering for it.
      *
      * Called from `Dispatchers.IO`, so blocking inside the block is deliberate.
+     *
+     * The resumes below use the plain one-argument `resume`, with no `onCancellation`
+     * handler, and that is not laziness. `CancellableContinuation.resume(value) { ... }`
+     * changed shape between coroutines 1.8 and 1.9 — one parameter in the version this
+     * module actually compiles against (1.8.1, arriving through androidx.lifecycle), three
+     * in the version `kotlinx-coroutines-test` puts on the *test* classpath. Writing the
+     * three-parameter form compiled locally and broke `:app:compileDebugKotlin`. There is
+     * nothing to release on a cancelled resume here in any case: the value is a `String?`,
+     * and the socket is closed by `invokeOnCancellation` above and by `finally` below.
      */
     private suspend fun post(route: MindWire.Route, body: String, timeoutMillis: Long): String? =
         suspendCancellableCoroutine { continuation ->
@@ -230,7 +240,7 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
                 val open = URL(route.endpoint).openConnection()
                 val http = open as? HttpURLConnection
                 if (http == null) {
-                    continuation.resume(null) { _, _, _ -> }
+                    continuation.resume(null)
                     return@suspendCancellableCoroutine
                 }
                 connection = http
@@ -266,14 +276,14 @@ class RemoteMindClient(private val configProvider: () -> MindConfig) : MindProvi
                 } else {
                     http.inputStream.use { readCapped(it) }
                 }
-                continuation.resume(answer) { _, _, _ -> }
+                continuation.resume(answer)
             } catch (ignored: Throwable) {
                 // Deliberately total. Every distinction this could draw — unknown host, refused
                 // connection, bad certificate, malformed URL the player typed into settings, or
                 // the stream being closed out from under us by a cancellation — leads to the same
                 // place: the local brain answers and the game carries on. Resuming after a cancel
                 // is a no-op, so the cancelled case needs no special handling here.
-                runCatching { continuation.resume(null) { _, _, _ -> } }
+                runCatching { continuation.resume(null) }
             } finally {
                 runCatching { connection?.disconnect() }
             }
