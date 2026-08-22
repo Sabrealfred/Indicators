@@ -27,6 +27,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +57,9 @@ import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.Decision
 import com.neopal.pet.domain.Learning
+import com.neopal.pet.domain.PlanBoard
+import com.neopal.pet.domain.PlanStepState
+import com.neopal.pet.domain.PlanStepView
 import com.neopal.pet.domain.Skill
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.MinTouchTarget
@@ -168,6 +173,9 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             val activityTarget = pet.activity?.targetId?.let { id ->
                 pet.pals.firstOrNull { it.id == id }?.name
             }
+            // Null for every save that never set up a remote mind, which is most of them; the
+            // panel simply is not there. See [PlanBoard.of].
+            val planBoard = PlanBoard.of(pet.plan, pet.ageSeconds)
 
             // Two columns once there is room for them. One tall ribbon of panels down the middle
             // of a tablet is a phone layout nobody went back to.
@@ -182,6 +190,9 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     ) {
                         AutonomyPanel(pet.autonomy, viewModel::setAutonomy, Modifier.fillMaxWidth())
                         NowPanel(pet.name, pet.autonomy, pet.activity, pet.ageSeconds, activityTarget, Modifier.fillMaxWidth())
+                        // Between "what it is doing" and "what it decided", because that is where
+                        // an intention sits: it is the thread the single decisions were beads on.
+                        planBoard?.let { PlanPanel(it, pet.name, Modifier.fillMaxWidth()) }
                         DecisionLogPanel(pet.decisions, pet.ageSeconds, pet.autonomy, Modifier.fillMaxWidth())
                     }
                     Column(
@@ -210,6 +221,7 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 ) {
                     AutonomyPanel(pet.autonomy, viewModel::setAutonomy, Modifier.fillMaxWidth())
                     NowPanel(pet.name, pet.autonomy, pet.activity, pet.ageSeconds, activityTarget, Modifier.fillMaxWidth())
+                    planBoard?.let { PlanPanel(it, pet.name, Modifier.fillMaxWidth()) }
                     DecisionLogPanel(pet.decisions, pet.ageSeconds, pet.autonomy, Modifier.fillMaxWidth())
                     WeighingPanel(considerations, pet.autonomy, Modifier.fillMaxWidth())
                     LearningPanel(
@@ -460,6 +472,160 @@ private fun NowPanel(
                     text = detail,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * The plan, whole.
+ *
+ * This is the panel the feature never had. The decision log answers "why did it just do that" one
+ * line at a time, which is a genuinely different question: three log entries read as three
+ * unrelated reactions even when they were one intention, and "eat, then tidy up, then go and find
+ * Moss, because I want to be presentable before company" only means anything as a whole.
+ *
+ * It is drawn only when there *is* a plan. Plans need a remote mind, and a panel reading "no plan
+ * yet" on every save that never pasted an API key would not be an honest empty state — it would
+ * be an advertisement on the one screen that is supposed to be about the creature.
+ */
+@Composable
+private fun PlanPanel(board: PlanBoard, name: String, modifier: Modifier = Modifier) {
+    // Green while it is live, for the same reason "Right now" is green: this is the creature
+    // getting on with something. A plan past its clock goes quiet rather than red — running out
+    // of time is not a fault, it is a creature that aimed slightly beyond its afternoon.
+    val accent = if (board.isOutOfTime) MaterialTheme.colorScheme.onSurfaceVariant else NeoAccents.green
+    val clock = if (board.isOutOfTime) {
+        "Out of time — it will let this go."
+    } else {
+        "${span(board.secondsLeft)} left to finish it"
+    }
+    val grown = when (board.extensions) {
+        0 -> null
+        1 -> "It liked how this was going and gave itself one more step."
+        else -> "It liked how this was going and gave itself ${board.extensions} more steps."
+    }
+    val readOut = "$name means to: ${board.goal} Step ${(board.done + 1).coerceAtMost(board.total)} " +
+        "of ${board.total}. $clock"
+
+    PixelPanel(
+        modifier = modifier,
+        accent = accent,
+        title = "What it means to do",
+        contentPadding = PaddingValues(pixelUnits(2)),
+        titleTrailing = {
+            PixelBadge(
+                text = "${board.done}/${board.total}",
+                color = MaterialTheme.colorScheme.surface,
+                contentDescription = "${board.done} of ${board.total} steps done",
+            )
+        },
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics(mergeDescendants = true) { contentDescription = readOut },
+        ) {
+            // The goal in the creature's own words, given room to wrap for the same reason a
+            // decision's reason is: a sentence cut to one line is a sentence the player guesses at.
+            Text(
+                text = board.goal,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Spacer(Modifier.height(pixelUnits(1)))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PixelBar(
+                    fraction = board.fraction,
+                    color = accent,
+                    segments = board.total.coerceAtLeast(1),
+                    height = pixelUnits(4),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(pixelUnits(2)))
+                PixelDigits(
+                    text = "${board.done}/${board.total}",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(pixelUnits(2)))
+            board.steps.forEachIndexed { index, view ->
+                if (index > 0) Spacer(Modifier.height(pixelUnits(1)))
+                PlanStepRow(view)
+            }
+            Spacer(Modifier.height(pixelUnits(2)))
+            PixelDivider()
+            Spacer(Modifier.height(pixelUnits(1)))
+            Text(
+                text = clock,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (board.isOutOfTime) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (grown != null) {
+                Text(
+                    text = grown,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            // Said once, here, because a plan is the one thing on this screen a player could
+            // mistake for a promise. Every step is re-checked when it comes up.
+            Text(
+                text = "A plan is what it intends, not what it is allowed. Each step is checked " +
+                    "again when it gets there.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** One step: a tick for done, the pointer for the one it is on, and its reason underneath. */
+@Composable
+private fun PlanStepRow(view: PlanStepView, modifier: Modifier = Modifier) {
+    val current = view.state == PlanStepState.CURRENT
+    val done = view.state == PlanStepState.DONE
+    val tint = when {
+        current -> NeoAccents.green
+        done -> NeoAccents.cyan
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    val marker = when {
+        done -> Icons.Filled.Check
+        current -> Icons.Filled.RadioButtonChecked
+        else -> Icons.Filled.RadioButtonUnchecked
+    }
+    Row(modifier = modifier.fillMaxWidth()) {
+        Icon(
+            imageVector = marker,
+            contentDescription = null,
+            tint = tint,
+            modifier = Modifier.size(pixelUnits(5)),
+        )
+        Spacer(Modifier.width(pixelUnits(2)))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = titled(view.step.kind),
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (done) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+                fontWeight = if (current) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (view.step.why.isNotBlank()) {
+                Text(
+                    text = view.step.why,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
