@@ -458,6 +458,15 @@ data class GameConfig(
      * a phone attached.
      */
     val nudges: NudgeSettings = NudgeSettings(),
+    /**
+     * Whether a copy of the save is kept in `Documents/NeoPal`, outside this app's sandbox.
+     *
+     * On by default, because a backup a player has to remember to make is a backup that does not
+     * exist on the day it is needed, and this one costs them nothing: no permission prompt, no
+     * dialog, one small text file in a folder with the app's name on it. It is what makes the
+     * difference between an uninstall costing a lineage and costing one tap in a file picker.
+     */
+    val saveMirrorEnabled: Boolean = true,
     /** Cleared once the player has seen the first-run coach marks. */
     val tutorialSeen: Boolean = false,
     /**

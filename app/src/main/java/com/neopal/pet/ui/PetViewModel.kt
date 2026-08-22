@@ -11,6 +11,7 @@ import com.neopal.pet.audio.Sfx
 import com.neopal.pet.data.Notifier
 import com.neopal.pet.data.PetRepository
 import com.neopal.pet.data.RemoteMindClient
+import com.neopal.pet.data.SaveVault
 import com.neopal.pet.domain.Achievement
 import com.neopal.pet.domain.ActionResult
 import com.neopal.pet.domain.Autonomy
@@ -44,7 +45,10 @@ import com.neopal.pet.domain.statDeltas
 import com.neopal.pet.widget.PetWidget
 import com.neopal.pet.widget.PetWidgetBridge
 import com.neopal.pet.widget.PetWidgetHost
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -119,6 +123,26 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     @Volatile
     private var inForeground: Boolean = true
     private var toastJob: Job? = null
+
+    /**
+     * The copy of the save that outlives an uninstall.
+     *
+     * Held here rather than made per call because the rate limit is per instance: a fresh
+     * SaveVault starts with `lastMirrorAtMillis = 0`, so a caller that built one each time would
+     * write a MediaStore file on every single tick while looking exactly like a caller that
+     * respected the twenty-minute interval.
+     */
+    private val vault = SaveVault(application)
+
+    /**
+     * Outlives this view model on purpose. The mirror is started from `onPaused`, and
+     * `viewModelScope` is cancelled the moment the view model is cleared — which on a
+     * configuration change or a swipe-away is the very next thing that happens. A write
+     * cancelled halfway is exactly what [SaveVault]'s three-step rotation is designed to
+     * survive, but not starting it at all is a lineage lost for no reason.
+     */
+    private val vaultScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
 
     /**
      * This view model's end of [PetWidgetBridge]. Held as a property rather than written inline
@@ -375,7 +399,14 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         // The creature is allowed to speak up again from here. While the app is on screen it is
         // not: an entry in the shade about a pet the player is looking at is clutter.
         Notifier.onAppBackgrounded()
-        _ui.value.pet?.let { persist(it, immediate = true) }
+        _ui.value.pet?.let { pet ->
+            persist(pet, immediate = true)
+            // Forced, ignoring the interval. Going to the background is one of the two moments
+            // the mirror exists for — the other is a death — because it is the last instant this
+            // process is guaranteed to still be running. A mirror that is twenty minutes stale
+            // is still a lineage saved; a mirror that was never written is not.
+            mirror(pet, force = true)
+        }
         // The player just did something and the home screen is where they are going. Ordered
         // after the persist so the widget reads the pet it is about to draw, not the one before.
         PetWidget.refresh(getApplication<Application>())
@@ -746,7 +777,25 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         updateConfig { it.copy(mind = transform(it.mind)) }
     }
 
+    /**
+     * Writes the out-of-sandbox copy, if the player has left it on and the device can hold one.
+     *
+     * Deliberately silent about its outcome. This is not something the player asked for at the
+     * moment it happens, and a failure — no MediaStore before Android 10, no room, a revoked
+     * volume — costs them nothing they can act on right now. What they can act on is the export
+     * button, which reports everything.
+     */
+    private fun mirror(pet: PetState, force: Boolean) {
+        val config = _ui.value.config
+        vault.mirrorEnabled = config.saveMirrorEnabled
+        if (vault.mirrorGate(System.currentTimeMillis(), force) != null) return
+        // On the application scope rather than viewModelScope: this is called from onPaused, and
+        // viewModelScope is cancelled when the view model is cleared, which can be moments later.
+        vaultScope.launch { vault.mirror(pet, config, System.currentTimeMillis(), force) }
+    }
+
     /** Runs one pure action against the current state and folds the result into the UI. */
+
     private fun runAction(sfx: Sfx, block: (PetState) -> ActionResult) {
         val pet = _ui.value.pet ?: return
         val raw = block(pet)
@@ -819,6 +868,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     triggerAnimation(PetAnimation.DEAD)
                     play(Sfx.DEATH)
                     showToast("${_ui.value.pet?.name ?: "Your pet"} passed away: ${event.reason.displayName}.")
+                    // The other moment the out-of-sandbox copy exists for. A death is when a save
+                    // becomes a record rather than a game in progress, and it is also when a
+                    // player is most likely to uninstall.
+                    _ui.value.pet?.let { mirror(it, force = true) }
                 }
                 is GameEvent.GotSick -> showToast("Your pet caught something.")
                 is GameEvent.Recovered -> showToast("Fully recovered!")
