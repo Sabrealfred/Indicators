@@ -150,6 +150,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 handleEvents(result.events, offline = false)
                 maybeReconsider(result.events)
                 maybePlan()
+                maybeSpeakFirst(result.events)
             }
         }
     }
@@ -250,7 +251,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * "Has not happened yet", for the throttles below.
+     * "Has not happened yet", for the three throttles below.
      *
      * Not `Long.MIN_VALUE`, and the difference is not cosmetic. Every throttle here reads
      * `pet.ageSeconds - lastX < gap`, and `ageSeconds - Long.MIN_VALUE` overflows straight back
@@ -602,6 +603,66 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
             persist(answered)
         }
     }
+
+    /**
+     * Lets the creature say something first, when something worth mentioning has just happened.
+     *
+     * Everything else in this app waits to be poked. This is the one place the creature starts
+     * the exchange, and it is the difference between a thing that answers and a thing that lives
+     * with you — but it is also the fastest way to make an app annoying, so the bar is high and
+     * the throttle is long.
+     *
+     * Deliberately reuses [MindProvider.speak] rather than adding a method. The event goes in as
+     * the prompt but is *not* stored as a player turn: the player did not say it, and a chat log
+     * that claims otherwise is a log that lies about who spoke.
+     */
+    private fun maybeSpeakFirst(events: List<GameEvent>) {
+        val worth = events.firstNotNullOfOrNull { unpromptedLine(it) } ?: return
+        val current = _ui.value
+        val pet = current.pet ?: return
+        val config = current.config
+        if (!config.mind.usable || !config.mind.conversation || !mind.isReady) return
+        if (_ui.value.thinking || pet.isSleeping || pet.isDead || !pet.isMindAwake) return
+        if (pet.ageSeconds - lastSpokeFirstAtSeconds < SPEAK_FIRST_GAP_SECONDS) return
+
+        lastSpokeFirstAtSeconds = pet.ageSeconds
+        viewModelScope.launch {
+            val reply = mind.speak(PetBrief.of(pet, config), pet.chat, worth) ?: return@launch
+            val now = _ui.value.pet ?: return@launch
+            val spoken = now.copy(
+                chat = (now.chat + ChatTurn(fromPet = true, text = reply.text, atSeconds = now.ageSeconds))
+                    .takeLast(Simulation.MAX_CHAT_TURNS),
+            )
+            _ui.update { it.copy(pet = spoken) }
+            showToast("${now.name} said something.")
+            persist(spoken)
+        }
+    }
+
+    /**
+     * What the creature would bring up on its own, or null for the vast majority of events.
+     *
+     * Only firsts and turning points. A creature that remarked on every meal would be a
+     * notification, and people turn notifications off.
+     */
+    private fun unpromptedLine(event: GameEvent): String? = when (event) {
+        is GameEvent.Evolved -> "You have just grown into a ${event.to.displayName}. Say something about it."
+        is GameEvent.LearnedSkill -> "You have just worked out how to ${event.skill.displayName.lowercase()}. Mention it."
+        is GameEvent.Befriended -> "${event.pal.name} has just become your friend. Say something about that."
+        is GameEvent.Paired -> "You and ${event.pal.name} have just paired off. Say something."
+        is GameEvent.ChildHatched -> "${event.child.name} has just hatched. Say something to your keeper about it."
+        is GameEvent.LearnedFromExperience -> "You have just worked something out for yourself. Mention what."
+        is GameEvent.Recovered -> "You have just got over being ill. Say something."
+        else -> null
+    }
+
+    private var lastSpokeFirstAtSeconds = NEVER
+
+    /**
+     * Pet seconds between unprompted remarks. Long — over an hour — because the whole value of
+     * the creature speaking first is that it is rare enough to be worth reading.
+     */
+    private val SPEAK_FIRST_GAP_SECONDS = 4_000L
 
     /** Forgets the conversation. The creature's diary is untouched; this is only the talking. */
     fun clearChat() {
