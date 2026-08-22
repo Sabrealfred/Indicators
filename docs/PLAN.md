@@ -27,6 +27,10 @@ Tres reglas, aprendidas rompiendo CI cuatro veces en esta rama:
 | `scratchpad/mindtest.sh` | Dominio + cliente remoto + sus tests, **incluida la ruta de red** contra un servidor de mentira | Un servicio real: nadie tocó OpenRouter todavía |
 | `scratchpad/uicheck.sh` | Frontend de todo el source set contra línea base | **No es un build**; sin SDK de Android |
 | `scratchpad/xmlcheck.sh` | Que todo XML parsee | Semántica del manifiesto |
+| `proxy/worker.test.mjs` | El Worker contra un upstream falso (`node worker.test.mjs`) | Un deploy real; nadie lo corrió con `wrangler` |
+
+CI corre `:app:testDebugUnitTest` **antes** de armar el APK, así que los 260 tests —los 16 de
+socket incluidos— corren de verdad en cada commit.
 
 Límites conocidos de `uicheck.sh`, para que nadie lo lea como semáforo:
 - No puede comparar un archivo **nuevo**: no hay entrada previa. Hay que comparar *clases de mensaje*
@@ -79,8 +83,8 @@ Límites conocidos de `uicheck.sh`, para que nadie lo lea como semáforo:
 
 | # | Qué | Por qué está trabado |
 |---|---|---|
-| 3.7.1 | Proxy hospedado | Hay campo `proxyUrl` y funciona; falta levantar el servicio. Decisión tuya: Lambda, Cloudflare Worker, o un gateway de OpenClaw/Hermes |
-| 3.7.2 | ¿Habla OpenClaw formato chat-completions? | **Sin verificar.** Su documentación no lo dice. Si sí, `proxyUrl` apunta ahí sin tocar código |
+| 3.7.1 | Proxy hospedado | ✅ **escrito** en `proxy/` — Cloudflare Worker, un archivo, sin build, 12 tests contra un upstream falso. Falta **una sola cosa que sólo vos podés hacer**: `wrangler secret put OPENROUTER_KEY && wrangler deploy`, y pegar la URL en Ajustes. Nadie lo desplegó todavía |
+| 3.7.2 | ¿Habla OpenClaw formato chat-completions? | **Sin verificar**, y ya no bloquea nada: el Worker de `proxy/` cubre el caso. Si OpenClaw resulta hablarlo, `proxyUrl` apunta ahí sin tocar código |
 | 3.7.3 | ~~Prosa en vez de JSON~~ | ✅ **probado**. Un servidor de mentira devolviendo prosa se rechaza limpio: sin crash, sin texto sin parsear en pantalla, la criatura simplemente no dice nada. Sigue siendo cierto que un modelo así **parece** mudo — pero ahora sabemos que falla bien, no que rompe |
 
 ---
@@ -217,5 +221,5 @@ cerrada y verde en CI. Lo que queda:
 3. Herramientas que actúan (§4.2.2) — cambia el contrato del proveedor, no se paraleliza
 
 **Bloqueado por decisión tuya:**
-- El proxy (§3.7.1) y si OpenClaw sirve como gateway (§3.7.2)
+- Desplegar el proxy (§3.7.1) — el código está, la clave y el deploy son tuyos
 - Permiso de micrófono (§5.2.5), sacudir el teléfono (§5.2.4) pide un sensor nuevo
