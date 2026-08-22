@@ -234,6 +234,34 @@ Cada vez que lo remoto es un extra sobre algo que ya funciona, apagarlo por acci
 Regla que sale de acá: todo lo que decida *no* llamar a la red merece o un test o un contador
 visible, porque su falla se parece demasiado a su éxito.
 
+### La lección de coroutines 1.8 vs 1.9 — un banco de pruebas que mentía
+
+`:app:compileDebugKotlin` murió tres veces seguidas con nueve errores en `RemoteMindClient.kt`,
+todos de una sola línea:
+
+```kotlin
+continuation.resume(null) { _, _, _ -> }
+```
+
+`CancellableContinuation.resume(value, onCancellation)` recibe un handler de **un** parámetro en
+coroutines 1.8 y de **tres** en 1.9. El *main source set* compila contra 1.8.1, que llega
+transitivamente por `androidx.lifecycle` 2.8.7; el *test source set* compila contra 1.9.0, que
+exige `kotlinx-coroutines-test`. Nada en el build declara coroutines directamente, así que los dos
+source sets resuelven versiones distintas con todo derecho — y la forma de tres parámetros es
+válida en exactamente uno de ellos.
+
+**Lo que hay que anotar no es la API sino el banco de pruebas.** `mindtest.sh` compilaba *todo*,
+las fuentes principales incluidas, contra 1.9.0: estaba verificando un classpath que la app nunca
+tiene. Decía verde con confianza mientras CI moría. Ahora corre en dos etapas — main contra 1.8.1
+como compuerta dura, después main más tests contra 1.9.0 — y reintroduciendo el bug la etapa uno
+reproduce los nueve errores de CI en las mismas líneas y columnas.
+
+Es la misma forma que la lección del `@DslMarker`: **un sustituto puede tener el conjunto de
+firmas perfecto y aun así aceptar código que el artefacto real rechaza.** Ahí faltaba una
+anotación; acá sobraba una versión. Regla que sale de las dos: un banco de pruebas local no vale
+por lo que compila, vale por lo que *rechaza igual que CI*, y eso hay que demostrarlo rompiendo
+algo a propósito.
+
 ---
 
 ## 7. Orden sugerido
