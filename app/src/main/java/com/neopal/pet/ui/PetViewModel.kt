@@ -176,7 +176,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val config = current.config
         if (!config.mind.usable || !config.mind.decidesActions || !mind.isReady) return
         if (reconsidering) return
-        if (pet.ageSeconds - lastReconsideredAtSeconds < RECONSIDER_GAP_SECONDS) return
+        if (pet.ageSeconds - lastReconsideredAtSeconds < gapFor(RECONSIDER_GAP_SECONDS, pet)) return
 
         val options = Brain.considerations(pet, config)
         // Nothing to reconsider when there is no real alternative to the thing it just did.
@@ -225,7 +225,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         if (planning || pet.plan != null) return
         if (!pet.isMindAwake || pet.isSleeping || pet.isDead) return
         if (pet.autonomy != Autonomy.FULL) return
-        if (pet.ageSeconds - lastPlannedAtSeconds < PLAN_GAP_SECONDS) return
+        if (pet.ageSeconds - lastPlannedAtSeconds < gapFor(PLAN_GAP_SECONDS, pet)) return
 
         val options = Brain.considerations(pet, config).filter { it.available }
         if (options.size < 2) return
@@ -261,6 +261,21 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * creature never finished an afternoon it started.
      */
     private val PLAN_GAP_SECONDS = 1_800L
+
+    /**
+     * How often a creature of this intellect stops to think, as a gap in pet seconds.
+     *
+     * A bright creature thinks more often than a newborn, which is the point — but the range is
+     * deliberately narrow, between 0.6x and 1.5x the base. The reason is not caution about how
+     * clever it is allowed to be: it is that every one of these is a request, most people will run
+     * this on a free tier, and a creature that thought twice as hard would spend the day's
+     * allowance by lunch and then think not at all. A narrow band is what keeps a clever creature
+     * clever all day rather than brilliant for an hour.
+     */
+    private fun gapFor(base: Long, pet: PetState): Long {
+        val scale = (1.5f - (pet.intellect.coerceIn(0f, 100f) / 100f) * 0.9f).coerceIn(0.6f, 1.5f)
+        return (base * scale).toLong()
+    }
 
     /**
      * Pet seconds between reconsiderations. Five minutes is frequent enough that a player watching

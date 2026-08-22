@@ -105,8 +105,8 @@ iguales y conviene no tocarlas en bloque.
 |---|---|---|---|
 | 4.2.1 | Plan de 3 pasos máximo | Planes largos que se **extienden solos** al terminar, si la criatura tiene intelecto alto | `Errands.MAX_STEPS`, sub-planes |
 | 4.2.2 | Sólo herramientas de **lectura** | Herramientas que **actúan**, cada una por la misma revalidación que `adopt`. Más capaz sin debilitar nada | Contrato de tool-calling |
-| 4.2.3 | Reconsidera cada 5 min, planifica cada 30 | Cadencia por intelecto: una criatura brillante piensa más seguido | Configurable en Ajustes |
-| 4.2.4 | Nunca aprende de sus propios planes | **Evaluar el resultado**: ¿el plan sirvió? Lecciones desde su propia experiencia, no sólo desde la muerte del padre | `Lineage` + `Errands` |
+| 4.2.3 | ~~Cadencia fija~~ | ✅ **hecho** — la cadencia escala con el intelecto, en banda estrecha (0.6x–1.5x) para que un tier gratis dure el día |
+| 4.2.4 | ~~Nunca aprende de sí misma~~ | ✅ **hecho** — cada plan se compara contra el cuidado con el que empezó; una mejora clara deja lección, topeada por debajo de lo que enseña una muerte |
 | 4.2.5 | Nunca inicia conversación | Que hable sola cuando pasa algo que le importa | `TalkScreen` + notificaciones |
 | 4.2.6 | Un solo modelo para todo | Modelo chico para decidir, grande para conversar y planificar | `MindConfig` |
 
