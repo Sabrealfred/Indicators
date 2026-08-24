@@ -551,6 +551,11 @@ fun SettingsScreen(
             }
         }
 
+        // Its own file: the only section of this screen that reads a download running somewhere
+        // else, and the only one whose numbers are gigabytes of somebody's phone.
+        Spacer(Modifier.height(pixelUnits(3)))
+        ModelStoragePanel()
+
         Spacer(Modifier.height(pixelUnits(3)))
         // Directly above the danger zone on purpose: it is the other thing on this screen that
         // can end with the save gone, if a build turns out to be signed with a different key.
