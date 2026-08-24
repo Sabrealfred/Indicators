@@ -131,13 +131,39 @@ object Chronicle {
             "I worked something out for myself today: ${event.lesson.kind.displayName.lowercase()}." to
                 ChronicleKind.MILESTONE
 
+        /**
+         * The one plan event with nowhere else to be seen.
+         *
+         * A plan lives on the Mind screen while it exists: the panel is what "a plan was made"
+         * looks like, and a plan that grows itself a step says so there in the creature's own
+         * words. What the panel cannot show is itself disappearing — a refused step takes the
+         * whole errand away between one glance and the next, and until this line nothing in the
+         * save remembered the creature had ever meant to do it.
+         *
+         * Only [PlanEnding.REFUSED]. Running out of time is the one ending the panel *does*
+         * announce, out loud and in advance: the countdown reaches zero and it reads "Out of
+         * time — it will let this go" for as long as the player cares to watch. Writing that
+         * down as well would be the diary repeating the screen, which is how a diary stops being
+         * read.
+         */
+        is GameEvent.PlanAbandoned -> when (event.ending) {
+            PlanEnding.RAN_OUT_OF_TIME -> null
+            PlanEnding.REFUSED -> if (event.done == 0) {
+                "I had it all worked out — ${event.goal} — and fell at the first step." to
+                    ChronicleKind.TROUBLE
+            } else {
+                "I had it all worked out — ${event.goal} — and got ${event.done} of the " +
+                    "${event.steps} done before it stopped being possible." to ChronicleKind.TROUBLE
+            }
+        }
+
         // No diary line by design — Decided and Finished are the two halves of a decision-log
         // entry (see Brain.recordOutcome) and the diary is for the firsts and the family.
+        // PlanMade and PlanExtended are the plan panel's, for the reason set out above it.
         is GameEvent.Decided,
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,
         is GameEvent.PalLeft,
-        is GameEvent.PlanAbandoned,
         is GameEvent.PlanMade,
         is GameEvent.PlanExtended,
         -> null

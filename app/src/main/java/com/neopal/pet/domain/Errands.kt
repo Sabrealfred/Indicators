@@ -28,6 +28,26 @@ data class PlanStep(
 )
 
 /**
+ * Why a plan stopped being followed.
+ *
+ * Not persisted — it rides on [GameEvent.PlanAbandoned] and is read within the tick — so it is
+ * free to grow a third case if one ever exists.
+ *
+ * The distinction earns its keep on the screen. Running out of time is announced by the plan
+ * panel *before* it happens: the countdown reaches zero and the panel says "Out of time — it will
+ * let this go" in as many words. Being refused is announced by nothing at all — the plan is there
+ * one moment and gone the next, and the creature was in the middle of something the player was
+ * watching. Two departures with one name meant neither could be treated as what it is.
+ */
+enum class PlanEnding {
+    /** A step came up and the world would not allow it. */
+    REFUSED,
+
+    /** The plan outlived the afternoon it was made for. See [Errands.lifetimeFor]. */
+    RAN_OUT_OF_TIME,
+}
+
+/**
  * A short sequence the creature means to work through, and what it is for.
  *
  * Plans exist because a single choice cannot express an intention. "Eat" is a reaction; "eat, then
@@ -366,7 +386,7 @@ object Errands {
      */
     fun abandon(state: PetState, events: MutableList<GameEvent>): PetState {
         val plan = state.plan ?: return state
-        events += GameEvent.PlanAbandoned(plan.goal)
+        events += GameEvent.PlanAbandoned(plan.goal, plan.done, plan.steps.size, PlanEnding.REFUSED)
         return state.copy(plan = null)
     }
 
@@ -374,7 +394,7 @@ object Errands {
     fun expireIfStale(state: PetState, events: MutableList<GameEvent>): PetState {
         val plan = state.plan ?: return state
         if (!plan.isStale(state.ageSeconds)) return state
-        events += GameEvent.PlanAbandoned(plan.goal)
+        events += GameEvent.PlanAbandoned(plan.goal, plan.done, plan.steps.size, PlanEnding.RAN_OUT_OF_TIME)
         return state.copy(plan = null)
     }
 }

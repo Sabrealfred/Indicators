@@ -41,8 +41,21 @@ sealed interface GameEvent {
     data class Paired(val pal: Pal) : GameEvent
     data class EggLaid(val egg: NestEgg) : GameEvent
     data class ChildHatched(val child: Pal) : GameEvent
-    /** A plan was dropped: refused, or simply too old to still be about this creature. */
-    data class PlanAbandoned(val goal: String) : GameEvent
+    /**
+     * A plan was dropped, and which of the two ways it was dropped.
+     *
+     * [ending] is the whole point of the event carrying more than a goal: one of the two is
+     * already on screen before it happens and the other is not, so a reader that cannot tell
+     * them apart has to treat both as the louder one or both as the quieter one, and either
+     * choice is wrong half the time. [done] of [steps] is how far it got, which is the
+     * difference between an afternoon that fell over immediately and one that nearly landed.
+     */
+    data class PlanAbandoned(
+        val goal: String,
+        val done: Int,
+        val steps: Int,
+        val ending: PlanEnding,
+    ) : GameEvent
     data class PlanMade(val goal: String, val steps: Int) : GameEvent
     /** A plan that was evidently working grew itself a further step instead of ending. */
     data class PlanExtended(val goal: String, val steps: Int) : GameEvent

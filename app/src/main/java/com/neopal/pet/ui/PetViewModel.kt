@@ -980,6 +980,16 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 // halves of one log line and both are folded into the decision log in the
                 // domain (Brain.recordOutcome), which the Mind screen reads. A toast per
                 // finished tidy-up is the notification this app exists not to be.
+                //
+                // The three plan events are silent here too, for two different reasons. PlanMade
+                // and PlanExtended are already on screen: the Mind screen's plan panel *is* what
+                // a plan being made looks like, and it says in the creature's own words when one
+                // has grown itself another step, so a toast would be the app reading its own
+                // screen out. PlanAbandoned is the one with nothing to show for it, and it is
+                // answered in the diary instead — see Chronicle.lineFor, which also explains why
+                // only a refused plan gets a line and one that ran out of time does not. Not a
+                // toast either way: §4.2.5 of docs/PLAN.md keeps the autonomous half's
+                // interruptions to firsts and turning points, and an errand is neither.
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
