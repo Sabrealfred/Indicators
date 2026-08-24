@@ -36,7 +36,13 @@ sealed interface GameEvent {
     data class LearnedSkill(val skill: Skill) : GameEvent
     data class IntellectGrew(val from: Int, val to: Int) : GameEvent
     data class MetPal(val pal: Pal) : GameEvent
-    data class PalLeft(val name: String) : GameEvent
+    /**
+     * Somebody is no longer in the room, and which of the three ways that happened.
+     *
+     * [departure] is the difference between a milestone and a non-event: see [Departure]. The
+     * name alone could not carry it, so every reader had to treat all three the same.
+     */
+    data class PalLeft(val name: String, val departure: Departure) : GameEvent
     data class Befriended(val pal: Pal) : GameEvent
     data class Paired(val pal: Pal) : GameEvent
     data class EggLaid(val egg: NestEgg) : GameEvent

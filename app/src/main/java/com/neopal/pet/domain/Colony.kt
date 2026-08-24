@@ -3,6 +3,38 @@ package com.neopal.pet.domain
 import kotlin.random.Random
 
 /**
+ * Why somebody is no longer in the room.
+ *
+ * Three quite different things used to raise the same event with the same payload — a name — and
+ * a reader holding one label for three events can only treat them all as the loudest or all as
+ * the quietest. Both the diary and the toast handler picked "quietest" and dropped every one of
+ * them, which is how "your child has grown up and moved out" came to be discarded so that "a
+ * stranger let itself out after fifteen minutes" would not be announced.
+ *
+ * Not persisted: it rides on [GameEvent.PalLeft] and is read inside the tick that raised it.
+ */
+enum class Departure {
+    /** A visit ran its course. The ordinary case, several times a day, and nobody's news. */
+    WENT_HOME,
+
+    /**
+     * A child grew up and went to live its own life. Once per child, for good — the roster keeps
+     * it as family and it may call round later, but it never lives here again.
+     */
+    MOVED_OUT,
+
+    /**
+     * The roster gave somebody up to stay inside its cap.
+     *
+     * Nothing happened in the creature's world at all; this is the save keeping itself bounded.
+     * It is still an event because the screens must not show a companion that silently stops
+     * existing between one frame and the next — but it is the app's own housekeeping, and a
+     * player has no way to act on it and never asked to hear about the limit.
+     */
+    FORGOTTEN,
+}
+
+/**
  * The pet's family and social circle, laid out for a screen to draw.
  *
  * Assembled on demand rather than stored, because every part of it is already a fact about
@@ -535,7 +567,7 @@ object Colony {
             if (pal.relation == Relation.OFFSPRING && pal.stage.order < LifeStage.ADULT.order) {
                 if (state.ageSeconds - pal.metAtSeconds < leaveHome) return@map pal
                 changed = true
-                events += GameEvent.PalLeft(pal.name)
+                events += GameEvent.PalLeft(pal.name, Departure.MOVED_OUT)
                 return@map pal.copy(
                     stage = LifeStage.ADULT,
                     present = false,
@@ -545,7 +577,7 @@ object Colony {
             val stay = if (pal.isFriend) FRIEND_VISIT_SECONDS else VISIT_SECONDS
             if (state.ageSeconds - pal.lastSeenSeconds < stay) return@map pal
             changed = true
-            events += GameEvent.PalLeft(pal.name)
+            events += GameEvent.PalLeft(pal.name, Departure.WENT_HOME)
             pal.copy(present = false, lastSeenSeconds = state.ageSeconds)
         }
         return if (changed) state.copy(pals = pals) else state
@@ -755,7 +787,7 @@ object Colony {
             // on the record whether or not it was in the room, because losing one off the roster
             // is the biggest thing this function ever does.
             if (pal.id !in keep && (pal.present || pal.relation != Relation.VISITOR)) {
-                events += GameEvent.PalLeft(pal.name)
+                events += GameEvent.PalLeft(pal.name, Departure.FORGOTTEN)
             }
         }
         // Filtered rather than rebuilt from the sorted copy, so the list keeps its own order and

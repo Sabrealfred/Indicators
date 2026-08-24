@@ -157,13 +157,32 @@ object Chronicle {
             }
         }
 
+        /**
+         * A child leaving home, and only that.
+         *
+         * The diary is for the firsts and the family, and this is both: it happens once per
+         * child, it never unhappens — the roster keeps them as family and they may call round
+         * again, but they never live here again — and it is the other end of the line
+         * [GameEvent.ChildHatched] opens two stages earlier. That line is a MILESTONE, so this
+         * one is too, or a diary long enough to be trimmed keeps the birth and loses the leaving.
+         *
+         * The other two departures write nothing. A visit ending is the ordinary rhythm of the
+         * room, several times a day; being let go to keep the roster inside its cap is the app's
+         * own housekeeping, which the player can neither see nor do anything about.
+         */
+        is GameEvent.PalLeft -> when (event.departure) {
+            Departure.MOVED_OUT ->
+                "${event.name} grew up and went off to live somewhere of their own today." to
+                    ChronicleKind.MILESTONE
+            Departure.WENT_HOME, Departure.FORGOTTEN -> null
+        }
+
         // No diary line by design — Decided and Finished are the two halves of a decision-log
         // entry (see Brain.recordOutcome) and the diary is for the firsts and the family.
         // PlanMade and PlanExtended are the plan panel's, for the reason set out above it.
         is GameEvent.Decided,
         is GameEvent.Finished,
         is GameEvent.IntellectGrew,
-        is GameEvent.PalLeft,
         is GameEvent.PlanMade,
         is GameEvent.PlanExtended,
         -> null

@@ -22,6 +22,7 @@ import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Departure
 import com.neopal.pet.domain.Distillation
 import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.GameConfig
@@ -976,6 +977,20 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     showToast("Worked something out on its own.")
                 }
 
+                // The other end of the line ChildHatched opens: a child that has grown up and
+                // gone. Once per child, never undone, and the household is a different shape
+                // afterwards — the same class of turning point as a hatching, which does get a
+                // toast, so this one does too. The other two departures do not: a visit ending
+                // is the room's ordinary rhythm several times a day, and being let go to keep
+                // the roster inside its cap is the app's own housekeeping. See [Departure].
+                is GameEvent.PalLeft -> when (event.departure) {
+                    Departure.MOVED_OUT -> {
+                        if (!offline) play(Sfx.CONFIRM)
+                        showToast("${event.name} has grown up and moved out.")
+                    }
+                    Departure.WENT_HOME, Departure.FORGOTTEN -> Unit
+                }
+
                 // Deliberately silent *here*, not unhandled: Decided and Finished are the two
                 // halves of one log line and both are folded into the decision log in the
                 // domain (Brain.recordOutcome), which the Mind screen reads. A toast per
@@ -993,7 +1008,6 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
-                is GameEvent.PalLeft,
                 is GameEvent.PlanAbandoned,
                 is GameEvent.PlanMade,
                 is GameEvent.PlanExtended,
