@@ -1,6 +1,19 @@
 [versions]
 agp = "8.7.2"
-kotlin = "2.0.21"
+# Moved from 2.0.21 for one reason, stated here because nothing else in this file explains it:
+# com.google.ai.edge.litertlm carries Kotlin metadata 2.3.0, and a compiler only reads metadata
+# one minor ahead of itself. 2.0.21 and 2.1.x reject it outright; 2.2.x reads it on a tolerance
+# that expires at Kotlin 2.4; 2.3.x reads it properly. That was measured — every version's
+# metadata was read out of its own jar with javap, and acceptance was probed by putting a
+# 2.3.0-metadata jar on each compiler's classpath — rather than inferred from version numbers.
+#
+# AGP does not move with it. The Kotlin Gradle plugin declares its own AGP floor (8.2.2 for this
+# version) and has no "AGP too new" check at all, so 8.7.2 clears it.
+#
+# This is the one change in its commit, deliberately: the Compose compiler plugin's version is
+# derived from this line, and nothing in the local harness can run that plugin. CI is the only
+# instrument that can answer, so it is asked exactly one question.
+kotlin = "2.3.21"
 coreKtx = "1.13.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
