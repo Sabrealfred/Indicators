@@ -12,11 +12,11 @@ import org.junit.Test
 /**
  * The half of the on-device brain that can be checked without a phone.
  *
- * [OnDeviceMindClient] cannot be compiled here — it imports `com.google.ai.edge.litertlm` and
- * `androidx.lifecycle`, and neither resolves in this harness — so everything that could be wrong
- * without a device was pushed across into [OnDeviceWire], and this is the suite that holds it.
- * What is left in the engine class is lifetime and ownership, which needs a real Android runtime
- * to mean anything at all.
+ * There is no engine class in the tree right now: the one that existed imported
+ * `com.google.ai.edge.litertlm`, and that library needs a newer Kotlin than this project compiles
+ * with, so it was taken back out. What survives is the half that never needed a phone — building
+ * the prompt and reading the answer — and this is the suite that holds it. Whatever engine
+ * eventually runs underneath, this part is already decided and already checked.
  */
 class OnDeviceWireTest {
 

@@ -7,10 +7,12 @@ import com.neopal.pet.domain.PetBrief
 /**
  * What is handed to a model running on the handset, and what is made of what comes back.
  *
- * This is a separate file from [OnDeviceMindClient] for one reason, and it is the reason
+ * This is a separate file from the engine for one reason, and it is the reason
  * `RemoteMindClient.kt` has no Android imports either: **this file compiles here.** There is no
  * Android SDK in this project's local harness and `com.google.ai.edge.litertlm` cannot be resolved
- * from it, so anything in the same file as the engine is checked by nothing until CI. Everything
+ * from it, so anything in the same file as the engine is checked by nothing until CI. That
+ * separation earned itself immediately: the engine was reverted when the library turned out to
+ * need a newer Kotlin than this project compiles with, and this file did not move. Everything
  * that could be got wrong without a device — how much of a conversation goes into the prompt, what
  * happens to the player's own words on the way in, what happens to the model's on the way out —
  * lives on this side of that line and has a test suite.
