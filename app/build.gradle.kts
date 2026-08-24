@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -70,10 +72,6 @@ android {
         isCoreLibraryDesugaringEnabled = false
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
     }
@@ -100,6 +98,20 @@ android {
             // test in this project touches `android.*` at all.
             isReturnDefaultValues = true
         }
+    }
+}
+
+// Replaces `android { kotlinOptions { jvmTarget = "17" } }`, which the Kotlin Gradle plugin no
+// longer merely deprecates — from this version the String setter is an *error*, so the build
+// script itself stops compiling and no task is ever scheduled. That is what the first attempt at
+// this upgrade hit, in 24 seconds, before touching a line of Kotlin source.
+//
+// Worth recording because the diagnosis in hand was wrong: the risk everyone expected was the
+// Compose compiler plugin moving against a frozen compose runtime. The plugins resolved and
+// loaded without complaint. It was a two-line DSL migration in this file.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
