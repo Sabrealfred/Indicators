@@ -255,17 +255,31 @@ object Missions {
 
         val fresh = state.copy(dayLedger = DayLedger.of(state, today), claimedMissionIds = emptySet())
 
-        // Anything but a step of exactly one day has no "yesterday" to grade. A forward jump
-        // means the player was not there for those days, and grading them against a ledger that
-        // is stale by definition would either hand out a perfect day for an absence or punish a
-        // save upgraded from a build that had no ledger at all. A backward jump means a new
-        // generation reset the age, which is a fresh start, not a failed day.
-        if (today != ledger.dayIndex + 1) {
+        // A forward jump of more than a day has no "yesterday" to grade: the player was not there
+        // for those days, and grading them against a ledger that is stale by definition would
+        // either hand out a perfect day for an absence or punish a save upgraded from a build
+        // that had no ledger at all. That is a design decision, and the streak goes.
+        if (today > ledger.dayIndex + 1) {
             if (state.careStreakDays > 0) {
                 events += GameEvent.Message("Streak lost after ${state.careStreakDays} days.")
             }
             return fresh.copy(careStreakDays = 0)
         }
+
+        // A jump *backwards* is not an absence, and cannot be: nobody is away for negative time.
+        // It is the age counter starting over -- a new generation hatching at zero, or a day
+        // length that grew under a pet that did not age. Both were being read as a skipped day,
+        // so the player was told "Streak lost" at a funeral and the streak was taken.
+        //
+        // Which made this a fight between two places. `Simulation.nextGeneration` carries
+        // `careStreakDays` over on purpose, because the streak counts days the *player* showed
+        // up and a funeral is not a day skipped -- and then the next roll-over quietly undid it.
+        // The message was the only part of that the player could see.
+        //
+        // The day is re-labelled onto the new clock and nothing is graded: no message, no reset,
+        // and equally no bonus. Not grading a day has to mean not grading it in either direction,
+        // or re-basing the ledger becomes a way to collect a perfect day that was never lived.
+        if (today < ledger.dayIndex) return fresh
 
         val perfect = allComplete(state)
         val streak = if (perfect) state.careStreakDays + 1 else 0
