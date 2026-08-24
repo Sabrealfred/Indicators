@@ -18,13 +18,7 @@ import com.neopal.pet.domain.PublishedBuild
 import com.neopal.pet.domain.ReleaseAsset
 import com.neopal.pet.domain.UpdateVerdict
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,8 +37,6 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
-import java.security.MessageDigest
-import kotlin.coroutines.coroutineContext
 
 /**
  * Updating the game from inside the game.
@@ -434,26 +426,14 @@ class UpdateService(
         val part = partFile(build)
         runCatching { part.delete() }
 
-        // Tracks whichever connection is currently open, redirect hops included. A blocked
-        // socket does not notice a cancelled coroutine; closing it underneath is the one thing
-        // that does, and the hand-off has to be armed *before* the first connect.
-        //
-        // Deliberately a child coroutine parked in `awaitCancellation` rather than the obvious
-        // `Job.invokeOnCompletion`, and this cost a test to find: a completion handler runs when
-        // the job *completes*, and a job whose body is stuck in a socket read has not completed —
-        // it is merely cancelling. The handler therefore fired only after the read gave up on its
-        // own fifteen-second timeout, which for a button marked "cancel" is indistinguishable
-        // from nothing happening. A cancelled child, by contrast, resumes at once.
-        var live: HttpURLConnection? = null
-        val closer = CoroutineScope(coroutineContext).launch(start = CoroutineStart.UNDISPATCHED) {
-            try {
-                awaitCancellation()
-            } finally {
-                runCatching { live?.disconnect() }
-            }
-        }
+        // Tracks whichever connection is currently open, redirect hops included, so that a
+        // cancellation can close the socket a blocked read is sitting on. The reasoning for the
+        // shape of it is at [armDisconnectOnCancel], which is where it now lives: the model
+        // downloader needs exactly the same hand-off, and it is not a thing to have two of.
+        val live = LiveConnection()
+        val closer = armDisconnectOnCancel(live)
         return try {
-            val opened = openAsset(offer.downloadUrl) { live = it }
+            val opened = openAsset(offer.downloadUrl) { live.connection = it }
             val http = when (opened) {
                 is Opened.Failed -> return ApkFetch.Failed(opened.reason)
                 is Opened.Ready -> opened.connection
@@ -466,39 +446,32 @@ class UpdateService(
                 return ApkFetch.Failed(DownloadFailure.SIZE_MISMATCH)
             }
 
-            val digest = MessageDigest.getInstance("SHA-256")
+            val digest = HttpDownload.newSha256()
             var written = 0L
-            var announced = 0L
-            val buffer = ByteArray(DOWNLOAD_CHUNK)
 
             http.inputStream.use { input ->
                 FileOutputStream(part).use { out ->
-                    while (true) {
-                        coroutineContext.ensureActive()
-                        val read = input.read(buffer)
-                        if (read < 0) break
-                        if (written + read > build.sizeBytes) {
-                            // More bytes than the release says exist. Stop rather than fill the
-                            // disk finding out how many there are.
-                            //
-                            // Only reachable on a chunked response, since a declared length is
-                            // checked above and HttpURLConnection stops at it — which also means
-                            // this is the one branch here no test drives.
+                    val pumped = HttpDownload.pump(
+                        input = input,
+                        out = out,
+                        digest = digest,
+                        startedAt = 0L,
+                        // More bytes than the release says exist means stop, rather than fill the
+                        // disk finding out how many there are.
+                        limit = build.sizeBytes,
+                        chunkBytes = DOWNLOAD_CHUNK,
+                        progressStepBytes = PROGRESS_STEP_BYTES,
+                        onProgress = { done ->
+                            statusFlow.value = UpdateStatus.Downloading(offer, done, build.sizeBytes)
+                        },
+                    )
+                    when (pumped) {
+                        is HttpPump.TooLong -> {
                             runCatching { part.delete() }
                             return ApkFetch.Failed(DownloadFailure.SIZE_MISMATCH)
                         }
-                        out.write(buffer, 0, read)
-                        digest.update(buffer, 0, read)
-                        written += read
-                        if (written - announced >= PROGRESS_STEP_BYTES) {
-                            announced = written
-                            statusFlow.value = UpdateStatus.Downloading(offer, written, build.sizeBytes)
-                        }
+                        is HttpPump.Wrote -> written = pumped.total
                     }
-                    out.flush()
-                    // Rename below is what makes the file installable, so it must not be able to
-                    // name a buffer that never reached the disk.
-                    runCatching { out.fd.sync() }
                 }
             }
 
@@ -509,7 +482,7 @@ class UpdateService(
                 runCatching { part.delete() }
                 return ApkFetch.Failed(DownloadFailure.INTERRUPTED)
             }
-            if (digest.digest().toHex() != build.sha256) {
+            if (digest.digest().toHexString() != build.sha256) {
                 runCatching { part.delete() }
                 return ApkFetch.Failed(DownloadFailure.CORRUPT)
             }
@@ -536,7 +509,7 @@ class UpdateService(
             ApkFetch.Failed(DownloadFailure.NETWORK)
         } finally {
             closer.cancel()
-            runCatching { live?.disconnect() }
+            live.disconnect()
         }
     }
 
@@ -548,54 +521,47 @@ class UpdateService(
     /**
      * Opens the asset, following GitHub's redirect to whichever bucket is serving today.
      *
-     * Redirects are followed by hand rather than by [HttpURLConnection], for two reasons: the
-     * built-in follower refuses to cross between http and https and would simply stop, and it
-     * never shows the caller where it went. Every hop is re-checked against
-     * [AppVersion.isTrustedReleaseUrl], because a redirect is the natural place for an update
-     * flow to be walked off the release page.
-     *
-     * [onOpen] is handed each connection as it is created, so that a cancellation arriving during
-     * the redirect chain has something to close.
+     * The walking of the redirect chain — and the re-check of every hop against
+     * [AppVersion.isTrustedReleaseUrl] — is [HttpDownload.open]; what stays here is the part that
+     * is the updater's own, which is what each status code *means*. A 404 is "the release moved
+     * on, check again" here and something else entirely next door, and that difference is why the
+     * shared opener hands back the code rather than a verdict.
      */
     private fun openAsset(startUrl: String, onOpen: (HttpURLConnection) -> Unit): Opened {
-        var url = startUrl
-        var hops = 0
-        while (true) {
-            if (!AppVersion.isTrustedReleaseUrl(url)) return Opened.Failed(DownloadFailure.UNTRUSTED_REDIRECT)
-            val http = URL(url).openConnection() as? HttpURLConnection
-                ?: return Opened.Failed(DownloadFailure.NETWORK)
-            onOpen(http)
-            http.requestMethod = "GET"
-            http.connectTimeout = SOCKET_TIMEOUT_MILLIS
-            http.readTimeout = SOCKET_TIMEOUT_MILLIS
-            http.instanceFollowRedirects = false
-            http.setRequestProperty("Accept", "application/octet-stream")
-            http.setRequestProperty("User-Agent", USER_AGENT)
-
-            val code = http.responseCode
-            if (code in 300..399) {
-                val location = http.getHeaderField("Location")
-                runCatching { http.disconnect() }
-                if (location.isNullOrEmpty()) return Opened.Failed(DownloadFailure.SERVER_ERROR)
-                if (++hops > MAX_REDIRECTS) return Opened.Failed(DownloadFailure.UNTRUSTED_REDIRECT)
-                // Resolved against the current URL, because a Location header is allowed to be
-                // relative even when GitHub's never is.
-                url = runCatching { URL(URL(url), location).toString() }.getOrNull()
-                    ?: return Opened.Failed(DownloadFailure.UNTRUSTED_REDIRECT)
-                continue
-            }
-            if (code == 404 || code == 410) {
-                runCatching { http.disconnect() }
-                return Opened.Failed(DownloadFailure.ASSET_GONE)
-            }
-            if (code !in 200..299) {
-                runCatching { http.disconnect() }
-                return Opened.Failed(
-                    if (code in 500..599) DownloadFailure.SERVER_ERROR else DownloadFailure.REFUSED,
-                )
-            }
-            return Opened.Ready(http)
+        val opened = HttpDownload.open(
+            startUrl = startUrl,
+            trusted = AppVersion::isTrustedReleaseUrl,
+            headers = mapOf(
+                "Accept" to "application/octet-stream",
+                "User-Agent" to USER_AGENT,
+            ),
+            connectTimeoutMillis = SOCKET_TIMEOUT_MILLIS,
+            readTimeoutMillis = SOCKET_TIMEOUT_MILLIS,
+            maxRedirects = MAX_REDIRECTS,
+            onOpen = onOpen,
+        )
+        val answer = when (opened) {
+            is HttpOpen.Failed -> return Opened.Failed(
+                when (opened.reason) {
+                    HttpOpenFailure.NETWORK -> DownloadFailure.NETWORK
+                    HttpOpenFailure.UNTRUSTED_REDIRECT -> DownloadFailure.UNTRUSTED_REDIRECT
+                    HttpOpenFailure.NO_LOCATION -> DownloadFailure.SERVER_ERROR
+                },
+            )
+            is HttpOpen.Answered -> opened
         }
+        val code = answer.code
+        if (code == 404 || code == 410) {
+            runCatching { answer.connection.disconnect() }
+            return Opened.Failed(DownloadFailure.ASSET_GONE)
+        }
+        if (code !in 200..299) {
+            runCatching { answer.connection.disconnect() }
+            return Opened.Failed(
+                if (code in 500..599) DownloadFailure.SERVER_ERROR else DownloadFailure.REFUSED,
+            )
+        }
+        return Opened.Ready(answer.connection)
     }
 
     // ------------------------------------------------------------------ what came down
@@ -728,28 +694,8 @@ class UpdateService(
         return out.toString()
     }
 
-    private fun digestOf(file: File): String? = runCatching {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val buffer = ByteArray(DOWNLOAD_CHUNK)
-        file.inputStream().use { stream ->
-            while (true) {
-                val read = stream.read(buffer)
-                if (read < 0) break
-                digest.update(buffer, 0, read)
-            }
-        }
-        digest.digest().toHex()
-    }.getOrNull()
-
-    private fun ByteArray.toHex(): String {
-        val chars = CharArray(size * 2)
-        for (index in indices) {
-            val value = this[index].toInt() and 0xFF
-            chars[index * 2] = HEX[value ushr 4]
-            chars[index * 2 + 1] = HEX[value and 0x0F]
-        }
-        return String(chars)
-    }
+    /** The whole file's SHA-256, or null if it could not be read. Shared with the model store. */
+    private suspend fun digestOf(file: File): String? = HttpDownload.sha256Of(file)
 
     companion object {
         /** Where the rolling debug build lives. Change these two if the repository moves. */
@@ -781,7 +727,6 @@ class UpdateService(
         private const val PROGRESS_STEP_BYTES = 128L * 1024L
         private const val INSTALL_HEADROOM_BYTES = 32L * 1024L * 1024L
 
-        private const val HEX = "0123456789abcdef"
 
         private const val DIFFERENT_KEY_CAUTION =
             "This build was signed with a different key from the copy you have installed, so " +
