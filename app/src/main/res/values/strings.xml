@@ -78,4 +78,158 @@
     <string name="album_empty_body">Every evolution files itself here on its own. For everything in between, hold your finger on %1$s and the moment gets kept.</string>
     <string name="album_caption">%1$s · %2$s</string>
     <string name="cd_album_card">Photo: %1$s. %2$s, %3$s.</string>
+
+    <!-- Shared: quoting the creature's own line. The marks are chrome, the line inside them
+         is content. A locale that quotes with guillemets changes this resource and never
+         touches a diary entry. -->
+
+    <string name="quoted_line">“%1$s”</string>
+
+    <!-- Boot screen. The wordmark NEOPAL is deliberately not here: it is the mark, not copy. -->
+    <string name="boot_start">Start</string>
+    <string name="boot_tagline">VIRTUAL PET SYSTEM</string>
+    <string name="boot_tap_to_start">TAP TO START</string>
+    <string name="boot_loading">LOADING...</string>
+
+    <!-- Chronicle / diary screen -->
+    <string name="chronicle_title">DIARY</string>
+    <string name="chronicle_subtitle">%1$s\'s own words · %2$d entries</string>
+    <string name="chronicle_empty_title">The first page is blank</string>
+    <string name="chronicle_empty_body">%1$s writes this itself — the good days and the ones where nobody came. Give it a life worth writing about.</string>
+    <string name="chronicle_day">Day %1$d</string>
+
+    <!-- Memorial screen -->
+    <string name="memorial_title">IN MEMORY</string>
+    <string name="memorial_cause_unknown">Gone</string>
+    <string name="memorial_lived">Lived %1$d days as a %2$s, %3$s to the end.</string>
+    <string name="memorial_tally">%1$d meals shared · %2$d games won · %3$d pictures kept</string>
+    <string name="memorial_read_diary">Read the diary</string>
+    <string name="memorial_next_generation">When you\'re ready: generation %1$d</string>
+    <string name="memorial_stay">Stay a moment</string>
+
+    <!-- Update screen -->
+    <string name="update_title">UPDATE</string>
+    <string name="update_how_title">How this works</string>
+    <string name="update_how_source">NeoPal is not on a store. Every push builds an APK and attaches it to one rolling pre-release on the project\'s own GitHub page, and that page is the only place this screen will fetch from — a release that points its download anywhere else is left alone rather than followed.</string>
+    <string name="update_how_verified">A downloaded build is checked against the checksum on the release page and opened to confirm it really is NeoPal, and the version it claims to be, before it is ever offered for installing. Android then asks you to confirm the install itself — nothing here can install anything on its own.</string>
+    <string name="update_how_cached">The download lives in this app\'s cache, so Android may clear it to make room. If it does, the updater notices and offers to fetch it again.</string>
+
+    <!-- On-device model panel -->
+    <string name="model_panel_title">The brain on this device</string>
+
+    <!-- Shared value formats -->
+    <string name="percent_value">%1$d%%</string>
+    <string name="cd_percent_value">%1$d percent</string>
+    <string name="cd_minutes_value">%1$d minutes</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">SETTINGS</string>
+
+    <string name="settings_look">Look</string>
+    <string name="settings_look_blurb">How the pet and the room are drawn on screen.</string>
+    <string name="settings_pixel_mode">Pixel-art mode</string>
+    <string name="settings_detail_hint">Detail — lower is chunkier and more retro.</string>
+    <string name="settings_pixel_preset_chunky">Chunky</string>
+    <string name="settings_pixel_preset_classic">Classic</string>
+    <string name="settings_pixel_preset_fine">Fine</string>
+    <string name="settings_pixel_preset_crisp">Crisp</string>
+    <string name="settings_buffer_hint">%1$dpx tall buffer, upscaled with hard edges.</string>
+    <string name="settings_screen_hint">Screen — which machine you are pretending to hold.</string>
+    <string name="settings_reduced_motion">Reduced motion</string>
+
+    <string name="settings_sound">Sound and feel</string>
+    <string name="settings_sound_blurb">Audio and vibration feedback for taps, meals and games.</string>
+    <string name="settings_sound_effects">Sound effects</string>
+    <string name="settings_volume">Volume</string>
+    <string name="settings_haptics">Haptics</string>
+
+    <string name="settings_brain">The creature\'s brain</string>
+    <string name="settings_brain_blurb">Off by default. Everything else in NeoPal works with no network at all, and nothing here is needed to play — this only lets the creature talk back and think out loud.</string>
+    <string name="settings_brain_enable">Give it somewhere to think</string>
+    <string name="settings_route">Route: %1$s</string>
+    <string name="settings_own_key">Your own key (optional)</string>
+    <string name="settings_own_key_placeholder">Leave empty to use the shared service</string>
+    <string name="settings_own_key_hint">Stored on this device and sent only to the address below. It is never put into anything the creature says, and never written to the save\'s diary.</string>
+    <string name="settings_endpoint">Endpoint</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_model_hint">The default is a free model, so trying this costs nothing.</string>
+    <string name="settings_quick_model">Quick model (optional)</string>
+    <string name="settings_quick_model_placeholder">A smaller model, for deciding only</string>
+    <string name="settings_split_models">Deciding goes to %1$s; talking, planning and remembering go to %2$s.</string>
+    <string name="settings_split_models_hint">Deciding runs many times an hour and only has to pick from a list the game already checked. Sending it somewhere small leaves the quota for talking and planning, which is where a big model shows.</string>
+    <string name="settings_shared_service">Shared service (optional)</string>
+    <string name="settings_shared_service_placeholder">Used when no key of your own is set</string>
+    <string name="settings_let_it_talk">Let it talk</string>
+    <string name="settings_let_it_choose">Let it choose what to do</string>
+    <string name="settings_let_it_teach">Let it draw lessons for its children</string>
+    <string name="settings_let_it_teach_hint">Children inherit lessons from their parent\'s life whether this is on or off. This only changes who words them.</string>
+
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_reminders_blurb">Whether NeoPal nudges you when a need runs low.</string>
+
+    <string name="settings_finish">Finish</string>
+    <string name="settings_finish_blurb">How soft the picture is, and how much atmosphere sits over it.</string>
+    <string name="settings_softness">Pixel softness</string>
+    <string name="settings_softness_value">Pixel softness %1$d%%</string>
+    <string name="settings_softness_hint">At zero the blocks are razor-hard. Higher lets light bleed a pixel past an edge, which takes the glare off without blurring the art.</string>
+    <string name="settings_atmosphere">Atmosphere</string>
+    <string name="settings_atmosphere_value">Atmosphere %1$d%%</string>
+    <string name="settings_atmosphere_hint">Warm light by day, cool by night, and a soft vignette around the room.</string>
+
+    <string name="settings_pace">Pace</string>
+    <string name="settings_pace_blurb">How long a whole life takes, and how fast the clock runs.</string>
+    <string name="settings_lifetime">A full life takes about %1$.1f hours of real time.</string>
+    <string name="settings_pace_slow">Slow</string>
+    <string name="settings_pace_normal">Normal</string>
+    <string name="settings_pace_fast">Fast</string>
+    <string name="settings_pace_demo">Demo</string>
+    <string name="settings_clock">Clock: one pet day lasts %1$d minutes.</string>
+    <string name="settings_minutes_per_day">Minutes per pet day</string>
+    <string name="settings_clock_hint">The clock only sets day, night and the day counter. Time away is simulated at %1$d%% speed and capped at %2$d hours, and absence alone will never kill a healthy pet — only illness you left untreated can.</string>
+
+    <string name="settings_help">Help</string>
+    <string name="settings_help_blurb">The first-run coach marks that explain the room.</string>
+    <string name="settings_replay_tips">Replay the tips</string>
+    <string name="settings_replay_tips_done">The tips will show again next time you open the room.</string>
+
+    <string name="settings_save_data">Save data</string>
+    <string name="settings_save_data_blurb">Move this pet between devices, or restore an older copy.</string>
+    <string name="settings_export">Export</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_paste_save">Paste a save here</string>
+    <string name="settings_save_copied">Save copied to the clipboard.</string>
+    <string name="settings_save_imported">Save imported.</string>
+    <string name="settings_save_unreadable">That save could not be read.</string>
+
+    <string name="settings_updates">App updates</string>
+    <string name="settings_updates_blurb">Where new builds come from, and whether there is one.</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_updates_hint">NeoPal installs from its own release page rather than a store, so it does not update itself in the background. Nothing is downloaded or installed without you asking for it.</string>
+
+    <string name="settings_danger">Danger zone</string>
+    <string name="settings_danger_blurb">Ends this pet\'s life and starts a fresh save.</string>
+    <string name="settings_delete_save">Delete save and start over</string>
+    <string name="settings_delete_confirm_title">Delete this pet?</string>
+    <string name="settings_delete_confirm_body">The save, the album and every unlock are erased. This cannot be undone.</string>
+    <string name="settings_colophon">NeoPal is an original virtual pet. All art is drawn procedurally in code; the console styling is a generic handheld design and carries no third-party branding.</string>
+
+    <!-- Voice panel, inside settings -->
+    <string name="voice_title">Its voice</string>
+    <string name="voice_blurb">Silent both ways until you say otherwise. Speaking uses the voice already on this phone and needs no network; listening needs the microphone, and is asked for the first time you reach for it rather than now.</string>
+    <string name="voice_let_it_speak">Let it speak aloud</string>
+    <string name="voice_read_replies">Read its replies aloud</string>
+    <string name="voice_read_replies_hint">Replies are the only thing read out today. Its diary and its decisions are written where they happen and stay on the page.</string>
+    <string name="voice_volume">Speaking volume</string>
+    <string name="voice_descriptor">%1$s sounds %2$s — its age, its temperament and what it was bred from, not a setting.</string>
+    <string name="voice_hear_it">HEAR IT</string>
+    <string name="cd_voice_preview">Hear %1$s say something.</string>
+    <string name="voice_let_it_listen">Let it listen when you talk</string>
+    <string name="voice_listen_no_recogniser">This device has no speech recognition, so there is nothing to switch on. Typing to it works exactly as well.</string>
+    <string name="voice_listen_off">Off. The talking screen shows no microphone at all while this is.</string>
+    <string name="voice_listen_granted">The microphone is granted. It opens when you press speak on the talking screen and closes as soon as you stop talking, and what it hears goes into the message box for you to read before anything is sent.</string>
+    <string name="voice_listen_unasked">The microphone has not been asked for. It is asked the first time you press speak on the talking screen, and refusing is a complete answer — the keyboard is not a fallback, it is the way in.</string>
+    <string name="voice_on_device">Keep recognition on this phone</string>
+    <string name="voice_on_device_hint">A request, not a promise. With it on, a phone that has an on-device recogniser uses it and nothing you say leaves the handset. Without one, the system\'s own speech service handles the audio under its own policy — this app never receives it either way.</string>
 </resources>

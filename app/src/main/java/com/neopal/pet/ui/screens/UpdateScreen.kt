@@ -30,9 +30,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import com.neopal.pet.R
 import com.neopal.pet.data.UpdateStatus
 import com.neopal.pet.domain.UpdateTone
 import com.neopal.pet.ui.UpdateViewModel
@@ -97,12 +99,12 @@ fun UpdateScreen(viewModel: UpdateViewModel, onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.nav_back),
                     tint = MaterialTheme.colorScheme.onBackground,
                 )
             }
             Text(
-                "UPDATE",
+                stringResource(R.string.update_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
@@ -207,30 +209,23 @@ fun UpdateScreen(viewModel: UpdateViewModel, onBack: () -> Unit) {
         PixelPanel(
             modifier = Modifier.fillMaxWidth(),
             accent = NeoAccents.cyan,
-            title = "How this works",
+            title = stringResource(R.string.update_how_title),
             contentPadding = PaddingValues(pixelUnits(3)),
         ) {
             Text(
-                "NeoPal is not on a store. Every push builds an APK and attaches it to one " +
-                    "rolling pre-release on the project's own GitHub page, and that page is the " +
-                    "only place this screen will fetch from — a release that points its download " +
-                    "anywhere else is left alone rather than followed.",
+                stringResource(R.string.update_how_source),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(2)))
             Text(
-                "A downloaded build is checked against the checksum on the release page and " +
-                    "opened to confirm it really is NeoPal, and the version it claims to be, " +
-                    "before it is ever offered for installing. Android then asks you to confirm " +
-                    "the install itself — nothing here can install anything on its own.",
+                stringResource(R.string.update_how_verified),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(2)))
             Text(
-                "The download lives in this app's cache, so Android may clear it to make room. " +
-                    "If it does, the updater notices and offers to fetch it again.",
+                stringResource(R.string.update_how_cached),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -22,6 +22,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.neopal.pet.R
 import com.neopal.pet.data.ModelDownloads
 import com.neopal.pet.data.ModelFetchStatus
 import com.neopal.pet.data.ModelStore
@@ -111,7 +113,7 @@ fun ModelStoragePanel(modifier: Modifier = Modifier) {
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = accent,
-        title = "The brain on this device",
+        title = stringResource(R.string.model_panel_title),
         contentPadding = PaddingValues(pixelUnits(3)),
     ) {
         Text(

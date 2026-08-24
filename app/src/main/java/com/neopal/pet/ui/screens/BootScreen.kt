@@ -34,8 +34,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
@@ -93,7 +95,7 @@ fun BootScreen(
             // Edge to edge: keep the content out of the status and gesture bars. The
             // background is applied first on purpose, so it still bleeds under them.
             .windowInsetsPadding(WindowInsets.safeDrawing)
-            .clickable(enabled = ready, onClickLabel = "Start") { onContinue(hasSave) },
+            .clickable(enabled = ready, onClickLabel = stringResource(R.string.boot_start)) { onContinue(hasSave) },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -127,7 +129,7 @@ fun BootScreen(
                 color = NeoColors.OnDark,
             )
             Text(
-                text = "VIRTUAL PET SYSTEM",
+                text = stringResource(R.string.boot_tagline),
                 style = MaterialTheme.typography.labelMedium,
                 color = NeoColors.NeonCyan.copy(alpha = glow),
             )
@@ -143,7 +145,7 @@ fun BootScreen(
                 contentPadding = PaddingValues(horizontal = pixelUnits(4), vertical = pixelUnits(2)),
             ) {
                 Text(
-                    text = if (ready) "TAP TO START" else "LOADING...",
+                    text = stringResource(if (ready) R.string.boot_tap_to_start else R.string.boot_loading),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (ready) NeoColors.OnDark else NeoColors.OnDarkMuted,
                     textAlign = TextAlign.Center,

@@ -34,11 +34,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.domain.Lore
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.components.MinTouchTarget
@@ -92,7 +94,7 @@ fun MemorialScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(pixelUnits(5)))
-        Text("IN MEMORY", style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDarkMuted)
+        Text(stringResource(R.string.memorial_title), style = MaterialTheme.typography.labelMedium, color = NeoColors.OnDarkMuted)
         Text(pet.name.uppercase(), style = MaterialTheme.typography.displayLarge, color = NeoColors.OnDark)
 
         Box(
@@ -138,14 +140,18 @@ fun MemorialScreen(
         }
 
         Text(
-            text = pet.deathReason?.displayName ?: "Gone",
+            text = pet.deathReason?.displayName ?: stringResource(R.string.memorial_cause_unknown),
             style = MaterialTheme.typography.headlineMedium,
             color = NeoColors.NeonRed,
         )
         Spacer(Modifier.height(pixelUnits(3)))
         Text(
-            text = "Lived ${pet.ageInPetDays(config)} days as a ${pet.stage.displayName}, " +
-                "${pet.branch.displayName.lowercase()} to the end.",
+            text = stringResource(
+                R.string.memorial_lived,
+                pet.ageInPetDays(config),
+                pet.stage.displayName,
+                pet.branch.displayName.lowercase(),
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = NeoColors.OnDarkMuted,
             textAlign = TextAlign.Center,
@@ -164,7 +170,7 @@ fun MemorialScreen(
                 contentPadding = PaddingValues(horizontal = pixelUnits(5), vertical = pixelUnits(4)),
             ) {
                 Text(
-                    text = "“${last.text}”",
+                    text = stringResource(R.string.quoted_line, last.text),
                     style = MaterialTheme.typography.bodyMedium,
                     fontStyle = FontStyle.Italic,
                     color = NeoColors.OnDark,
@@ -189,7 +195,7 @@ fun MemorialScreen(
             Spacer(Modifier.height(pixelUnits(2)))
         }
         Text(
-            text = "${pet.mealsEaten} meals shared · ${pet.gamesWon} games won · ${pet.album.size} pictures kept",
+            text = stringResource(R.string.memorial_tally, pet.mealsEaten, pet.gamesWon, pet.album.size),
             style = MaterialTheme.typography.labelSmall,
             color = NeoColors.OnDarkMuted,
             textAlign = TextAlign.Center,
@@ -209,7 +215,7 @@ fun MemorialScreen(
                 fill = NeoColors.SurfaceCard,
                 background = MemorialDeep,
             ) {
-                Text("Read the diary", style = MaterialTheme.typography.titleSmall, color = NeoColors.OnDark, maxLines = 1)
+                Text(stringResource(R.string.memorial_read_diary), style = MaterialTheme.typography.titleSmall, color = NeoColors.OnDark, maxLines = 1)
             }
             PixelButton(
                 onClick = onStartNextGeneration,
@@ -221,7 +227,7 @@ fun MemorialScreen(
                 background = MemorialDeep,
             ) {
                 Text(
-                    "When you're ready: generation ${pet.generation + 1}",
+                    stringResource(R.string.memorial_next_generation, pet.generation + 1),
                     style = MaterialTheme.typography.bodyMedium,
                     color = NeoColors.OnDark,
                     textAlign = TextAlign.Center,
@@ -237,7 +243,7 @@ fun MemorialScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "Stay a moment",
+                    text = stringResource(R.string.memorial_stay),
                     style = MaterialTheme.typography.labelSmall,
                     color = NeoColors.OnDarkMuted,
                     textAlign = TextAlign.Center,
