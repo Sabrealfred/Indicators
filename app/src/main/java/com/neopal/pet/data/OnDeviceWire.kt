@@ -28,18 +28,23 @@ import com.neopal.pet.domain.PetBrief
  * ---- what is different, and why -----------------------------------------------------------
  *
  * The remote route sends the conversation as *actual* chat messages with roles, because that is
- * the shape of the endpoint. This one sends a single block of text. That is not a simplification
- * for its own sake: the multi-message form needs `ConversationConfig(systemInstruction = …)` and
- * `initialMessages`, and this project pins `litertlm-android` to a version whose parameter list
- * could not be read from here. The design document is explicit that a plausible-looking signature
- * that does not exist is how this project's builds have gone red, so the surface used is the
- * smallest one that was actually verified — `createConversation()` with no arguments and
- * `sendMessage(text)`.
+ * the shape of the endpoint. This one sends a single block of text through
+ * `createConversation()` and `sendMessage(text)`.
  *
- * Which makes [MindWire.flatten] load-bearing rather than tidy. The turns below are written as
+ * The multi-message form does exist at the pinned version — `ConversationConfig(systemInstruction,
+ * initialMessages)` was read at the tag rather than assumed — so this is a choice and the trade
+ * should be stated rather than dressed up as a limit. Against it: `Contents`, `Message.user`,
+ * `Message.model` and two more constructor parameters are four more pieces of a surface this
+ * project cannot compile against locally, for a prompt whose quality nobody here can measure. For
+ * it, and it is the better argument: real turns make forging the scaffolding *impossible* rather
+ * than *defended against*. If someone with a handset is improving this, that is the change to
+ * make, and this comment is the reason it was not made blind.
+ *
+ * Until then [MindWire.flatten] is load-bearing rather than tidy. The turns below are written as
  * labelled lines inside one prompt, so a newline in a turn would let the player — or the model's
  * own previous answer — forge a line of this scaffolding that is indistinguishable from a real
- * one. Collapsing whitespace removes the only tool that attack has.
+ * one. Collapsing whitespace removes the only tool that attack has, and it is the same defence
+ * the remote route already relies on for `Decision.reason` and `Lesson.text`.
  */
 internal object OnDeviceWire {
 

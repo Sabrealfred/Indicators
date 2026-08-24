@@ -392,10 +392,16 @@ class OnDeviceMindClient(
      *  - `Backend.GPU`. It needs two `uses-native-library` entries in the manifest, it fails in
      *    ways that depend on the driver, and no measurement exists saying it is faster for a
      *    creature that speaks two lines. CPU first; GPU is a decision for whoever has a phone.
-     *  - `ConversationConfig(systemInstruction = …)`, which would let the character sheet be a
-     *    real system turn instead of the top of a text block. It is the nicer prompt and it is
-     *    also a parameter list that could not be checked against the pinned version. [OnDeviceWire]
-     *    documents what it does instead.
+     *  - `ConversationConfig(systemInstruction = …)` with `initialMessages`, which would let the
+     *    character sheet and the transcript be real turns instead of the top of a text block. That
+     *    one exists at the pinned version — it was checked — so this is a choice rather than a
+     *    limit, and [OnDeviceWire] states the trade honestly.
+     *
+     * `Backend.CPU`'s parameter is named `numOfThreads` and not `threadCount`, and the difference
+     * is not cosmetic: `threadCount` was introduced later and does not exist at the pinned
+     * version, where naming it is a compile error. It is the exact failure this project keeps
+     * having — a signature that is real in *a* version and not in *this* one — caught by reading
+     * the pinned tag rather than the newest source.
      *
      * [EngineConfig.cacheDir] *is* used, and points at the system cache. That is not a
      * contradiction of §5 of the design, which insists the weights live on permanent private
@@ -411,7 +417,7 @@ class OnDeviceMindClient(
             val built = Engine(
                 EngineConfig(
                     modelPath = modelPath,
-                    backend = Backend.CPU(threadCount = threadCount()),
+                    backend = Backend.CPU(numOfThreads = threadCount()),
                     maxNumTokens = config.contextTokens,
                     cacheDir = engineCacheDir()?.absolutePath,
                 ),
