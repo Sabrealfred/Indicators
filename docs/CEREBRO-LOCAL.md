@@ -12,10 +12,22 @@ haya internet pueda usar el grande. El presupuesto declarado es de hasta 5 GB de
 Cinco gigas de disco es holgado. **La RAM es lo que decide**, y es un número mucho más pequeño y
 mucho menos negociable:
 
-| | Parámetros efectivos | Disco (int4 QAT) | RAM en ejecución | Teléfono mínimo |
+| Modelo | Fichero `.litertlm` | Tamaño exacto | | RAM de dispositivo que Google exige |
 |---|---|---|---|---|
-| Gemma 4 **E2B** | ~2,3 B | ~1,3 GB | 2–3 GB | prácticamente cualquiera desde 2022 |
-| Gemma 4 **E4B** | ~4,5 B | ~3 GB | ~5 GB | gama alta reciente, 8 GB de RAM |
+| **Gemma 3 1B-IT** int4 | `gemma3-1b-it-int4.litertlm` | 584.417.280 B | 557 MiB | **6 GB** |
+| **Gemma 4 E2B-it** | `gemma-4-E2B-it.litertlm` | 2.588.147.712 B | 2,41 GiB | **8 GB** |
+| **Gemma 4 E4B-it** | `gemma-4-E4B-it.litertlm` | 3.659.530.240 B | 3,41 GiB | **12 GB** |
+
+> Estas cifras salen de la lista de modelos que la propia app de Google publica
+> (`google-ai-edge/gallery`, `model_allowlists/1_0_19.json`), donde `sizeInBytes` es el tamaño
+> exacto del fichero y `minDeviceMemoryInGb` es el suelo de RAM que Google declara.
+>
+> **Corrección.** La primera versión de este documento decía que E2B pesaba ~1,3 GB y corría en
+> «prácticamente cualquier teléfono desde 2022». Las dos cosas eran falsas: pesa casi el doble y
+> Google pide 8 GB. E4B pide **12 GB**, que no es «gama alta reciente» sino gama alta y punto. Esos
+> números venían de resúmenes, no del artefacto — el error exacto contra el que avisa la sección 2
+> de este mismo documento. Se corrigieron antes de escribir una sola línea de código, que es la
+> única parte de esto que salió bien.
 
 Android no te da la RAM del teléfono: te da un presupuesto por proceso, y lo hace cumplir matando
 la app. Un modelo que pide 5 GB en un teléfono de 6 GB no va lento — **desaparece**, y para el
@@ -23,7 +35,10 @@ jugador eso es indistinguible de que la mascota se haya muerto. Es el peor fallo
 juego concreto.
 
 Así que «el mejor que haya» no puede significar un solo modelo. Significa **el mejor que este
-teléfono pueda sostener de verdad**.
+teléfono pueda sostener de verdad** — y con los números reales encima de la mesa, eso son **tres**
+escalones, no dos. El de 557 MiB no es un premio de consolación: es el único que llega a un
+teléfono normal, y para una criatura que habla en frases de dos líneas puede que no se note la
+diferencia. Medirlo es trabajo pendiente, no una conclusión.
 
 ## 2. Qué modelo
 
@@ -34,14 +49,25 @@ teléfono pueda sostener de verdad**.
    modelo pequeño y un modelo grande estropeado.
 2. **Multilingüe de serie**: 35+ idiomas soportados, 140+ preentrenados. El español importa aquí y
    no es un añadido.
-3. **Es el camino que Google mantiene.** MediaPipe `tasks-genai` está en modo mantenimiento y su
-   propia guía dice que migres. LiteRT-LM es la ruta viva, con delegados de CPU/GPU/NPU y
-   *embeddings* por capa mapeados en memoria, que es justo el truco que deja a E2B por debajo de
-   1,5 GB en algunos dispositivos.
+3. **Es el camino que Google usa.** Aquí hay que ser preciso, porque la primera versión de esto
+   afirmaba de más: **no he podido leer** ninguna nota oficial de obsolescencia de MediaPipe
+   `tasks-genai` — la página está bloqueada desde este entorno y no hay copia en archivo. Lo que
+   **sí** está verificado es la conducta: la propia app de Google ya no depende de `tasks-genai`
+   en absoluto, y las descripciones de sus modelos pasaron de «listo para Android usando la
+   MediaPipe LLM Inference API» a «…usando LiteRT-LM» entre dos versiones. Es indicio fuerte, no
+   una cita. No se pondrá una cita entrecomillada en ningún comentario hasta poder leerla.
 
 ```kotlin
-implementation("com.google.ai.edge.litertlm:litertlm-android:<versión>")
+// En google(), no en mavenCentral() — Central devuelve 404 para estas coordenadas.
+// Versión fijada, no `latest.release`: una versión móvil es exactamente cómo se consigue una
+// build roja por sorpresa, y la forma con argumentos con nombre de `sendMessageAsync` no compila
+// en las versiones viejas. 0.12.0 está probada en un fichero de build del propio Google.
+implementation("com.google.ai.edge.litertlm:litertlm-android:0.12.0")
 ```
+
+**Sólo `arm64-v8a`.** La librería trae binarios nativos para `android_arm64` y `android_x86_64` y
+nada más — ARM de 32 bits no está soportado, y las apps de ejemplo de Google filtran a `arm64-v8a`.
+Eso hay que declararlo en el build y decirlo en pantalla, no descubrirlo en un teléfono viejo.
 
 **Se empaquetan los dos.** No como una pregunta al jugador —«¿ligero o bueno?» no es una pregunta
 que nadie pueda responder— sino como una medición: se lee la memoria disponible del proceso y se
@@ -49,9 +75,17 @@ ofrece E4B sólo donde cabe, E2B donde no, y nada donde tampoco. El jugador pued
 pequeño si prefiere gastar menos batería; no puede forzar el grande en un teléfono que lo va a
 matar.
 
-> **Por verificar antes de escribir código:** el tamaño exacto del `.litertlm` de E4B, la versión
-> concreta de `litertlm-android` en Google Maven, y si E4B está publicado en ese formato o sólo en
-> GGUF. Lo he leído en resúmenes, no en el artefacto. Nada de esto se decide de memoria.
+> **Verificado desde las fuentes de Google en GitHub**, porque Google Maven, Hugging Face y
+> `ai.google.dev` están todos bloqueados desde este entorno: las coordenadas Maven, el repositorio
+> (`google()`), las ABI, la superficie real de la API (`Engine`, `EngineConfig`, `Conversation`,
+> `sendMessageAsync` devolviendo un `Flow<Message>`, todo `AutoCloseable`), los tres ficheros y sus
+> tamaños exactos, y la forma de la URL de descarga.
+>
+> **Sigue sin verificar, y se dice en vez de taparse:** la versión más reciente publicada en Google
+> Maven (el `maven-metadata.xml` es inalcanzable), el `minSdk` declarado del artefacto, si estos
+> repositorios concretos de Hugging Face están *gated*, y el texto de la cláusula de
+> redistribución de los términos de Gemma. Nada de eso se decide de memoria, así que nada de eso
+> se ha decidido.
 
 ## 3. Por qué la arquitectura ya encaja
 
@@ -112,6 +146,32 @@ comprobación previa de espacio libre, tope de redirecciones y anfitrión fijado
 con otro destino. Lo que hay que añadir es reanudación y descarga sólo por wifi por defecto —
 tres gigas por datos móviles es algo que se hace una vez y no se perdona.
 
+## 5 bis. El riesgo que este documento no había visto: la descarga puede no ser desatendida
+
+Es el mayor de todos y no estaba escrito en ninguna parte.
+
+Los pesos de Gemma **no son código abierto**. Van bajo los Gemma Terms of Use, no bajo Apache 2.0
+—la librería sí es Apache 2.0, los pesos no—, y la cláusula de redistribución no se ha podido leer
+porque la página está bloqueada desde aquí. Así que **el modelo no se sube al repositorio**, ni
+ahora ni cuando se pueda leer: se descarga en tiempo de ejecución, que es exactamente lo que hace
+la app de Google, y así la pregunta ni se plantea.
+
+Lo incómodo es lo otro. La app de Google **no da por hecho** que la descarga funcione sin
+credenciales: prueba la URL sin autenticar, y si no le devuelven 200 arranca un intercambio OAuth
+con Hugging Face y reintenta con un *bearer*. Si aun así la rechazan, enseña esto: «This is a gated
+model. Please click the button below to view and agree to the user agreement.» Y antes de
+cualquier descarga de Gemma, un diálogo de términos.
+
+Si los repositorios que necesitamos están *gated* — **no se ha podido comprobar**, Hugging Face
+también está bloqueado desde aquí — entonces bajar el modelo exige que el jugador pase por un
+navegador, inicie sesión y acepte unos términos. Eso no es un detalle de implementación: cambia el
+rasgo de «púlsalo y espera» a «púlsalo, sal de la app, acepta algo, vuelve». Puede que siga
+mereciendo la pena. Pero se decide sabiéndolo, no descubriéndolo con la descarga a medias.
+
+Lo que hay que hacer, en orden: comprobar con un `curl -I` sin autenticar si esas URLs devuelven
+200. Si sí, la ruta simple vale y esto se queda en una nota. Si no, hay que diseñar el paso por el
+navegador antes de prometer nada en pantalla.
+
 ## 6. Lo que esto le cuesta al proyecto
 
 **«Cero recursos» deja de ser literalmente cierto.** Hasta hoy no hay ni un PNG ni un WAV en el
@@ -135,13 +195,22 @@ Todo lo que toque `litertlm-android` queda razonado y comprobado con diffs de di
 árboles — que es exactamente lo que ya pasa con el widget, la voz y el actualizador, y exactamente
 por lo que tres builds se pusieron rojas. La primera medición de verdad sale de un teléfono.
 
-## 8. Lo que hace falta decidir
+## 8. Lo decidido, y lo que queda abierto
 
-1. **¿Descarga sólo por wifi, o se le deja elegir?** Yo pondría wifi por defecto y un aviso claro
-   para saltárselo.
-2. **¿Se ofrece el modelo local en la primera partida, o cuando el jugador ya se ha encariñado?**
-   Pedir tres gigas a alguien que lleva dos minutos con un huevo es la forma más rápida de que
-   desinstale.
-3. **¿E4B siquiera merece la pena para esto?** La criatura habla en frases de una o dos líneas.
-   Puede que E2B sea indistinguible en la práctica y ahorre 2 GB, batería y media gama entera de
-   teléfonos. Es medible, y habría que medirlo antes de dar por buena la respuesta «el mejor».
+**Decidido:**
+
+1. **Wifi por defecto**, con una forma clara de saltárselo. Tres gigas por datos móviles se hace
+   una vez y no se perdona.
+2. **Se ofrece tarde, no en la primera partida.** Pedir gigas a alguien que lleva dos minutos con
+   un huevo es la forma más rápida de que desinstale. Se ofrece cuando ya hay algo que perder.
+3. **Se empaquetan los tres escalones**, y cuál se ofrece es una medición, nunca una pregunta. El
+   jugador puede forzar uno más pequeño; no puede forzar uno que su teléfono va a matar.
+
+**Abierto, y sólo un teléfono puede cerrarlo:**
+
+- **¿Se nota siquiera la diferencia?** La criatura habla en frases de una o dos líneas. Puede que
+  el de 557 MiB sea indistinguible del de 3,41 GiB para este uso concreto — y si lo es, el grande
+  sobra y con él sobran 3 GB, la batería y una gama entera de teléfonos. Es medible. No está
+  medido.
+- **¿Están *gated* los repositorios?** Ver §5 bis. Es un `curl -I` desde una máquina con salida a
+  Hugging Face.
