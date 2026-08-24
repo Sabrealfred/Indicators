@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Care reminders while the app is closed. Optional: the game runs fine without it. -->
     <!--
@@ -28,6 +29,31 @@
         release page in a browser.
     -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+        Declared here rather than left to arrive transitively.
+
+        WorkManager's own manifest already merges this in, so the app has had it all along and
+        `ConnectivityManager` has been answering honestly. That is a fragile way to hold a
+        permission the updater and the model downloader both make decisions with: the day a
+        dependency changes, the failure is silent — every connection starts reading as metered,
+        the automatic update check stops happening, and the model download asks for permission to
+        spend mobile data that it is sitting on Wi-Fi to avoid. Nothing crashes and nothing says
+        anything, which is the exact shape of failure this project has already shipped twice.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+        A model file is one to three gigabytes and takes as long as it takes. The download runs as
+        a foreground service so that leaving the app does not kill it, and so that an hour of
+        somebody's connection and battery is visible in the shade rather than spent invisibly.
+
+        `dataSync` is the type: a long transfer the player asked for by name. From API 34 the type
+        must be declared, and both the permission and the service entry below have to agree with
+        the `ForegroundInfo` the worker returns.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <!--
         Package visibility, API 30 and up. Text-to-speech and speech recognition are provided by
@@ -110,6 +136,17 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_pet_info" />
         </receiver>
+
+        <!--
+            WorkManager brings its own foreground service; what it cannot know is what this app
+            uses it for. `tools:node="merge"` adds the type to the entry the library declares
+            rather than replacing it, which is what API 34 and up require before the service may
+            start at all.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
 
         <!--
             Hands the downloaded APK to the installer as a content:// URI. A file:// URI would
