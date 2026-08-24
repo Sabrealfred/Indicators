@@ -230,8 +230,20 @@ class LocalModelFitTest {
 
     @Test
     fun `a phone that cannot hold a model is never told to free space`() {
-        assertEquals(0L, LocalModelFit.of(budget).freeUpBytes)
-        assertEquals(0L, LocalModelFit.of(goEdition).freeUpBytes)
+        // Both of these are short of space *and* short of memory, which is the combination that
+        // matters: a phone with a full disk that would still not be offered anything must not be
+        // sent off to delete photographs. It wastes their evening and then says no anyway. A
+        // spacious unfit phone proves nothing here — the arithmetic returns zero for it either
+        // way — so these two are deliberately squeezed on both axes.
+        val squeezedAndUnfit = budget.copy(freeDiskBytes = 500_000_000L)
+        assertEquals(ModelBlocker.NOT_ENOUGH_RAM, LocalModelFit.of(squeezedAndUnfit).blocker)
+        assertEquals(0L, LocalModelFit.of(squeezedAndUnfit).freeUpBytes)
+
+        val squeezedAndFlagged = goEdition.copy(freeDiskBytes = 400_000_000L)
+        assertEquals(ModelBlocker.LOW_RAM_DEVICE, LocalModelFit.of(squeezedAndFlagged).blocker)
+        assertEquals(0L, LocalModelFit.of(squeezedAndFlagged).freeUpBytes)
+
+        assertEquals("and a roomy disk on an unfit phone is still zero", 0L, LocalModelFit.of(budget).freeUpBytes)
     }
 
     @Test
