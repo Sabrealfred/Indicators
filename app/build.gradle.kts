@@ -48,6 +48,26 @@ android {
         versionName = "1.0.$buildNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // The first native code this app has ever carried, and it changes which handsets can
+        // install it. Read this before assuming it is a formality.
+        //
+        // litertlm-android ships binaries for android_arm64 and android_x86_64 and nothing else —
+        // 32-bit ARM is not supported by the library at all — and Google's own sample apps filter
+        // to arm64-v8a. This does the same.
+        //
+        // The cost is real and it is not this feature's alone to pay. Until now the APK had no
+        // `lib/` directory whatsoever, so it installed on anything from API 24 up, armeabi-v7a
+        // included. An APK that *has* native libraries and none matching the device is refused by
+        // the installer outright, so those handsets stop being able to install NeoPal at all —
+        // not "without the on-device brain", at all. The alternative is per-ABI split APKs, which
+        // the in-app updater is not built for: it downloads one artifact from one release.
+        //
+        // Left as a single filter deliberately rather than solved quietly, because it is a
+        // product decision about who can play, not a build detail.
+        ndk {
+            abiFilters += "arm64-v8a"
+        }
     }
 
     buildTypes {
@@ -121,6 +141,16 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // The engine for a model that runs on the handset. Resolved from google(), which
+    // settings.gradle.kts already lists first — Maven Central returns 404 for these coordinates.
+    //
+    // Unverified from here, and the honest list of what that means: Google Maven is blocked from
+    // this environment, so the coordinates have never been resolved, the artifact's own declared
+    // minSdk has never been read against this module's 24, and no transitive dependency it drags
+    // in has been seen. Every one of those is a way this line alone turns a build red, which is
+    // why it is a commit of its own rather than folded into the code that needs it.
+    implementation(libs.litertlm.android)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 
