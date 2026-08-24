@@ -23,7 +23,9 @@ enum class PetAnimation {
  * with the same reason, applied to the rest of what a creature can do for itself.
  *
  * Only the actions [Brain] can reach take this parameter. Anything new that the brain learns to
- * commit has to take it too, or the ledger leaks again.
+ * commit has to take it too, or the ledger leaks again. [Learning] is the other user: a skill pays
+ * experience when a lesson finished it and not when the creature finished it alone, for this
+ * reason and by this enum, rather than by a second mechanism of its own.
  */
 enum class Actor { KEEPER, CREATURE }
 

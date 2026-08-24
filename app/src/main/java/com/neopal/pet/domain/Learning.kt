@@ -16,6 +16,33 @@ import kotlin.math.roundToLong
  * Nothing here reads a clock or a random source. The tick loop hands over a [dt] and gets a new
  * state back, which is what lets a week of absence be caught up in two thousand steps and still
  * land on exactly the state a player who sat and watched would have seen.
+ *
+ * ## Whose accomplishment a skill is
+ *
+ * A skill lands in exactly one place — [learn] — and it is reached down exactly two paths, which
+ * differ in precisely the thing [Actor] names:
+ *
+ *  - [teach] is the player sitting down with the creature. One tap, the pet's energy, a little
+ *    bond. There is no route to it except a person choosing it.
+ *  - [progress] is the creature studying unasked. Its only production caller is [Brain] running an
+ *    `ActivityKind.STUDY` it committed to itself, and that option is `FULL`-autonomy only. Nobody
+ *    is in the room.
+ *
+ * So experience for a finished skill is paid only when the keeper's own lesson is what completed
+ * it. This is the [Actor] rule [CareActions] already applies to feeding, dosing and scooping, and
+ * the one [SoloPlay] states for the minigames: the world belongs to whoever caused it, the
+ * keeper's ledger records what the *player* did. A creature that worked something out overnight
+ * did a real thing, and every part of that real thing is kept — the skill is in the set, the
+ * intellect is banked, [GameEvent.LearnedSkill] still fires, the diary and the decision log still
+ * say it happened, and the new capability changes what the creature can do for the rest of its
+ * life. What it no longer does is fill in the player's homework.
+ *
+ * Two things worth knowing before reopening this. Experience was never a payment for *having* a
+ * skill: [Simulation.nextGeneration] carries an heir's skills into the next life and pays
+ * nothing at all for them, so the number here has always been payment for the *work*, which makes
+ * "whose work" the only question there is. And the split costs a Manual or Assisted keeper
+ * exactly nothing: [progress] has no production caller outside `FULL` autonomy, so below it every
+ * skill still arrives through [teach] and still pays in full.
  */
 object Learning {
 
@@ -188,7 +215,9 @@ object Learning {
         // nowhere to keep a fractional carry, so at one-second ticks a slow learner would round to
         // zero on every single one and never finish anything. The floor makes a dim or poorly pet
         // slow over any stretch long enough to measure, rather than permanently stuck.
-        return bank(s, (rate * dt).roundToLong().coerceAtLeast(1L), events)
+        // [Actor.CREATURE], always: this is only ever reached from [Brain]'s own STUDY activity,
+        // which nobody asked for. See "Whose accomplishment a skill is" at the top of the file.
+        return bank(s, (rate * dt).roundToLong().coerceAtLeast(1L), events, Actor.CREATURE)
     }
 
     /**
@@ -216,7 +245,8 @@ object Learning {
         s = retarget(s)
         val worth = rate * LESSON_SECONDS * LESSON_MULTIPLIER
         s = grow(s, STUDY_INTELLECT_RATE * worth * approach(s.intellect, MAX_INTELLECT), events)
-        return bank(s, worth.roundToLong().coerceAtLeast(1L), events)
+        // [Actor.KEEPER], always: a lesson has no route into the game except a player choosing it.
+        return bank(s, worth.roundToLong().coerceAtLeast(1L), events, Actor.KEEPER)
     }
 
     /**
@@ -321,23 +351,35 @@ object Learning {
         )
     }
 
-    /** Banks [seconds] toward the current target, learning the skill if that finishes it. */
-    private fun bank(state: PetState, seconds: Long, events: MutableList<GameEvent>): PetState {
+    /**
+     * Banks [seconds] toward the current target, learning the skill if that finishes it.
+     *
+     * [by] is carried rather than looked up because it is a fact about the call, not about the
+     * state: the same pet with the same banked seconds is one tap away from a taught skill and one
+     * tick away from a self-taught one, and nothing in [PetState] can tell those two apart.
+     */
+    private fun bank(state: PetState, seconds: Long, events: MutableList<GameEvent>, by: Actor): PetState {
         val target = state.studying ?: return state
         val filled = state.studySeconds + seconds
         if (filled < target.studySeconds) return state.copy(studySeconds = filled)
-        return learn(state, target, events)
+        return learn(state, target, events, by)
     }
 
     /**
      * The moment it lands. Overshoot is dropped rather than carried into the next skill: a long
      * catch-up step should not hand the player two skills for one session's work.
+     *
+     * Everything above the experience line happens whoever did the work, because all of it is news
+     * about the creature: it knows the thing now, it says so, and it can do the thing from here on.
      */
-    private fun learn(state: PetState, skill: Skill, events: MutableList<GameEvent>): PetState {
+    private fun learn(state: PetState, skill: Skill, events: MutableList<GameEvent>, by: Actor): PetState {
         events += GameEvent.LearnedSkill(skill)
         // Retargeting after the skill is in the set, so it picks what comes next rather than the
         // thing that was just finished.
         val s = retarget(state.copy(skills = state.skills + skill, studySeconds = 0L, studying = null))
+        // The keeper's ledger, and only the keeper pays into it. A skill the creature ground out
+        // alone still lands — it just is not a line in the player's record of their own afternoons.
+        if (by != Actor.KEEPER) return s
         // Through applyXp rather than added raw, so a skill can push the keeper over a level
         // boundary and the level-up is announced like any other.
         return Simulation.applyXp(s, xpFor(skill), events)
