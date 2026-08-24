@@ -474,6 +474,11 @@ data class GameConfig(
      * without it and nobody is asked to sign up for anything to play.
      */
     val mind: MindConfig = MindConfig(),
+    /**
+     * The brain that lives on the phone. Nothing is downloaded until the player says so, so this
+     * is inert on every save until one of them does. See [LocalMindConfig].
+     */
+    val localMind: LocalMindConfig = LocalMindConfig(),
 ) {
     companion object {
         val Default = GameConfig()
