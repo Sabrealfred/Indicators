@@ -11,6 +11,7 @@ import com.neopal.pet.data.CheckTrigger
 import com.neopal.pet.data.InstallLaunch
 import com.neopal.pet.data.UpdateService
 import com.neopal.pet.data.UpdateStatus
+import com.neopal.pet.domain.InstalledBuild
 import com.neopal.pet.domain.UpdateAction
 import com.neopal.pet.domain.UpdatePhase
 import com.neopal.pet.domain.UpdatePlan
@@ -97,9 +98,18 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
          * so this is a note about the attempt, never a claim about the install.
          */
         val installNote: String? = null,
+        /**
+         * The build the player is running, known before any check and independent of one.
+         *
+         * Null only when the package manager refuses to describe this app to itself, which is the
+         * same condition [UpdateUnknown.INSTALLED_UNKNOWN] already names.
+         */
+        val installed: InstalledBuild? = null,
     )
 
-    private val _state = MutableStateFlow(State())
+    // Read once, at construction: the installed build cannot change under a running process —
+    // an update replaces the process rather than mutating it.
+    private val _state = MutableStateFlow(State(installed = service.readInstalledBuild()))
     val state: StateFlow<State> = _state.asStateFlow()
 
     init {

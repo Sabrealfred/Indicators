@@ -640,7 +640,18 @@ class UpdateService(
             is Preflight.Passed -> UpdateStatus.ReadyToInstall(offer.published, file, verdict.caution)
         }
 
-    private fun readInstalledBuild(): InstalledBuild? = runCatching {
+    /**
+     * What is installed right now, read straight from the package manager.
+     *
+     * Public because the screen needs it before any check has run. Nothing about this needs a
+     * network or a release: it is a synchronous local read of the build the player is holding.
+     * `UpdateStatus.Idle` carries no version, so without this the updater opened saying nothing
+     * at all about the app it is offering to replace — which was mistaken for a missing
+     * `BuildConfig` and is not: `PackageManager` reports what is *actually installed*, which is
+     * strictly better than a compile-time constant, and its null case is already modelled as
+     * [UpdateUnknown.INSTALLED_UNKNOWN].
+     */
+    fun readInstalledBuild(): InstalledBuild? = runCatching {
         val info = app.packageManager.getPackageInfo(app.packageName, 0)
         InstalledBuild(versionCodeOf(info), info.versionName.orEmpty())
     }.getOrNull()
