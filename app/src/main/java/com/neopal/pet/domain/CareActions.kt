@@ -368,6 +368,40 @@ object CareActions {
         return finish(s, PetAnimation.PLAY, toast, events)
     }
 
+    /**
+     * Plays with a toy: the durable half of the play menu.
+     *
+     * The catalog had already described this and nothing read it. Each toy carries happiness, a
+     * negative energy and bond — a play action written out as data that no code path could reach.
+     * The deltas are applied straight from the item rather than restated here, so a fourth toy is
+     * a line in [ItemCatalog] and nothing else.
+     *
+     * Gated on [canPlay] rather than on a rule of its own. A ball is play, so whatever stops the
+     * creature starting a minigame stops it picking up a ball, in the same words — two rules for
+     * one idea is how a player learns that a game is arbitrary. It also bounds the loop that a
+     * free, durable item would otherwise open: every go costs energy, and canPlay's floor is a
+     * harder stop than anything petting is held to.
+     */
+    fun playWith(state: PetState, itemId: String): ActionResult {
+        val item = ItemCatalog[itemId] ?: return blocked(state, "There is no such thing.")
+        if (item.kind != ItemKind.TOY) return blocked(state, "${item.name} is not a toy.")
+        canPlay(state)?.let { return blocked(state, it) }
+        if ((state.inventory[itemId] ?: 0) <= 0) return blocked(state, "You do not own ${item.name} yet.")
+
+        val events = mutableListOf<GameEvent>()
+        var s = state.copy(
+            stats = state.stats.copy(
+                happiness = state.stats.happiness + item.happiness,
+                energy = state.stats.energy + item.energy,
+                hygiene = state.stats.hygiene + item.hygiene,
+                health = state.stats.health + item.health,
+                bond = state.stats.bond + item.bond,
+            ).coerced(),
+        )
+        s = Simulation.applyXp(s, 3, events)
+        return finish(s, PetAnimation.PLAY, "${state.name} and the ${item.name}, again.", events)
+    }
+
     // ---------------------------------------------------------------- economy
 
     fun buy(state: PetState, itemId: String): ActionResult {
@@ -399,12 +433,20 @@ object CareActions {
      *
      * Routing on the item's own effects rather than on its `kind` is what fixes both: soap is
      * catalogued as MEDICINE and always will be, and a kind is a shelf category, not a verb.
+     *
+     * [ItemKind.TOY] is the one branch that has to go on the kind, and it is worth saying why
+     * that is not a hole in the rule. A toy had no branch at all, so all three fell through to
+     * the `else` and were refused — thirty coins for a tile answering "does not know what to do
+     * with the Bounce Ball". It cannot be routed by effects because a toy's effects *are* a
+     * snack's effects, mood up and energy down; what makes it a toy is that it is never used up,
+     * and that is written in the kind and nowhere else.
      */
     fun use(state: PetState, itemId: String): ActionResult {
         val item = ItemCatalog[itemId] ?: return blocked(state, "There is no such thing.")
         return when {
             item.kind == ItemKind.HAT -> equipHat(state, if (state.equippedHat == itemId) null else itemId)
             item.kind == ItemKind.ROOM -> setRoom(state, itemId)
+            item.kind == ItemKind.TOY -> playWith(state, itemId)
             // Washing before curing: soap heals nothing, so a rule that asked about health first
             // would send it down the medicine path again.
             item.hygiene > 0f && item.health <= 0f -> bathe(state)

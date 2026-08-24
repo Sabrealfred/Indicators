@@ -71,13 +71,20 @@ object ItemCatalog {
         Item("soap", "Bubble Soap", ItemKind.MEDICINE, 10, "soap", 0xFF7FD4F5,
             hygiene = 55f, happiness = 4f, description = "A proper scrub-down."),
 
-        // ---- Toys: used from the play menu, never consumed ----
+        // ---- Toys: played with by hand, never consumed. See [CareActions.playWith].
+        //
+        // These three used to advertise unlocks — "Unlocks Ball Rally", for a game that does not
+        // exist, beside two claiming to unlock games every save can already play on the day it
+        // hatches. Nothing in this game gates a minigame on an item: the games screen asks
+        // [CareActions.canPlay] and nothing else, which is the right question to ask. A price tag
+        // that promises otherwise is not a missing feature, it is a lie, so what they say now is
+        // what they actually do.
         Item("toy_ball", "Bounce Ball", ItemKind.TOY, 30, "ball", 0xFFFF6B57,
-            happiness = 14f, energy = -8f, bond = 3f, description = "Unlocks Ball Rally."),
+            happiness = 14f, energy = -8f, bond = 3f, description = "Chase it round the room. Yours for good."),
         Item("toy_drum", "Beat Drum", ItemKind.TOY, 45, "drum", 0xFF5AA9E6,
-            happiness = 16f, energy = -10f, bond = 4f, description = "Unlocks Rhythm Tap."),
+            happiness = 16f, energy = -10f, bond = 4f, description = "Loud, tiring, worth it. Yours for good."),
         Item("toy_cards", "Memory Cards", ItemKind.TOY, 45, "cards", 0xFFB48CE8,
-            happiness = 12f, energy = -6f, bond = 5f, description = "Unlocks Memory Match."),
+            happiness = 12f, energy = -6f, bond = 5f, description = "A quiet game for two. Yours for good."),
 
         // ---- Hats: pure cosmetics, drawn on top of the creature ----
         Item("hat_cap", "Racer Cap", ItemKind.HAT, 60, "cap", 0xFFFF3C28, description = "Classic red cap."),
