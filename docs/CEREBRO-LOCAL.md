@@ -1,9 +1,23 @@
 # Un cerebro dentro del teléfono
 
-Diseño, no implementación. Nada de esto está construido todavía.
+Empezó como diseño. Ya está construido — y esta cabecera decía «nada de esto está construido
+todavía» bastante después de dejar de ser verdad, que es la clase de mentira pequeña por la que
+un documento deja de leerse.
 
 La petición: que la criatura tenga un modelo corriendo **en el propio teléfono**, y que cuando
 haya internet pueda usar el grande. El presupuesto declarado es de hasta 5 GB de app.
+
+**Estado real, a día de hoy:** las reglas puras están escritas y probadas (qué modelo aguanta cada
+teléfono, quién contesta qué, cuándo se ofrece la descarga), la descarga está construida con
+reanudación y verificación, el motor está cableado a la pantalla de hablar, y el proyecto se movió
+a Kotlin 2.3.21 porque la librería lo exigía. **Y aun así no funciona todavía para nadie**, por una
+razón concreta y honesta: el catálogo de modelos descargables está *vacío*. Ninguna entrada tiene
+fijado su hash de commit, porque Hugging Face está bloqueado desde el entorno donde se escribió
+esto y nadie ha podido leerlo. Son tres cadenas de texto. Hasta que existan, todo lo demás está
+esperando en la sala.
+
+Lo que sigue es el razonamiento, y las correcciones se han dejado a la vista en lugar de
+reescribirse.
 
 ---
 
