@@ -770,4 +770,109 @@
     <string name="cd_mind_rung">%1$s. %2$s Needs an intellect of %3$d.%4$s</string>
     <string name="mind_known">KNOWN</string>
     <string name="mind_int">INT</string>
+
+    <!-- Shared -->
+    <string name="list_separator">", "</string>
+    <string name="cd_labelled_line">%1$s: %2$s</string>
+    <string name="duration_seconds">%1$ds</string>
+    <plurals name="creature_count">
+        <item quantity="one">%1$d creature</item>
+        <item quantity="other">%1$d creatures</item>
+    </plurals>
+    <plurals name="child_count">
+        <item quantity="one">%1$d child</item>
+        <item quantity="other">%1$d children</item>
+    </plurals>
+    <plurals name="egg_count">
+        <item quantity="one">%1$d egg</item>
+        <item quantity="other">%1$d eggs</item>
+    </plurals>
+
+    <!-- The silhouette in words: read off the same houndliness number the art reads. -->
+    <string name="silhouette_round">a round, upright little thing</string>
+    <string name="silhouette_leggy">still rounded, but longer in the leg</string>
+    <string name="silhouette_half_hound">half hound: a real muzzle and a low stance</string>
+    <string name="silhouette_houndish">clearly houndish, going on all fours</string>
+    <string name="silhouette_hound">a long-muzzled hound, four-footed</string>
+    <string name="colony_describe">%1$s %2$s, %3$s</string>
+
+    <!-- Colony screen -->
+    <string name="colony_nobody_met">%1$s has not met anyone yet</string>
+    <string name="colony_known_summary">%1$s known · %2$s</string>
+    <string name="colony_none_here">none here now</string>
+    <string name="colony_count_here">%1$d here now</string>
+    <string name="colony_who_knows">Who %1$s knows</string>
+    <string name="cd_colony_in_room">%1$d in the room now</string>
+    <string name="cd_colony_room_empty">Nobody in the room now</string>
+    <string name="colony_tap_a_name">Tap a name to read what a pairing with them would produce. The colony remembers %1$d creatures; a stranger nobody grew fond of is the first to be forgotten.</string>
+    <string name="colony_needs_socialise">Fondness creeps up on its own while somebody is in the room, but it takes about six visits that way. %1$s has not learned %2$s yet, which is what makes it two.</string>
+    <string name="colony_needs_autonomy">Going over to say hello is %1$s\'s own move, and on %2$s it is not allowed to make it. Set the day to %3$s for it to approach anyone rather than waiting for company to do the work.</string>
+    <string name="colony_pal_line">%1$s %2$s · %3$s</string>
+    <string name="colony_here_now">here now</string>
+    <string name="colony_away">away</string>
+    <string name="colony_past_courting">past courting at %1$d</string>
+    <string name="colony_rung_friendship">friendship</string>
+    <string name="colony_rung_courting">courting</string>
+    <string name="colony_mark_caption">%1$d to %2$s at %3$d</string>
+
+    <string name="colony_nobody_yet">Nobody yet</string>
+    <string name="colony_alone">%1$s is the only creature in the room.</string>
+    <string name="colony_what_is_a_visitor">A visitor is another creature that lets itself in for a while. Nothing you press summons one — they wander by on their own, a stranger stays about a quarter of an hour, and somebody %1$s already knows stays far longer. Whoever turns up brings their own genes with them, which is where every shape this line has not got yet comes from.</string>
+    <string name="colony_before_calls">BEFORE ANYONE CALLS</string>
+    <string name="colony_old_enough">%1$s is old enough to notice a caller.</string>
+    <string name="colony_too_young">%1$s is still a %2$s. Nobody calls on a creature younger than a child — it would not know what to do with them.</string>
+    <string name="colony_awake">%1$s is awake, so the door is effectively open.</string>
+    <string name="colony_asleep">%1$s is asleep. Nobody calls while the lights are out.</string>
+    <string name="colony_sociability">Sociability %1$d out of 100 — a warmer creature is called on more often. It is inherited, so breeding for it is the only way to change it.</string>
+    <string name="colony_before_friend">BEFORE A CALLER BECOMES A FRIEND</string>
+    <string name="colony_knows_socialise">%1$s has learned %2$s.</string>
+    <string name="colony_lacks_socialise">%1$s has not learned %2$s yet. Until it does, a visitor is somebody it sits across the room from — fondness still creeps up, at about a third of the pace.</string>
+    <string name="colony_may_approach">The day is %1$s, so %2$s will go over and say hello by itself.</string>
+    <string name="colony_may_not_approach">Going over is %1$s\'s own move to make, and on %2$s it is not allowed to make it. Company still counts while somebody is here; set the day to %3$s for it to do more than share a room.</string>
+    <string name="colony_currency">Time together is the whole currency: friendship at %1$d fondness, courting at %2$d, and one visit is not enough for either.</string>
+
+    <string name="colony_family">Family</string>
+    <string name="cd_colony_children">%1$s of %2$s\'s own</string>
+    <string name="colony_parents">Parents</string>
+    <string name="colony_founder">%1$s is a founder. This line starts here — there is no generation above it to record.</string>
+    <string name="colony_mates">Mates</string>
+    <string name="colony_no_mates">None. A friend becomes a mate at %1$d fondness, or the moment a pairing is made.</string>
+    <string name="colony_children">Children</string>
+    <string name="colony_no_children">None yet. Children hatch from the nest and stay — they are family from the first second, not visitors who have to be won round.</string>
+    <string name="colony_child_name_stage">%1$s (%2$s)</string>
+    <string name="colony_expecting">Expecting</string>
+    <string name="colony_with_parent">With %1$s</string>
+    <string name="colony_friends">Friends</string>
+    <string name="colony_generation">Generation %1$d.</string>
+
+    <string name="colony_nest">Nest</string>
+    <string name="cd_colony_nest">%1$s in the nest, room for %2$d</string>
+    <string name="colony_nest_empty">The nest is empty. An egg appears the moment %1$s pairs off, and the nest holds %2$d at once. At this pace one takes about %3$s to hatch.</string>
+    <string name="colony_egg_due">Due now.</string>
+    <string name="colony_next_hatch">Next hatches in %1$s.</string>
+    <string name="colony_genes_fixed">The genes inside were fixed when the egg was laid, so closing the app cannot change what comes out.</string>
+    <string name="colony_egg_ready">%1$s · ready to hatch</string>
+    <string name="colony_egg_left">%1$s · %2$s left</string>
+
+    <string name="colony_breeding">Breeding</string>
+    <string name="colony_partner_gone">%1$s is no longer in the colony.</string>
+    <string name="colony_pair_with">PAIR WITH %1$s</string>
+    <string name="colony_cannot_pair">CANNOT PAIR YET</string>
+    <string name="colony_pair_detail">An egg goes into the nest straight away</string>
+    <string name="colony_pair_blocked_detail">See the reason above</string>
+    <string name="cd_colony_pair">Pair %1$s with %2$s. An egg goes straight into the nest.</string>
+    <string name="cd_colony_pair_blocked">Pairing with %1$s is not possible. %2$s</string>
+    <string name="cd_colony_parent_chip">%1$s, %2$s.</string>
+
+    <string name="colony_likely_child">LIKELY CHILD</string>
+    <string name="cd_colony_child_portrait">The likely child of %1$s and %2$s, shown grown up: %3$s. %4$s</string>
+    <string name="colony_shape">SHAPE</string>
+    <string name="colony_shift_hound">further towards a hound</string>
+    <string name="colony_shift_blob">back towards a round blob</string>
+    <string name="colony_shift_same">about where %1$s already is</string>
+    <string name="colony_shift_line">%1$s (%2$s is at %3$d of 100)</string>
+    <string name="cd_colony_shape">Shape: %1$s. %2$s on the hound scale, where %3$s sits at %4$d out of 100.</string>
+    <string name="colony_bloodlines">Bloodlines %1$d per cent apart. Below %2$d per cent a pair only repeats itself and the match is refused.</string>
+    <string name="colony_palette_caveat">Drawn in %1$s colours. Either family can carry, so the egg is as likely to hatch a %2$s — the palette changes, the shape above does not.</string>
+    <string name="colony_average_caveat">This is the halfway point between the two, not a roll. The real egg lands near it, sometimes one trait further out.</string>
 </resources>

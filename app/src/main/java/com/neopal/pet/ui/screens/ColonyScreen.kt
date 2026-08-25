@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -170,9 +171,17 @@ fun ColonyScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 )
                 Text(
                     text = if (pals.isEmpty()) {
-                        "${pet.name} has not met anyone yet"
+                        stringResource(R.string.colony_nobody_met, pet.name)
                     } else {
-                        "${creatureCount(pals.size)} known · ${if (here == 0) "none here now" else "$here here now"}"
+                        stringResource(
+                            R.string.colony_known_summary,
+                            creatureCount(pals.size),
+                            if (here == 0) {
+                                stringResource(R.string.colony_none_here)
+                            } else {
+                                stringResource(R.string.colony_count_here, here)
+                            },
+                        )
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -232,13 +241,17 @@ private fun PalsPanel(
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = NeoAccents.cyan,
-        title = "Who ${pet.name} knows",
+        title = stringResource(R.string.colony_who_knows, pet.name),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
                 text = "$here",
                 color = if (here > 0) NeoAccents.green else MaterialTheme.colorScheme.surface,
-                contentDescription = if (here > 0) "$here in the room now" else "Nobody in the room now",
+                contentDescription = if (here > 0) {
+                    stringResource(R.string.cd_colony_in_room, here)
+                } else {
+                    stringResource(R.string.cd_colony_room_empty)
+                },
             )
         },
     ) {
@@ -258,9 +271,7 @@ private fun PalsPanel(
         PixelDivider()
         Spacer(Modifier.height(pixelUnits(2)))
         Text(
-            text = "Tap a name to read what a pairing with them would produce. " +
-                "The colony remembers ${Colony.MAX_REMEMBERED_PALS} creatures; " +
-                "a stranger nobody grew fond of is the first to be forgotten.",
+            text = stringResource(R.string.colony_tap_a_name, Colony.MAX_REMEMBERED_PALS),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -277,18 +288,22 @@ private fun PalsPanel(
             if (!knowsHow) {
                 Condition(
                     met = false,
-                    text = "Fondness creeps up on its own while somebody is in the room, but it " +
-                        "takes about six visits that way. ${pet.name} has not learned " +
-                        "${Skill.SOCIALISE.displayName.lowercase()} yet, which is what makes it two.",
+                    text = stringResource(
+                        R.string.colony_needs_socialise,
+                        pet.name,
+                        Skill.SOCIALISE.displayName.lowercase(),
+                    ),
                 )
             }
             if (!allowed) {
                 Condition(
                     met = false,
-                    text = "Going over to say hello is ${pet.name}'s own move, and on " +
-                        "${pet.autonomy.displayName} it is not allowed to make it. Set the day " +
-                        "to ${Autonomy.FULL.displayName} for it to approach anyone rather than " +
-                        "waiting for company to do the work.",
+                    text = stringResource(
+                        R.string.colony_needs_autonomy,
+                        pet.name,
+                        pet.autonomy.displayName,
+                        Autonomy.FULL.displayName,
+                    ),
                 )
             }
         }
@@ -381,8 +396,12 @@ private fun PalRow(
                 )
             }
             Text(
-                text = "${pal.stage.displayName} ${pal.species.displayName} · " +
-                    if (pal.present) "here now" else "away",
+                text = stringResource(
+                    R.string.colony_pal_line,
+                    pal.stage.displayName,
+                    pal.species.displayName,
+                    stringResource(if (pal.present) R.string.colony_here_now else R.string.colony_away),
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (pal.present) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -438,7 +457,7 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = NeoAccents.cyan,
-        title = "Nobody yet",
+        title = stringResource(R.string.colony_nobody_yet),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -450,7 +469,7 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.width(pixelUnits(2)))
             Text(
-                text = "${pet.name} is the only creature in the room.",
+                text = stringResource(R.string.colony_alone, pet.name),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -458,11 +477,7 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(pixelUnits(2)))
         Text(
-            text = "A visitor is another creature that lets itself in for a while. Nothing you " +
-                "press summons one — they wander by on their own, a stranger stays about a " +
-                "quarter of an hour, and somebody ${pet.name} already knows stays far longer. " +
-                "Whoever turns up brings their own genes with them, which is where every " +
-                "shape this line has not got yet comes from.",
+            text = stringResource(R.string.colony_what_is_a_visitor, pet.name),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -472,7 +487,7 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(pixelUnits(2)))
 
         Text(
-            text = "BEFORE ANYONE CALLS",
+            text = stringResource(R.string.colony_before_calls),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
@@ -482,25 +497,23 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
         Condition(
             met = oldEnough,
             text = if (oldEnough) {
-                "${pet.name} is old enough to notice a caller."
+                stringResource(R.string.colony_old_enough, pet.name)
             } else {
-                "${pet.name} is still a ${pet.stage.displayName.lowercase()}. Nobody calls on a " +
-                    "creature younger than a child — it would not know what to do with them."
+                stringResource(R.string.colony_too_young, pet.name, pet.stage.displayName.lowercase())
             },
         )
         Condition(
             met = awake,
             text = if (awake) {
-                "${pet.name} is awake, so the door is effectively open."
+                stringResource(R.string.colony_awake, pet.name)
             } else {
-                "${pet.name} is asleep. Nobody calls while the lights are out."
+                stringResource(R.string.colony_asleep, pet.name)
             },
         )
         Condition(
             met = true,
             neutral = true,
-            text = "Sociability $sociability out of 100 — a warmer creature is called on more " +
-                "often. It is inherited, so breeding for it is the only way to change it.",
+            text = stringResource(R.string.colony_sociability, sociability),
         )
 
         Spacer(Modifier.height(pixelUnits(2)))
@@ -508,7 +521,7 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
         Spacer(Modifier.height(pixelUnits(2)))
 
         Text(
-            text = "BEFORE A CALLER BECOMES A FRIEND",
+            text = stringResource(R.string.colony_before_friend),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
@@ -518,30 +531,32 @@ private fun NobodyYetPanel(pet: PetState, modifier: Modifier = Modifier) {
         Condition(
             met = knowsHow,
             text = if (knowsHow) {
-                "${pet.name} has learned ${Skill.SOCIALISE.displayName.lowercase()}."
+                stringResource(R.string.colony_knows_socialise, pet.name, Skill.SOCIALISE.displayName.lowercase())
             } else {
-                "${pet.name} has not learned ${Skill.SOCIALISE.displayName.lowercase()} yet. " +
-                    "Until it does, a visitor is somebody it sits across the room from — " +
-                    "fondness still creeps up, at about a third of the pace."
+                stringResource(R.string.colony_lacks_socialise, pet.name, Skill.SOCIALISE.displayName.lowercase())
             },
         )
         Condition(
             met = allowed,
             text = if (allowed) {
-                "The day is ${pet.autonomy.displayName.lowercase()}, so ${pet.name} will go over " +
-                    "and say hello by itself."
+                stringResource(R.string.colony_may_approach, pet.autonomy.displayName.lowercase(), pet.name)
             } else {
-                "Going over is ${pet.name}'s own move to make, and on ${pet.autonomy.displayName} " +
-                    "it is not allowed to make it. Company still counts while somebody is here; " +
-                    "set the day to ${Autonomy.FULL.displayName} for it to do more than share a room."
+                stringResource(
+                    R.string.colony_may_not_approach,
+                    pet.name,
+                    pet.autonomy.displayName,
+                    Autonomy.FULL.displayName,
+                )
             },
         )
         Condition(
             met = true,
             neutral = true,
-            text = "Time together is the whole currency: friendship at ${Pal.FRIEND_AT.roundToInt()} " +
-                "fondness, courting at ${Pal.COURT_AT.roundToInt()}, and one visit is not enough " +
-                "for either.",
+            text = stringResource(
+                R.string.colony_currency,
+                Pal.FRIEND_AT.roundToInt(),
+                Pal.COURT_AT.roundToInt(),
+            ),
         )
     }
 }
@@ -624,23 +639,26 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = NeoAccents.gold,
-        title = "Family",
+        title = stringResource(R.string.colony_family),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
                 text = "${tree.offspring.size}",
                 color = if (tree.offspring.isEmpty()) MaterialTheme.colorScheme.surface else NeoAccents.gold,
-                contentDescription = "${childCount(tree.offspring.size)} of ${tree.name}'s own",
+                contentDescription = stringResource(
+                    R.string.cd_colony_children,
+                    childCount(tree.offspring.size),
+                    tree.name,
+                ),
             )
         },
     ) {
         FamilyLine(
-            label = "Parents",
+            label = stringResource(R.string.colony_parents),
             body = if (tree.parentNames.isEmpty()) {
-                "${tree.name} is a founder. This line starts here — there is no generation " +
-                    "above it to record."
+                stringResource(R.string.colony_founder, tree.name)
             } else {
-                tree.parentNames.joinToString(" and ")
+                tree.parentNames.joinToString(stringResource(R.string.conjunction_and))
             },
             muted = tree.parentNames.isEmpty(),
         )
@@ -649,12 +667,11 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
         Spacer(Modifier.height(pixelUnits(2)))
 
         FamilyLine(
-            label = "Mates",
+            label = stringResource(R.string.colony_mates),
             body = if (tree.mates.isEmpty()) {
-                "None. A friend becomes a mate at ${Pal.COURT_AT.roundToInt()} fondness, or the " +
-                    "moment a pairing is made."
+                stringResource(R.string.colony_no_mates, Pal.COURT_AT.roundToInt())
             } else {
-                tree.mates.joinToString(", ") { it.name }
+                tree.mates.joinToString(listSeparator()) { it.name }
             },
             muted = tree.mates.isEmpty(),
         )
@@ -663,12 +680,14 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
         Spacer(Modifier.height(pixelUnits(2)))
 
         FamilyLine(
-            label = "Children",
+            label = stringResource(R.string.colony_children),
             body = if (tree.offspring.isEmpty()) {
-                "None yet. Children hatch from the nest and stay — they are family from the " +
-                    "first second, not visitors who have to be won round."
+                stringResource(R.string.colony_no_children)
             } else {
-                tree.offspring.joinToString(", ") { "${it.name} (${it.stage.displayName.lowercase()})" }
+                val nameAndStage = stringResource(R.string.colony_child_name_stage)
+                tree.offspring.joinToString(listSeparator()) {
+                    nameAndStage.format(it.name, it.stage.displayName.lowercase())
+                }
             },
             muted = tree.offspring.isEmpty(),
         )
@@ -678,8 +697,11 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
             PixelDivider()
             Spacer(Modifier.height(pixelUnits(2)))
             FamilyLine(
-                label = "Expecting",
-                body = tree.expecting.joinToString(", ") { "with ${it.otherParentName}" },
+                label = stringResource(R.string.colony_expecting),
+                body = run {
+                    val withWhom = stringResource(R.string.colony_with_parent)
+                    tree.expecting.joinToString(listSeparator()) { withWhom.format(it.otherParentName) }
+                },
                 muted = false,
             )
         }
@@ -689,15 +711,15 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
             PixelDivider()
             Spacer(Modifier.height(pixelUnits(2)))
             FamilyLine(
-                label = "Friends",
-                body = tree.friends.joinToString(", ") { it.name },
+                label = stringResource(R.string.colony_friends),
+                body = tree.friends.joinToString(listSeparator()) { it.name },
                 muted = false,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(2)))
         Text(
-            text = "Generation ${pet.generation}.",
+            text = stringResource(R.string.colony_generation, pet.generation),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
@@ -715,10 +737,11 @@ private fun FamilyPanel(pet: PetState, tree: FamilyTree, modifier: Modifier = Mo
  */
 @Composable
 private fun FamilyLine(label: String, body: String, muted: Boolean, modifier: Modifier = Modifier) {
+    val readOut = stringResource(R.string.cd_labelled_line, label, body)
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) { contentDescription = "$label: $body" },
+            .semantics(mergeDescendants = true) { contentDescription = readOut },
     ) {
         Text(
             text = label.uppercase(),
@@ -746,30 +769,37 @@ private fun NestPanel(pet: PetState, incubation: Long, modifier: Modifier = Modi
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = accent,
-        title = "Nest",
+        title = stringResource(R.string.colony_nest),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
-                text = "${pet.nest.size}/${Colony.MAX_NEST_EGGS}",
+                text = stringResource(R.string.fraction, pet.nest.size, Colony.MAX_NEST_EGGS),
                 color = if (pet.nest.isEmpty()) MaterialTheme.colorScheme.surface else NeoAccents.green,
-                contentDescription = "${eggCount(pet.nest.size)} in the nest, room for ${Colony.MAX_NEST_EGGS}",
+                contentDescription = stringResource(
+                    R.string.cd_colony_nest,
+                    eggCount(pet.nest.size),
+                    Colony.MAX_NEST_EGGS,
+                ),
             )
         },
     ) {
         if (pet.nest.isEmpty()) {
             Text(
-                text = "The nest is empty. An egg appears the moment ${pet.name} pairs off, and " +
-                    "the nest holds ${Colony.MAX_NEST_EGGS} at once. At this pace one takes " +
-                    "about ${clock(incubation)} to hatch.",
+                text = stringResource(
+                    R.string.colony_nest_empty,
+                    pet.name,
+                    Colony.MAX_NEST_EGGS,
+                    clock(incubation),
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else {
             Text(
                 text = if (next != null && next <= 0L) {
-                    "Due now."
+                    stringResource(R.string.colony_egg_due)
                 } else {
-                    "Next hatches in ${clock(next ?: 0L)}."
+                    stringResource(R.string.colony_next_hatch, clock(next ?: 0L))
                 },
                 style = MaterialTheme.typography.titleMedium,
                 color = accent,
@@ -786,8 +816,7 @@ private fun NestPanel(pet: PetState, incubation: Long, modifier: Modifier = Modi
             }
             Spacer(Modifier.height(pixelUnits(2)))
             Text(
-                text = "The genes inside were fixed when the egg was laid, so closing the app " +
-                    "cannot change what comes out.",
+                text = stringResource(R.string.colony_genes_fixed),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -829,7 +858,7 @@ private fun EggRow(
         Spacer(Modifier.width(pixelUnits(2)))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "With $otherParent",
+                text = stringResource(R.string.colony_with_parent, otherParent),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -837,9 +866,9 @@ private fun EggRow(
             )
             Text(
                 text = if (ready) {
-                    "${egg.species.displayName} · ready to hatch"
+                    stringResource(R.string.colony_egg_ready, egg.species.displayName)
                 } else {
-                    "${egg.species.displayName} · ${clock(left)} left"
+                    stringResource(R.string.colony_egg_left, egg.species.displayName, clock(left))
                 },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -887,14 +916,14 @@ private fun BreedingPanel(
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = accent,
-        title = "Breeding",
+        title = stringResource(R.string.colony_breeding),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         if (preview == null) {
             // Only reachable if the companion is forgotten between the list being read and this
             // panel being drawn. Saying so beats an empty panel.
             Text(
-                text = "${partner.name} is no longer in the colony.",
+                text = stringResource(R.string.colony_partner_gone, partner.name),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -915,17 +944,16 @@ private fun BreedingPanel(
             BlockerNote(blocker)
             Spacer(Modifier.height(pixelUnits(2)))
         }
+        val pairReadOut = if (blocker == null) {
+            stringResource(R.string.cd_colony_pair, pet.name, partner.name)
+        } else {
+            stringResource(R.string.cd_colony_pair_blocked, partner.name, blocker)
+        }
         PixelButton(
             onClick = onPair,
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics(mergeDescendants = true) {
-                    contentDescription = if (blocker == null) {
-                        "Pair ${pet.name} with ${partner.name}. An egg goes straight into the nest."
-                    } else {
-                        "Pairing with ${partner.name} is not possible. $blocker"
-                    }
-                },
+                .semantics(mergeDescendants = true) { contentDescription = pairReadOut },
             enabled = blocker == null,
             accent = accent,
             fill = if (blocker == null) {
@@ -944,18 +972,20 @@ private fun BreedingPanel(
             Spacer(Modifier.width(pixelUnits(2)))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (blocker == null) "PAIR WITH ${partner.name.uppercase()}" else "CANNOT PAIR YET",
+                    text = if (blocker == null) {
+                        stringResource(R.string.colony_pair_with, partner.name.uppercase())
+                    } else {
+                        stringResource(R.string.colony_cannot_pair)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (blocker == null) {
-                        "An egg goes into the nest straight away"
-                    } else {
-                        "See the reason above"
-                    },
+                    text = stringResource(
+                        if (blocker == null) R.string.colony_pair_detail else R.string.colony_pair_blocked_detail,
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -1010,11 +1040,10 @@ private fun ParentChip(
     genome: Genome,
     modifier: Modifier = Modifier,
 ) {
+    val chipReadOut = stringResource(R.string.cd_colony_parent_chip, name, describe(species, stage, genome))
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = "$name, ${describe(species, stage, genome)}."
-        },
+        modifier = modifier.semantics(mergeDescendants = true) { contentDescription = chipReadOut },
     ) {
         Portrait(
             species = species,
@@ -1066,17 +1095,29 @@ private fun ChildPreviewBlock(
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
     val shiftWord = when {
-        shiftPoints > 1 -> "further towards a hound"
-        shiftPoints < -1 -> "back towards a round blob"
-        else -> "about where ${pet.name} already is"
+        shiftPoints > 1 -> stringResource(R.string.colony_shift_hound)
+        shiftPoints < -1 -> stringResource(R.string.colony_shift_blob)
+        else -> stringResource(R.string.colony_shift_same, pet.name)
     }
 
-    val portraitDescription = "The likely child of ${pet.name} and ${partner.name}, shown grown up: " +
-        "${describe(preview.genome)}. ${preview.summary}"
+    val portraitDescription = stringResource(
+        R.string.cd_colony_child_portrait,
+        pet.name,
+        partner.name,
+        describe(preview.genome),
+        preview.summary,
+    )
+    val shapeReadOut = stringResource(
+        R.string.cd_colony_shape,
+        shiftWord,
+        signed(shiftPoints),
+        pet.name,
+        mine,
+    )
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "LIKELY CHILD",
+            text = stringResource(R.string.colony_likely_child),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurface,
             fontWeight = FontWeight.Bold,
@@ -1122,13 +1163,10 @@ private fun ChildPreviewBlock(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics(mergeDescendants = true) {
-                    contentDescription = "Shape: $shiftWord. ${signed(shiftPoints)} on the hound " +
-                        "scale, where ${pet.name} sits at $mine out of 100."
-                },
+                .semantics(mergeDescendants = true) { contentDescription = shapeReadOut },
         ) {
             Text(
-                text = "SHAPE",
+                text = stringResource(R.string.colony_shape),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -1143,7 +1181,7 @@ private fun ChildPreviewBlock(
             )
             Spacer(Modifier.width(pixelUnits(2)))
             Text(
-                text = "$shiftWord (${pet.name} is at $mine of 100)",
+                text = stringResource(R.string.colony_shift_line, shiftWord, pet.name, mine),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -1152,8 +1190,7 @@ private fun ChildPreviewBlock(
 
         Spacer(Modifier.height(pixelUnits(1)))
         Text(
-            text = "Bloodlines $distance per cent apart. Below $minApart per cent a pair only " +
-                "repeats itself and the match is refused.",
+            text = stringResource(R.string.colony_bloodlines, distance, minApart),
             style = MaterialTheme.typography.labelSmall,
             color = if (tooClose) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1163,9 +1200,11 @@ private fun ChildPreviewBlock(
             // is not, because the egg picks a family at random. Drawing it in one family and
             // saying nothing would make the other outcome look like a bug.
             Text(
-                text = "Drawn in ${pet.species.displayName} colours. Either family can carry, so " +
-                    "the egg is as likely to hatch a ${partner.species.displayName} — the palette " +
-                    "changes, the shape above does not.",
+                text = stringResource(
+                    R.string.colony_palette_caveat,
+                    pet.species.displayName,
+                    partner.species.displayName,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1184,8 +1223,7 @@ private fun ChildWords(summary: String, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.height(pixelUnits(1)))
         Text(
-            text = "This is the halfway point between the two, not a roll. The real egg lands " +
-                "near it, sometimes one trait further out.",
+            text = stringResource(R.string.colony_average_caveat),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1322,25 +1360,39 @@ private fun markSentence(pal: Pal, mark: Float?): String {
 }
 
 /** The same fact under the meter, short enough to sit on one line on a narrow phone. */
+@Composable
 private fun markCaption(pal: Pal, mark: Float?): String {
-    if (mark == null) return "past courting at ${Pal.COURT_AT.roundToInt()}"
+    if (mark == null) return stringResource(R.string.colony_past_courting, Pal.COURT_AT.roundToInt())
     val gap = (mark - pal.affinity).roundToInt().coerceAtLeast(1)
-    val rung = if (mark == Pal.FRIEND_AT) "friendship" else "courting"
-    return "$gap to $rung at ${mark.roundToInt()}"
+    val rung = stringResource(
+        if (mark == Pal.FRIEND_AT) R.string.colony_rung_friendship else R.string.colony_rung_courting,
+    )
+    return stringResource(R.string.colony_mark_caption, gap, rung, mark.roundToInt())
 }
+
+/**
+ * How a list of names is joined. A comma and a space in English; the resource exists so a
+ * locale that separates differently is a file change and not a code change.
+ */
+@Composable
+private fun listSeparator(): String = stringResource(R.string.list_separator)
 
 /** "Adult Volt, long-muzzled and leggy" — enough for a screen reader to picture the drawing. */
+@Composable
 private fun describe(species: Species, stage: LifeStage, genome: Genome): String =
-    "${stage.displayName.lowercase()} ${species.displayName}, ${describe(genome)}"
+    stringResource(R.string.colony_describe, stage.displayName.lowercase(), species.displayName, describe(genome))
 
 /** The silhouette in words, read off the same number the art reads. */
-private fun describe(genome: Genome): String = when {
-    genome.houndliness < 0.20f -> "a round, upright little thing"
-    genome.houndliness < 0.40f -> "still rounded, but longer in the leg"
-    genome.houndliness < 0.60f -> "half hound: a real muzzle and a low stance"
-    genome.houndliness < 0.80f -> "clearly houndish, going on all fours"
-    else -> "a long-muzzled hound, four-footed"
-}
+@Composable
+private fun describe(genome: Genome): String = stringResource(
+    when {
+        genome.houndliness < 0.20f -> R.string.silhouette_round
+        genome.houndliness < 0.40f -> R.string.silhouette_leggy
+        genome.houndliness < 0.60f -> R.string.silhouette_half_hound
+        genome.houndliness < 0.80f -> R.string.silhouette_houndish
+        else -> R.string.silhouette_hound
+    },
+)
 
 /** A signed whole number for a badge. The minus is a real minus sign, not a hyphen. */
 private fun signed(points: Int): String = when {
@@ -1349,11 +1401,14 @@ private fun signed(points: Int): String = when {
     else -> "0"
 }
 
-private fun creatureCount(n: Int): String = if (n == 1) "1 creature" else "$n creatures"
+@Composable
+private fun creatureCount(n: Int): String = pluralStringResource(R.plurals.creature_count, n, n)
 
-private fun childCount(n: Int): String = if (n == 1) "1 child" else "$n children"
+@Composable
+private fun childCount(n: Int): String = pluralStringResource(R.plurals.child_count, n, n)
 
-private fun eggCount(n: Int): String = if (n == 1) "1 egg" else "$n eggs"
+@Composable
+private fun eggCount(n: Int): String = pluralStringResource(R.plurals.egg_count, n, n)
 
 /**
  * A countdown in the coarsest unit that still says something.
@@ -1362,13 +1417,14 @@ private fun eggCount(n: Int): String = if (n == 1) "1 egg" else "$n eggs"
  * half an hour, and a ticking second hand on it is motion rather than information — except in
  * the last minute, where the seconds are the whole point.
  */
+@Composable
 private fun clock(seconds: Long): String {
     val left = seconds.coerceAtLeast(0L)
     val hours = left / 3600L
     val minutes = (left % 3600L) / 60L
     return when {
-        hours > 0L -> "${hours}h ${minutes}m"
-        minutes > 0L -> "${minutes}m"
-        else -> "${left}s"
+        hours > 0L -> stringResource(R.string.duration_hours_minutes, hours, minutes)
+        minutes > 0L -> stringResource(R.string.duration_minutes, minutes)
+        else -> stringResource(R.string.duration_seconds, left)
     }
 }
