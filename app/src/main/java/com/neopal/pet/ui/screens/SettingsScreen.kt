@@ -39,9 +39,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
+import com.neopal.pet.R
 import com.neopal.pet.domain.RetroMode
 import com.neopal.pet.domain.Simulation
 import com.neopal.pet.ui.PetViewModel
@@ -62,11 +64,15 @@ import kotlin.math.roundToInt
  * always a whole number; these are the sizes it rounds toward. Below about 130 the creature's
  * face stops surviving the downsample, which is why the coarse end starts where it does.
  */
+// Buffer height paired with the resource that names it, not with the English. The list is a
+// top-level `val` and a top-level `val` cannot call `stringResource`, so what it carries has to
+// be the id; the chip resolves it. Same shape as the domain question in §6.1, decided the same
+// way — the table holds identity, the composable holds words.
 private val PixelPresets = listOf(
-    130 to "Chunky",
-    200 to "Classic",
-    280 to "Fine",
-    380 to "Crisp",
+    130 to R.string.settings_pixel_preset_chunky,
+    200 to R.string.settings_pixel_preset_classic,
+    280 to R.string.settings_pixel_preset_fine,
+    380 to R.string.settings_pixel_preset_crisp,
 )
 
 /** Matches the kit's dimming so a label greys out with the control it names. */
@@ -89,6 +95,14 @@ fun SettingsScreen(
     var importResult by remember { mutableStateOf<String?>(null) }
     var tipsReplayed by remember { mutableStateOf(false) }
 
+    // Resolved here rather than where they are assigned: both assignments happen inside a
+    // callback or a coroutine, and `stringResource` is only legal in composition. Reading the
+    // words at the composable edge and handing the *value* to the code that runs later is the
+    // same move §6.1 asks for at the domain boundary, in the small.
+    val savedToClipboard = stringResource(R.string.settings_save_copied)
+    val saveImported = stringResource(R.string.settings_save_imported)
+    val saveUnreadable = stringResource(R.string.settings_save_unreadable)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -101,23 +115,23 @@ fun SettingsScreen(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back), tint = MaterialTheme.colorScheme.onBackground)
             }
-            Text("SETTINGS", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+            Text(stringResource(R.string.settings_title), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         }
         Spacer(Modifier.height(pixelUnits(2)))
 
-        SettingsPanel("Look", "How the pet and the room are drawn on screen.") {
+        SettingsPanel(stringResource(R.string.settings_look), stringResource(R.string.settings_look_blurb)) {
             PixelToggle(
                 checked = config.pixelMode,
                 onCheckedChange = { on -> viewModel.updateConfig { it.copy(pixelMode = on) } },
-                label = "Pixel-art mode",
+                label = stringResource(R.string.settings_pixel_mode),
                 accent = NeoAccents.cyan,
             )
             if (config.pixelMode) {
                 Spacer(Modifier.height(pixelUnits(2)))
                 Text(
-                    "Detail — lower is chunkier and more retro.",
+                    stringResource(R.string.settings_detail_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -128,9 +142,9 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(pixelUnits(1)),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    PixelPresets.forEach { (height, label) ->
+                    PixelPresets.forEach { (height, labelRes) ->
                         PixelChip(
-                            label = label,
+                            label = stringResource(labelRes),
                             selected = config.pixelHeight == height,
                             onClick = { viewModel.updateConfig { it.copy(pixelHeight = height) } },
                             accent = NeoAccents.cyan,
@@ -139,14 +153,14 @@ fun SettingsScreen(
                 }
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    "${config.pixelHeight}px tall buffer, upscaled with hard edges.",
+                    stringResource(R.string.settings_buffer_hint, config.pixelHeight),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
                 Spacer(Modifier.height(pixelUnits(3)))
                 Text(
-                    "Screen — which machine you are pretending to hold.",
+                    stringResource(R.string.settings_screen_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -176,17 +190,17 @@ fun SettingsScreen(
             PixelToggle(
                 checked = config.reducedMotion,
                 onCheckedChange = { on -> viewModel.updateConfig { it.copy(reducedMotion = on) } },
-                label = "Reduced motion",
+                label = stringResource(R.string.settings_reduced_motion),
                 accent = NeoAccents.cyan,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Sound and feel", "Audio and vibration feedback for taps, meals and games.") {
+        SettingsPanel(stringResource(R.string.settings_sound), stringResource(R.string.settings_sound_blurb)) {
             PixelToggle(
                 checked = config.soundEnabled,
                 onCheckedChange = { on -> viewModel.updateConfig { it.copy(soundEnabled = on) } },
-                label = "Sound effects",
+                label = stringResource(R.string.settings_sound_effects),
                 accent = NeoAccents.cyan,
             )
             Spacer(Modifier.height(pixelUnits(2)))
@@ -199,13 +213,13 @@ fun SettingsScreen(
                     .clearAndSetSemantics { },
             ) {
                 Text(
-                    "Volume",
+                    stringResource(R.string.settings_volume),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (config.soundEnabled) 1f else DisabledAlpha),
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
-                    "${(config.sfxVolume * 100f).roundToInt()}%",
+                    stringResource(R.string.percent_value, (config.sfxVolume * 100f).roundToInt()),
                     style = MaterialTheme.typography.labelMedium,
                     color = if (config.soundEnabled) NeoAccents.cyan else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -213,8 +227,8 @@ fun SettingsScreen(
             PixelSlider(
                 value = config.sfxVolume.coerceIn(0f, 1f),
                 onValueChange = { v -> viewModel.updateConfig { it.copy(sfxVolume = v.coerceIn(0f, 1f)) } },
-                label = "Volume",
-                valueLabel = "${(config.sfxVolume * 100f).roundToInt()} percent",
+                label = stringResource(R.string.settings_volume),
+                valueLabel = stringResource(R.string.cd_percent_value, (config.sfxVolume * 100f).roundToInt()),
                 valueRange = 0f..1f,
                 notches = 20,
                 enabled = config.soundEnabled,
@@ -224,7 +238,7 @@ fun SettingsScreen(
             PixelToggle(
                 checked = config.hapticsEnabled,
                 onCheckedChange = { on -> viewModel.updateConfig { it.copy(hapticsEnabled = on) } },
-                label = "Haptics",
+                label = stringResource(R.string.settings_haptics),
                 accent = NeoAccents.cyan,
             )
         }
@@ -241,20 +255,19 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(pixelUnits(3)))
         SettingsPanel(
-            "The creature's brain",
-            "Off by default. Everything else in NeoPal works with no network at all, and nothing " +
-                "here is needed to play — this only lets the creature talk back and think out loud.",
+            stringResource(R.string.settings_brain),
+            stringResource(R.string.settings_brain_blurb),
             accent = NeoAccents.gold,
         ) {
             PixelToggle(
                 checked = config.mind.enabled,
                 onCheckedChange = { on -> viewModel.updateMind { it.copy(enabled = on) } },
-                label = "Give it somewhere to think",
+                label = stringResource(R.string.settings_brain_enable),
                 accent = NeoAccents.gold,
             )
             Spacer(Modifier.height(pixelUnits(2)))
             Text(
-                "Route: ${config.mind.routeLabel}",
+                stringResource(R.string.settings_route, config.mind.routeLabel),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -266,14 +279,13 @@ fun SettingsScreen(
                 PixelTextWell(
                     value = config.mind.apiKey,
                     onValueChange = { v -> viewModel.updateMind { it.copy(apiKey = v.trim()) } },
-                    label = "Your own key (optional)",
-                    placeholder = "Leave empty to use the shared service",
+                    label = stringResource(R.string.settings_own_key),
+                    placeholder = stringResource(R.string.settings_own_key_placeholder),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    "Stored on this device and sent only to the address below. It is never put " +
-                        "into anything the creature says, and never written to the save's diary.",
+                    stringResource(R.string.settings_own_key_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -282,19 +294,19 @@ fun SettingsScreen(
                 PixelTextWell(
                     value = config.mind.baseUrl,
                     onValueChange = { v -> viewModel.updateMind { it.copy(baseUrl = v.trim()) } },
-                    label = "Endpoint",
+                    label = stringResource(R.string.settings_endpoint),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(3)))
                 PixelTextWell(
                     value = config.mind.model,
                     onValueChange = { v -> viewModel.updateMind { it.copy(model = v.trim()) } },
-                    label = "Model",
+                    label = stringResource(R.string.settings_model),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    "The default is a free model, so trying this costs nothing.",
+                    stringResource(R.string.settings_model_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -303,19 +315,16 @@ fun SettingsScreen(
                 PixelTextWell(
                     value = config.mind.quickModel,
                     onValueChange = { v -> viewModel.updateMind { it.copy(quickModel = v.trim()) } },
-                    label = "Quick model (optional)",
-                    placeholder = "A smaller model, for deciding only",
+                    label = stringResource(R.string.settings_quick_model),
+                    placeholder = stringResource(R.string.settings_quick_model_placeholder),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
                     if (config.mind.splitsModels) {
-                        "Deciding goes to ${config.mind.quickModel}; talking, planning and " +
-                            "remembering go to ${config.mind.model}."
+                        stringResource(R.string.settings_split_models, config.mind.quickModel, config.mind.model)
                     } else {
-                        "Deciding runs many times an hour and only has to pick from a list the " +
-                            "game already checked. Sending it somewhere small leaves the quota " +
-                            "for talking and planning, which is where a big model shows."
+                        stringResource(R.string.settings_split_models_hint)
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -325,8 +334,8 @@ fun SettingsScreen(
                 PixelTextWell(
                     value = config.mind.proxyUrl,
                     onValueChange = { v -> viewModel.updateMind { it.copy(proxyUrl = v.trim()) } },
-                    label = "Shared service (optional)",
-                    placeholder = "Used when no key of your own is set",
+                    label = stringResource(R.string.settings_shared_service),
+                    placeholder = stringResource(R.string.settings_shared_service_placeholder),
                     accent = NeoAccents.gold,
                 )
 
@@ -334,27 +343,26 @@ fun SettingsScreen(
                 PixelToggle(
                     checked = config.mind.conversation,
                     onCheckedChange = { on -> viewModel.updateMind { it.copy(conversation = on) } },
-                    label = "Let it talk",
+                    label = stringResource(R.string.settings_let_it_talk),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(2)))
                 PixelToggle(
                     checked = config.mind.decidesActions,
                     onCheckedChange = { on -> viewModel.updateMind { it.copy(decidesActions = on) } },
-                    label = "Let it choose what to do",
+                    label = stringResource(R.string.settings_let_it_choose),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(2)))
                 PixelToggle(
                     checked = config.mind.lineageLessons,
                     onCheckedChange = { on -> viewModel.updateMind { it.copy(lineageLessons = on) } },
-                    label = "Let it draw lessons for its children",
+                    label = stringResource(R.string.settings_let_it_teach),
                     accent = NeoAccents.gold,
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    "Children inherit lessons from their parent's life whether this is on or " +
-                        "off. This only changes who words them.",
+                    stringResource(R.string.settings_let_it_teach_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -362,19 +370,19 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Reminders", "Whether NeoPal nudges you when a need runs low.") {
+        SettingsPanel(stringResource(R.string.settings_reminders), stringResource(R.string.settings_reminders_blurb)) {
             PixelToggle(
                 checked = config.notificationsEnabled,
                 onCheckedChange = { on -> viewModel.updateConfig { it.copy(notificationsEnabled = on) } },
-                label = "Care reminders",
+                label = stringResource(R.string.channel_care_name),
                 accent = NeoAccents.cyan,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Finish", "How soft the picture is, and how much atmosphere sits over it.") {
+        SettingsPanel(stringResource(R.string.settings_finish), stringResource(R.string.settings_finish_blurb)) {
             Text(
-                "Pixel softness ${(config.softFinish * 100).roundToInt()}%",
+                stringResource(R.string.settings_softness_value, (config.softFinish * 100).roundToInt()),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.clearAndSetSemantics { },
@@ -383,8 +391,8 @@ fun SettingsScreen(
             PixelSlider(
                 value = config.softFinish,
                 onValueChange = { value -> viewModel.updateConfig { it.copy(softFinish = value) } },
-                label = "Pixel softness",
-                valueLabel = "${(config.softFinish * 100).roundToInt()} percent",
+                label = stringResource(R.string.settings_softness),
+                valueLabel = stringResource(R.string.cd_percent_value, (config.softFinish * 100).roundToInt()),
                 valueRange = 0f..1f,
                 notches = 20,
                 // The handheld reprints the frame in four flat tones, so a bloom would only add a
@@ -395,14 +403,13 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(pixelUnits(1)))
             Text(
-                "At zero the blocks are razor-hard. Higher lets light bleed a pixel past an edge, " +
-                    "which takes the glare off without blurring the art.",
+                stringResource(R.string.settings_softness_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(3)))
             Text(
-                "Atmosphere ${(config.atmosphere * 100).roundToInt()}%",
+                stringResource(R.string.settings_atmosphere_value, (config.atmosphere * 100).roundToInt()),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.clearAndSetSemantics { },
@@ -411,25 +418,25 @@ fun SettingsScreen(
             PixelSlider(
                 value = config.atmosphere,
                 onValueChange = { value -> viewModel.updateConfig { it.copy(atmosphere = value) } },
-                label = "Atmosphere",
-                valueLabel = "${(config.atmosphere * 100).roundToInt()} percent",
+                label = stringResource(R.string.settings_atmosphere),
+                valueLabel = stringResource(R.string.cd_percent_value, (config.atmosphere * 100).roundToInt()),
                 valueRange = 0f..1f,
                 notches = 20,
                 accent = NeoAccents.cyan,
             )
             Spacer(Modifier.height(pixelUnits(1)))
             Text(
-                "Warm light by day, cool by night, and a soft vignette around the room.",
+                stringResource(R.string.settings_atmosphere_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Pace", "How long a whole life takes, and how fast the clock runs.") {
+        SettingsPanel(stringResource(R.string.settings_pace), stringResource(R.string.settings_pace_blurb)) {
             val lifetimeHours = Simulation.expectedLifetimeSeconds(config) / 3600f
             Text(
-                "A full life takes about ${"%.1f".format(lifetimeHours)} hours of real time.",
+                stringResource(R.string.settings_lifetime, lifetimeHours),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -441,13 +448,13 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 listOf(
-                    "Slow" to 0.5f,
-                    "Normal" to 1f,
-                    "Fast" to 3f,
-                    "Demo" to 12f,
-                ).forEach { (label, speed) ->
+                    R.string.settings_pace_slow to 0.5f,
+                    R.string.settings_pace_normal to 1f,
+                    R.string.settings_pace_fast to 3f,
+                    R.string.settings_pace_demo to 12f,
+                ).forEach { (labelRes, speed) ->
                     PixelChip(
-                        label = label,
+                        label = stringResource(labelRes),
                         selected = kotlin.math.abs(config.lifeSpeed - speed) < 0.01f,
                         onClick = { viewModel.updateConfig { it.copy(lifeSpeed = speed) } },
                         accent = NeoAccents.cyan,
@@ -456,7 +463,7 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(pixelUnits(3)))
             Text(
-                "Clock: one pet day lasts ${PetClock.minutesOf(config)} minutes.",
+                stringResource(R.string.settings_clock, PetClock.minutesOf(config)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -466,8 +473,8 @@ fun SettingsScreen(
                 onValueChange = { minutes ->
                     viewModel.updateConfig { PetClock.withMinutes(it, minutes) }
                 },
-                label = "Minutes per pet day",
-                valueLabel = "${PetClock.minutesOf(config)} minutes",
+                label = stringResource(R.string.settings_minutes_per_day),
+                valueLabel = stringResource(R.string.cd_minutes_value, PetClock.minutesOf(config)),
                 // Range and stops come from the domain, which has a test tying the top of the
                 // range to GameConfig's own default. They were literals here, and they did not
                 // include it: the control opened pinned to its maximum, two hours short of the
@@ -478,17 +485,18 @@ fun SettingsScreen(
             )
             Spacer(Modifier.height(pixelUnits(1)))
             Text(
-                "The clock only sets day, night and the day counter. Time away is simulated at " +
-                    "${(config.offlineDecayMultiplier * 100).toInt()}% speed and capped at " +
-                    "${config.maxOfflineSeconds / 3600} hours, and absence alone will never kill a " +
-                    "healthy pet — only illness you left untreated can.",
+                stringResource(
+                    R.string.settings_clock_hint,
+                    (config.offlineDecayMultiplier * 100).toInt(),
+                    config.maxOfflineSeconds / 3600,
+                ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Help", "The first-run coach marks that explain the room.") {
+        SettingsPanel(stringResource(R.string.settings_help), stringResource(R.string.settings_help_blurb)) {
             PixelButton(
                 onClick = {
                     viewModel.updateConfig { it.copy(tutorialSeen = false) }
@@ -497,12 +505,12 @@ fun SettingsScreen(
                 accent = NeoAccents.cyan,
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text("Replay the tips", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                Text(stringResource(R.string.settings_replay_tips), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
             }
             if (tipsReplayed) {
                 Spacer(Modifier.height(pixelUnits(2)))
                 Text(
-                    "The tips will show again next time you open the room.",
+                    stringResource(R.string.settings_replay_tips_done),
                     style = MaterialTheme.typography.labelSmall,
                     color = NeoAccents.cyan,
                 )
@@ -510,29 +518,29 @@ fun SettingsScreen(
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Save data", "Move this pet between devices, or restore an older copy.") {
+        SettingsPanel(stringResource(R.string.settings_save_data), stringResource(R.string.settings_save_data_blurb)) {
             Row(horizontalArrangement = Arrangement.spacedBy(pixelUnits(2))) {
                 PixelButton(
                     onClick = {
                         scope.launch {
                             clipboard.setText(AnnotatedString(viewModel.exportSave()))
-                            importResult = "Save copied to the clipboard."
+                            importResult = savedToClipboard
                         }
                     },
                     accent = NeoAccents.cyan,
                 ) {
-                    Text("Export", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Text(stringResource(R.string.settings_export), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                 }
                 PixelButton(
                     onClick = {
                         viewModel.importSave(importText) { ok ->
-                            importResult = if (ok) "Save imported." else "That save could not be read."
+                            importResult = if (ok) saveImported else saveUnreadable
                         }
                     },
                     accent = NeoAccents.cyan,
                     enabled = importText.isNotBlank(),
                 ) {
-                    Text("Import", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+                    Text(stringResource(R.string.settings_import), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
                 }
             }
             Spacer(Modifier.height(pixelUnits(2)))
@@ -540,7 +548,7 @@ fun SettingsScreen(
                 value = importText,
                 onValueChange = { importText = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = "Paste a save here",
+                placeholder = stringResource(R.string.settings_paste_save),
                 minLines = 2,
                 maxLines = 4,
                 accent = NeoAccents.cyan,
@@ -551,17 +559,22 @@ fun SettingsScreen(
             }
         }
 
+        // Its own file: the only section of this screen that reads a download running somewhere
+        // else, and the only one whose numbers are gigabytes of somebody's phone.
+        Spacer(Modifier.height(pixelUnits(3)))
+        ModelStoragePanel()
+
         Spacer(Modifier.height(pixelUnits(3)))
         // Directly above the danger zone on purpose: it is the other thing on this screen that
         // can end with the save gone, if a build turns out to be signed with a different key.
-        SettingsPanel("App updates", "Where new builds come from, and whether there is one.") {
+        SettingsPanel(stringResource(R.string.settings_updates), stringResource(R.string.settings_updates_blurb)) {
             PixelButton(
                 onClick = onOpenUpdates,
                 accent = NeoAccents.cyan,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "Check for updates",
+                    stringResource(R.string.settings_check_updates),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -569,16 +582,14 @@ fun SettingsScreen(
             }
             Spacer(Modifier.height(pixelUnits(2)))
             Text(
-                "NeoPal installs from its own release page rather than a store, so it does not " +
-                    "update itself in the background. Nothing is downloaded or installed without " +
-                    "you asking for it.",
+                stringResource(R.string.settings_updates_hint),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         Spacer(Modifier.height(pixelUnits(3)))
-        SettingsPanel("Danger zone", "Ends this pet's life and starts a fresh save.", accent = MaterialTheme.colorScheme.error) {
+        SettingsPanel(stringResource(R.string.settings_danger), stringResource(R.string.settings_danger_blurb), accent = MaterialTheme.colorScheme.error) {
             PixelButton(
                 onClick = { confirmReset = true },
                 accent = MaterialTheme.colorScheme.error,
@@ -586,7 +597,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
-                    "Delete save and start over",
+                    stringResource(R.string.settings_delete_save),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -597,8 +608,7 @@ fun SettingsScreen(
 
         Spacer(Modifier.height(pixelUnits(5)))
         Text(
-            "NeoPal is an original virtual pet. All art is drawn procedurally in code; the console " +
-                "styling is a generic handheld design and carries no third-party branding.",
+            stringResource(R.string.settings_colophon),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -608,16 +618,16 @@ fun SettingsScreen(
     if (confirmReset) {
         AlertDialog(
             onDismissRequest = { confirmReset = false },
-            title = { Text("Delete this pet?") },
-            text = { Text("The save, the album and every unlock are erased. This cannot be undone.") },
+            title = { Text(stringResource(R.string.settings_delete_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_delete_confirm_body)) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmReset = false
                     onResetToNewGame()
-                }) { Text("Delete") }
+                }) { Text(stringResource(R.string.action_delete)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmReset = false }) { Text("Cancel") }
+                TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.action_cancel)) }
             },
         )
     }

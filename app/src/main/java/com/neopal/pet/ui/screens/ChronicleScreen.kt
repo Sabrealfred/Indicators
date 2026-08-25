@@ -29,7 +29,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
+import com.neopal.pet.R
 import com.neopal.pet.domain.ChronicleEntry
 import com.neopal.pet.domain.ChronicleKind
 import com.neopal.pet.ui.PetViewModel
@@ -63,18 +65,18 @@ fun ChronicleScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.nav_back),
                     tint = MaterialTheme.colorScheme.onBackground,
                 )
             }
             Column {
                 Text(
-                    "DIARY",
+                    stringResource(R.string.chronicle_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                 )
                 Text(
-                    "${pet.name}'s own words · ${entries.size} entries",
+                    stringResource(R.string.chronicle_subtitle, pet.name, entries.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -85,14 +87,13 @@ fun ChronicleScreen(viewModel: PetViewModel, onBack: () -> Unit) {
         if (entries.isEmpty()) {
             Column(modifier = Modifier.padding(top = pixelUnits(10))) {
                 Text(
-                    "The first page is blank",
+                    stringResource(R.string.chronicle_empty_title),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
                 Spacer(Modifier.height(pixelUnits(2)))
                 Text(
-                    "${pet.name} writes this itself — the good days and the ones where nobody came. " +
-                        "Give it a life worth writing about.",
+                    stringResource(R.string.chronicle_empty_body, pet.name),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -151,11 +152,13 @@ private fun ChronicleRow(entry: ChronicleEntry) {
             // The entry wears the colour of what happened, edge and title plate alike.
             accent = accent,
             background = background,
-            title = "Day ${entry.petDay}",
+            title = stringResource(R.string.chronicle_day, entry.petDay),
             contentPadding = PaddingValues(pixelUnits(3)),
         ) {
             Text(
-                text = "“${entry.text}”",
+                // The quotation marks are chrome around the creature's line, not part of it:
+                // a locale that quotes with «» changes the resource and never the diary.
+                text = stringResource(R.string.quoted_line, entry.text),
                 style = MaterialTheme.typography.bodyMedium,
                 fontStyle = FontStyle.Italic,
                 color = if (entry.kind == ChronicleKind.LOSS) {

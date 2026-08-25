@@ -42,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -98,6 +99,8 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     tint = MaterialTheme.colorScheme.onBackground,
                 )
             }
+            // `clickable(onClickLabel = ...)` takes a value, not a composable call.
+            val renameLabel = stringResource(R.string.stats_rename)
             Text(
                 pet.name.uppercase(),
                 style = MaterialTheme.typography.headlineMedium,
@@ -107,19 +110,25 @@ fun StatsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                 modifier = Modifier
                     .weight(1f)
                     // The name is a shortcut to the same dialog as the pencil, so it says so.
-                    .clickable(onClickLabel = "Rename", role = Role.Button) { renaming = true }
+                    .clickable(onClickLabel = renameLabel, role = Role.Button) { renaming = true }
                     .semantics { heading() },
             )
             IconButton(onClick = { renaming = true }) {
                 Icon(
                     Icons.Filled.Edit,
-                    contentDescription = "Rename ${pet.name}",
+                    contentDescription = stringResource(R.string.cd_rename_pet, pet.name),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
         Text(
-            "${pet.species.displayName} · ${pet.stage.displayName} · ${pet.branch.displayName} · ${pet.personality.displayName}",
+            stringResource(
+                R.string.stats_identity,
+                pet.species.displayName,
+                pet.stage.displayName,
+                pet.branch.displayName,
+                pet.personality.displayName,
+            ),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -255,12 +264,12 @@ private fun GenerationsCard(pet: PetState, config: GameConfig) {
     PixelPanel(
         modifier = Modifier.fillMaxWidth(),
         accent = NeoAccents.cyan,
-        title = "Generations",
+        title = stringResource(R.string.generations_title),
         titleTrailing = {
             PixelBadge(
                 text = "${pet.generation}",
                 color = NeoAccents.cyan,
-                contentDescription = "Generation ${pet.generation}",
+                contentDescription = stringResource(R.string.cd_generation, pet.generation),
             )
         },
     ) {
@@ -268,14 +277,9 @@ private fun GenerationsCard(pet: PetState, config: GameConfig) {
             // A save carried over from a build that kept no history has nothing here and never
             // will. A table of zeroes would read as a generation that did nothing at all.
             val missing = pet.generation - 1
-            val lead = if (missing == 1) {
-                "The generation before this one was never written down"
-            } else {
-                "The $missing generations before this one were never written down"
-            }
+            val lead = pluralStringResource(R.plurals.generations_unrecorded, missing, missing)
             Text(
-                "$lead — this save is older than the log. Generation ${pet.generation} is being " +
-                    "recorded, so the pet after it will have something to be measured against.",
+                stringResource(R.string.generations_unrecorded_body, lead, pet.generation),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -291,17 +295,19 @@ private fun GenerationsCard(pet: PetState, config: GameConfig) {
             // A finished life against a life in progress: the totals are not a fair race yet, and
             // a green number on an unfinished run should not be read as one.
             Text(
-                "Generation ${last.generation} is a finished life. This one is still being lived, " +
-                    "so its counts are still filling in.",
+                stringResource(R.string.generations_in_progress, last.generation),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(pixelUnits(2)))
         }
-        CompareHeader(now = "Now", then = "Gen ${last.generation}")
-        CompareDigits("Pet days", "$nowDays", "$thenDays", ahead = nowDays > thenDays)
+        CompareHeader(
+            now = stringResource(R.string.compare_now),
+            then = stringResource(R.string.compare_generation, last.generation),
+        )
+        CompareDigits(stringResource(R.string.compare_pet_days), "$nowDays", "$thenDays", ahead = nowDays > thenDays)
         CompareText(
-            label = "Stage",
+            label = stringResource(R.string.compare_stage),
             now = pet.stage.displayName,
             then = last.stage.displayName,
             ahead = pet.stage.order > last.stage.order,
@@ -309,26 +315,26 @@ private fun GenerationsCard(pet: PetState, config: GameConfig) {
         // The growth card grades the stats as they stand this second; this one grades the whole
         // life, which is the only way two finished runs can be held against each other.
         CompareText(
-            label = "Lifetime care",
+            label = stringResource(R.string.compare_lifetime_care),
             now = careGrade(pet.lifetimeCareScore),
             then = careGrade(last.careScore),
             ahead = pet.lifetimeCareScore > last.careScore,
         )
-        CompareBars("Care", pet.lifetimeCareScore, last.careScore, NeoColors.StatHealth, last.generation)
+        CompareBars(stringResource(R.string.compare_care), pet.lifetimeCareScore, last.careScore, NeoColors.StatHealth, last.generation)
         CompareDigits(
-            label = "Mistakes per hour",
+            label = stringResource(R.string.compare_mistakes_per_hour),
             now = oneDecimal(nowMistakes),
             then = oneDecimal(last.mistakesPerHour),
             ahead = nowMistakes < last.mistakesPerHour,
         )
-        CompareDigits("Meals", "${pet.mealsEaten}", "${last.mealsEaten}", ahead = pet.mealsEaten > last.mealsEaten)
+        CompareDigits(stringResource(R.string.compare_meals), "${pet.mealsEaten}", "${last.mealsEaten}", ahead = pet.mealsEaten > last.mealsEaten)
         CompareDigits(
-            label = "Games won",
+            label = stringResource(R.string.stats_record_games_won),
             now = "${pet.gamesWon}",
             then = "${last.gamesWon}",
             ahead = pet.gamesWon > last.gamesWon,
         )
-        CompareBars("Peak bond", pet.peakBond / 100f, last.peakBond / 100f, NeoColors.StatBond, last.generation)
+        CompareBars(stringResource(R.string.compare_peak_bond), pet.peakBond / 100f, last.peakBond / 100f, NeoColors.StatBond, last.generation)
 
         Spacer(Modifier.height(pixelUnits(2)))
         PixelDivider()
@@ -346,18 +352,24 @@ private fun GenerationsCard(pet: PetState, config: GameConfig) {
 /** How the last run ended — the one line of it this pet cannot be compared against. */
 @Composable
 private fun Ending(last: RunRecord) {
-    val badge = last.deathReason?.displayName ?: "Unfinished"
-    val who = "${last.name} · ${last.species.displayName} · " +
-        "${last.branch.displayName} · ${last.personality.displayName}"
+    val badge = last.deathReason?.displayName ?: stringResource(R.string.ending_unfinished)
+    val who = stringResource(
+        R.string.stats_identity,
+        last.name,
+        last.species.displayName,
+        last.branch.displayName,
+        last.personality.displayName,
+    )
     val sentence = when {
-        last.diedOfOldAge -> "A whole life, ended by nothing but time."
-        last.deathReason != null -> "It never saw the end of ${last.stage.displayName}."
-        else -> "Replaced rather than lost."
+        last.diedOfOldAge -> stringResource(R.string.ending_old_age)
+        last.deathReason != null -> stringResource(R.string.ending_cut_short, last.stage.displayName)
+        else -> stringResource(R.string.ending_replaced)
     }
+    val readOut = stringResource(R.string.cd_ending, badge, who, sentence)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .semantics(mergeDescendants = true) { contentDescription = "Ending. $badge. $who. $sentence" },
+            .semantics(mergeDescendants = true) { contentDescription = readOut },
     ) {
         PixelBadge(
             text = badge.uppercase(),
@@ -382,17 +394,26 @@ private fun Ending(last: RunRecord) {
 }
 
 /** One honest sentence about the comparison, including "too early to tell". */
+@Composable
 private fun verdict(pet: PetState, last: RunRecord, nowDays: Int, thenDays: Int): String = when {
     pet.stage.order > last.stage.order ->
-        "${pet.name} has already outgrown generation ${last.generation}."
+        stringResource(R.string.verdict_ahead, pet.name, last.generation)
     pet.stage.order < last.stage.order ->
-        "Generation ${last.generation} reached ${last.stage.displayName}. ${pet.name} is not there yet."
+        stringResource(R.string.verdict_behind, last.generation, last.stage.displayName, pet.name)
     nowDays < thenDays ->
-        "Same stage as generation ${last.generation}, and ${thenDays - nowDays} pet day(s) quicker about it."
+        stringResource(
+            R.string.verdict_quicker,
+            last.generation,
+            pluralStringResource(R.plurals.day_count, thenDays - nowDays, thenDays - nowDays),
+        )
     nowDays > thenDays ->
-        "Same stage as generation ${last.generation}, ${nowDays - thenDays} pet day(s) later."
+        stringResource(
+            R.string.verdict_slower,
+            last.generation,
+            pluralStringResource(R.plurals.day_count, nowDays - thenDays, nowDays - thenDays),
+        )
     else ->
-        "Neck and neck with generation ${last.generation} so far."
+        stringResource(R.string.verdict_level, last.generation)
 }
 
 @Composable
@@ -436,7 +457,7 @@ private const val CompareLabelWeight = 1.2f
  */
 @Composable
 private fun CompareText(label: String, now: String, then: String, ahead: Boolean = false) {
-    CompareRow(label, "$label. This generation $now. Generation before $then.") {
+    CompareRow(label, stringResource(R.string.cd_compare_row, label, now, then)) {
         Text(
             now,
             style = MaterialTheme.typography.bodyMedium,
@@ -466,7 +487,7 @@ private fun CompareText(label: String, now: String, then: String, ahead: Boolean
  */
 @Composable
 private fun CompareDigits(label: String, now: String, then: String, ahead: Boolean = false) {
-    CompareRow(label, "$label. This generation $now. Generation before $then.") {
+    CompareRow(label, stringResource(R.string.cd_compare_row, label, now, then)) {
         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             PixelDigits(now, color = if (ahead) NeoAccents.green else MaterialTheme.colorScheme.onSurface)
         }
@@ -505,14 +526,12 @@ private fun CompareRow(label: String, readOut: String, values: @Composable RowSc
 @Composable
 private fun CompareBars(label: String, now: Float, then: Float, color: Color, generation: Int) {
     val background = MaterialTheme.colorScheme.background
+    val readOut = stringResource(R.string.cd_compare_bars, label, percent(now), generation, percent(then))
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = pixelUnits(1))
-            .semantics(mergeDescendants = true) {
-                contentDescription = "$label. This generation ${percent(now)} percent. " +
-                    "Generation $generation ${percent(then)} percent."
-            },
+            .semantics(mergeDescendants = true) { contentDescription = readOut },
     ) {
         Text(
             label.uppercase(),
@@ -542,27 +561,27 @@ private fun RenameDialog(current: String, onDismiss: () -> Unit, onConfirm: (Str
     var draft by remember { mutableStateOf(current) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Rename") },
+        title = { Text(stringResource(R.string.stats_rename)) },
         text = {
             Column {
                 OutlinedTextField(
                     value = draft,
                     onValueChange = { if (it.length <= 12) draft = it },
                     singleLine = true,
-                    label = { Text("Name") },
+                    label = { Text(stringResource(R.string.newgame_name)) },
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "Twelve characters. It keeps everything else — the diary is still its diary.",
+                    stringResource(R.string.stats_rename_hint),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(draft) }, enabled = draft.isNotBlank()) { Text("Save") }
+            TextButton(onClick = { onConfirm(draft) }, enabled = draft.isNotBlank()) { Text(stringResource(R.string.action_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) } },
     )
 }
 

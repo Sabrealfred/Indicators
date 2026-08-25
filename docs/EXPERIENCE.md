@@ -289,14 +289,42 @@ tipografía y mismo botón para "murió de vieja a los dos días" que para "la d
 
 ### 3.1 Qué se hereda hoy (verificado en `Simulation.nextGeneration`)
 
+**La línea divisoria no es "qué es importante", es de quién es cada cosa.** Lo que ganó el
+jugador con sus propios pulgares sobrevive; lo que era de *esa* criatura se entierra con ella.
+Esa regla no estaba escrita cuando se hizo la tabla de la revisión anterior, y por eso la tabla
+mandaba a la tumba tres cosas que nunca fueron de la mascota.
+
 | Se hereda | No se hereda |
 |---|---|
-| `coins` | `level` y `xp` (vuelven a 1 / 0) |
-| `album` completo | `highScores` de los minijuegos |
-| **`chronicle` completo** (nuevo) | `personality` (se vuelve a sortear) |
-| `unlockedAchievements` | `weightGrams`, todos los contadores de cuidado |
-| Inventario **cosmético** (sombreros, cuartos) | Consumibles (se reponen 3 bayas, 2 platos, 1 pastilla) |
-| `generation + 1` | El nombre |
+| `coins` | El nombre (lo elige el jugador) |
+| `album` completo | `personality` (se vuelve a sortear) |
+| **`chronicle` completo** | `stats`, `weightGrams` y todos los contadores de cuidado |
+| `unlockedAchievements` | `intellect` y `studySessions` |
+| **`level` y `xp`** | `skills` — salvo las que el heredero ya sabía |
+| **`highScores` de los minijuegos** | `genome` — salvo que se continúe por un heredero |
+| **`careStreakDays` y `bestCareStreak`** | Consumibles (se reponen 3 bayas, 2 platos, 1 pastilla) |
+| Inventario **duradero**: sombreros, cuartos **y juguetes** | |
+| `pals`: todos siguen ahí, con afinidad 0 y otra vez visitantes | |
+| `nest`: los huevos, con el tiempo que les quedaba | |
+| `lessons` del linaje, más la que destila la vida que terminó | |
+| `previousGenerations` + el `RunRecord` de la vida que terminó | |
+| `autonomy` y `generation + 1` | |
+
+Tres correcciones respecto de la revisión anterior, y las tres son la misma corrección:
+
+- **`level` y `xp` ya no vuelven a 1 / 0.** El logro lo llama *keeper level* — nivel de
+  **cuidador** — y el cuidador no se murió.
+- **`highScores` ya no se pierde.** Un récord lo puso el jugador jugando, no la mascota. Además
+  "puntuá en los siete minijuegos" era un logro imposible de terminar mientras los récords se
+  borraran en cada muerte, porque nadie juega los siete en una sola vida.
+- **La racha de cuidado cruza el entierro.** Cuenta días en los que el *jugador* apareció, y
+  enterrar una mascota y adoptar otra el mismo día no es un día faltado.
+
+El inventario también cambió de criterio: se filtraba por "cosmético", lo que tiraba los
+juguetes: la mascota nueva no hereda una pelota que no se gasta y el jugador vuelve a la tienda a
+comprar la misma dos veces. Ahora el filtro es **duradero** (`Item.isDurable`), que es la
+propiedad que de verdad importa. La comida sí se acaba, así que la camada nueva trae su propio
+paquete de arranque.
 
 ### 3.2 Por qué la segunda generación debe sentirse distinta
 
@@ -305,15 +333,21 @@ tarde. El peso de esa decisión sube muchísimo, y el juego tiene que estar a la
 
 1. **Ya no hay excusa.** En la gen 1 el jugador no sabía que un adulto aguanta cuatro horas
    solo. En la gen 2 lo sabe. Las mismas acciones significan otra cosa cuando son informadas.
-2. **La casa ya no está vacía.** Hereda monedas, sombreros y cuartos: la nueva criatura nace en
-   el mundo que construyó la anterior. Eso hoy es sólo economía; debería ser escenografía — el
-   sombrero de la mascota muerta debería estar colgado en el cuarto, no sólo en el inventario.
+2. **La casa ya no está vacía.** Hereda monedas, sombreros, cuartos y juguetes: la nueva criatura
+   nace en el mundo que construyó la anterior. Eso hoy es sólo economía; debería ser escenografía
+   — el sombrero de la mascota muerta debería estar colgado en el cuarto, no sólo en el
+   inventario.
 3. **El cuaderno ya tiene voz.** Es la novedad más grande respecto de la revisión anterior:
    la generación 2 nace con las palabras de la generación 1 en el bolsillo. Eso es exactamente
    el sentido de linaje que queríamos, y todavía no está presentado como tal (§8.6).
-4. **La progresión se reinicia y eso es correcto.** Perder el nivel de cuidador dice: la
-   experiencia no se transfiere, el vínculo sí. Es exactamente la tesis. Lo que **no** es
-   correcto es perder los récords de los minijuegos sin decírselo a nadie.
+4. **Lo que se reinicia es la criatura, no el jugador.** Esta viñeta decía lo contrario: que
+   perder el nivel de cuidador expresaba "la experiencia no se transfiere, el vínculo sí". Suena
+   bien y es falso, porque el nivel nunca fue de la mascota. El que aprendió a cuidar es el que
+   sigue vivo, y borrarle el nivel, los récords y la racha era decirle que su propia historia era
+   propiedad de la mascota. Lo que se reinicia — stats, contadores, intelecto, skills, genoma —
+   sí era de ella, y ahí el reinicio dice exactamente lo que queríamos que dijera: **la crianza
+   no se hereda, hay que volver a hacerla**. La tesis está intacta; estaba apoyada en la mitad
+   equivocada de la tabla.
 
 ### 3.3 El juego largo (generación 3+)
 
@@ -786,13 +820,18 @@ días rutinarios antes que `MILESTONE` y `LOSS`; `CareActions.trimAlbum()` desca
 que entradas `evo_`. `BalanceTest` fija las dos cosas. La eclosión de la generación 1 ya no se
 puede borrar por escribir mucho.
 
+`highScores` ya se hereda, y con él `level`, `xp` y la racha de cuidado: son del jugador, no de
+la mascota (§3.1).
+
 **Lo que sigue mal.** Los topes (`MAX_ENTRIES = 120`, `ALBUM_LIMIT = 60`) son **globales, no por
 generación**: en la generación 4 los hitos de las cuatro compiten por el mismo espacio, y como
 los hitos son inmunes al recorte, el cuaderno termina siendo puros hitos sin ningún día común
-entre ellos — una lista de partidas de nacimiento. Y `highScores` sigue sin heredarse.
+entre ellos — una lista de partidas de nacimiento.
 
-**Recomendación.** Particionar cuaderno y álbum por generación, con tope por generación. Los
-récords de minijuegos se heredan como "récord de la casa" con el nombre de quién lo hizo.
+**Recomendación.** Particionar cuaderno y álbum por generación, con tope por generación. De los
+récords queda sólo la mitad de presentación: se conservan, pero como un número suelto, sin decir
+**quién** lo hizo. "Récord de la casa, puesto por Pip, generación 2" es la versión que convierte
+un número en memoria — que es lo que pide todo este §8.6.
 
 ### 8.7 El álbum borraba el recuerdo más viejo en silencio · ✅ **RESUELTO**
 
@@ -946,7 +985,7 @@ ritmo de dos días**. **S** = días, **M** = una a dos semanas, **L** = más.
 | **R13** | **Carta de aniversario** | Cada 24 horas reales de vida, la criatura deja una nota corta sobre lo que va del camino. Dos por partida a ritmo Normal. | El rebalanceo creó una unidad nueva —el día real— y nada la marca. Es el gancho más barato para que el jugador vuelva al día siguiente sin que nadie le pida nada. | **S** |
 | **R14** | **El objeto favorito** | En algún momento la criatura elige un objeto del inventario y lo adopta. Aparece en el cuarto, en las fotos, y se hereda a la generación siguiente. | Un detalle irracional y no optimizable es lo que hace que una criatura se sienta particular en vez de configurada. | **S** |
 | **R15** | **Rechazos con carácter** | Cada personalidad rechaza distinto: Shy se esconde, Brave planta cara, Greedy come igual y se arrepiente. | El primer "no" es un latido (§4.2) y hoy es un toast genérico. Es la forma más barata de dar interioridad, y ahora ocurre en cada reencuentro. | **S** |
-| **R16** | **Linaje** | Pantalla de árbol de generaciones: nombre, especie, rama, días vividos, causa, foto. Sin puntajes. Récords heredados como "récord de la casa". | Es el metajuego de la generación 3+. Sin esto, morir y volver a empezar es repetición; con esto, es historia. | **M** |
+| **R16** | **Linaje** | Pantalla de árbol de generaciones: nombre, especie, rama, días vividos, causa, foto. Sin puntajes. Los récords ya se heredan; falta mostrarlos como "récord de la casa" con el nombre de quien lo puso. | Es el metajuego de la generación 3+. Sin esto, morir y volver a empezar es repetición; con esto, es historia. | **M** |
 | **R17** | **Internacionalización real** | Todas las cadenas a recursos, con plurales y placeholders nombrados; español como idioma de primera clase. | Prerequisito duro del §7. No se puede dirigir la voz de un juego cuyo texto vive dentro de la lógica. | **M** |
 | **R18** | **Modo sin barras** | Un ajuste que oculta todo el HUD numérico: sólo la criatura y la sala. | Prueba de fuego del arte y regalo para el jugador que ya entendió el juego. Si funciona, confirmamos la tesis; si no, sabemos qué arreglar. | **S** |
 | **R19** | **Cápsula del tiempo** | Al morir de vejez, el cuidador guarda una cosa (una foto, una línea, el objeto favorito) que la próxima criatura encuentra en el cuarto y no entiende. | Cierra el círculo entre generaciones con un gesto de memoria, no de progresión. Es el mejor final que este juego puede tener. | **S** |

@@ -304,19 +304,106 @@ class LearningTest {
 
     // ---- rewards -----------------------------------------------------------------------------
 
+    /**
+     * Was: the same assertion driven by [Learning.progress], from before experience was the
+     * keeper's alone. The claim it was making — a skill is worth enough XP to carry a level — is
+     * still true and still worth pinning; it is the *lesson* that pays it, so the lesson is what
+     * drives it now. See `a skill the creature works out alone pays the keeper nothing` for the
+     * other half of the contract.
+     */
     @Test
-    fun `learning a skill pays XP through the level system`() {
+    fun `a skill finished by a lesson pays XP through the level system`() {
         val start = pet(intellect = 15f).copy(xp = 55, level = 1)
         assertEquals(60, start.xpForNextLevel)
 
         val events = mutableListOf<GameEvent>()
         var s = start
-        repeat(Skill.SELF_FEED.studySeconds.toInt()) { s = Learning.progress(s, 1L, events) }
+        // Four lessons cover SELF_FEED's 240 seconds at three times the rate, well inside the
+        // energy a full pet has to spend on them.
+        repeat(8) { if (Skill.SELF_FEED !in s.skills) s = Learning.teach(s, events) }
 
         assertTrue(Skill.SELF_FEED in s.skills)
         assertEquals("a skill has to be able to carry the keeper over a level boundary", 2, s.level)
         assertTrue(events.any { it is GameEvent.LeveledUp && it.level == 2 })
         assertTrue("the level-up must not eat the leftover XP", s.xp in 1..59)
+    }
+
+    /**
+     * The other half of the contract, and the reason the test above had to change.
+     *
+     * A skill the creature ground out on its own is a real thing that really happened — it is in
+     * the set, it was announced, the intellect it took is banked, and the creature can do the
+     * thing from here on. It is simply not a line in the keeper's ledger, for the reason
+     * [CareActions.Actor] gives: that ledger is a record of what the *player* did, and nobody sat
+     * down with that book.
+     */
+    @Test
+    fun `a skill the creature works out alone pays the keeper nothing`() {
+        val start = pet(intellect = 15f).copy(xp = 55, level = 1)
+        assertEquals("one skill would carry this pet over a level, if it counted", 60, start.xpForNextLevel)
+
+        val events = mutableListOf<GameEvent>()
+        var s = start
+        repeat(Skill.SELF_FEED.studySeconds.toInt()) { s = Learning.progress(s, 1L, events) }
+
+        assertTrue("it really did learn it", Skill.SELF_FEED in s.skills)
+        assertTrue("and said so", events.any { it is GameEvent.LearnedSkill && it.skill == Skill.SELF_FEED })
+        assertTrue("and got cleverer doing it", s.intellect > start.intellect)
+        assertEquals("but the keeper studied nothing", start.xp, s.xp)
+        assertEquals(1, s.level)
+        assertTrue("and no level was announced", events.none { it is GameEvent.LeveledUp })
+    }
+
+    /**
+     * The narrowness of the split, stated so it cannot quietly widen.
+     *
+     * Everything short of the experience is paid whoever did the work, because all of it is news
+     * about the creature rather than about the player. A version that gated the skill itself, or
+     * the announcement, would have hollowed out the autonomous half instead of tidying the ledger.
+     */
+    @Test
+    fun `self-taught and taught land exactly the same skill`() {
+        val alone = run {
+            var s = pet(intellect = 15f)
+            repeat(Skill.SELF_FEED.studySeconds.toInt()) { s = Learning.progress(s, 1L, mutableListOf()) }
+            s
+        }
+        val taught = run {
+            var s = pet(intellect = 15f)
+            repeat(8) { if (Skill.SELF_FEED !in s.skills) s = Learning.teach(s, mutableListOf()) }
+            s
+        }
+
+        assertTrue(Skill.SELF_FEED in alone.skills)
+        assertTrue(Skill.SELF_FEED in taught.skills)
+        assertEquals("both moved on to the same next rung", taught.studying, alone.studying)
+        assertEquals("both counted the session", taught.studySessions, alone.studySessions)
+        assertTrue("only the ledger differs", taught.xp > alone.xp || taught.level > alone.level)
+    }
+
+    /**
+     * The change costs a Manual or Assisted keeper nothing at all, and this is why: below FULL
+     * autonomy the creature never commits a STUDY of its own, so [Learning.progress] has no
+     * production caller and every skill still arrives through a lesson.
+     */
+    @Test
+    fun `below full autonomy the creature is never offered a study of its own`() {
+        val base = PetState(
+            name = "Pip",
+            stage = LifeStage.ADULT,
+            genome = Genome(),
+            intellect = 40f,
+            ageSeconds = 10_800L,
+        )
+        val study = { s: PetState ->
+            Brain.considerations(s, GameConfig.Default).first { it.kind == ActivityKind.STUDY }
+        }
+
+        assertNull("a fully autonomous creature reads its book", study(base.copy(autonomy = Autonomy.FULL)).blockedBy)
+        assertNotNull(
+            "an assisting one was asked for the chores, not for an education of its own",
+            study(base.copy(autonomy = Autonomy.ASSIST)).blockedBy,
+        )
     }
 
     @Test

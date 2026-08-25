@@ -36,9 +36,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import com.neopal.pet.R
 import com.neopal.pet.domain.EvolutionBranch
 import com.neopal.pet.domain.LifeStage
 import com.neopal.pet.domain.Mood
@@ -73,7 +75,10 @@ fun NewGameScreen(
     heirs: List<Pal> = emptyList(),
     onStart: (String, Species, String?) -> Unit,
 ) {
-    var name by remember { mutableStateOf("Pip") }
+    // One resource for the three places the starter name appears: the initial value, the
+    // placeholder that echoes it, and the fallback for a name left blank.
+    val defaultName = stringResource(R.string.default_pet_name)
+    var name by remember { mutableStateOf(defaultName) }
     var species by remember { mutableStateOf(Species.AQUA) }
     // Null is the nursery, which stays the default: continuing the line has to be chosen, the
     // same way courting and raising the child had to be.
@@ -114,16 +119,18 @@ fun NewGameScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
-                text = if (isNextGeneration) "GENERATION ${generation + 1}" else "NEW PET",
+                text = if (isNextGeneration) {
+                    stringResource(R.string.newgame_generation, generation + 1)
+                } else {
+                    stringResource(R.string.newgame_title)
+                },
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = if (isNextGeneration) {
-                    "Coins, cosmetics and the album carry over."
-                } else {
-                    "Pick an egg. Every family grows up differently."
-                },
+                text = stringResource(
+                    if (isNextGeneration) R.string.newgame_carry_over else R.string.newgame_pick_an_egg,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -174,19 +181,18 @@ fun NewGameScreen(
                     modifier = Modifier.fillMaxWidth(),
                     accent = accent,
                     background = background,
-                    title = "Who continues",
+                    title = stringResource(R.string.newgame_who_continues),
                     contentPadding = PaddingValues(pixelUnits(2)),
                 ) {
                     Text(
-                        text = "An heir keeps its own body and family, and whatever it was taught " +
-                            "in time. The nursery sends something unrelated.",
+                        text = stringResource(R.string.newgame_heir_blurb),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(pixelUnits(2)))
                     HeirRow(
-                        label = "From the nursery",
-                        detail = "A new family, nothing behind it",
+                        label = stringResource(R.string.newgame_nursery),
+                        detail = stringResource(R.string.newgame_nursery_detail),
                         isSelected = heirId == null,
                         accent = accent,
                         surface = surface,
@@ -197,7 +203,7 @@ fun NewGameScreen(
                         Spacer(Modifier.height(pixelUnits(1)))
                         HeirRow(
                             label = candidate.name,
-                            detail = candidate.parentNames.joinToString(" and ")
+                            detail = candidate.parentNames.joinToString(stringResource(R.string.conjunction_and))
                                 .ifBlank { candidate.species.displayName },
                             isSelected = heirId == candidate.id,
                             accent = accent,
@@ -256,7 +262,7 @@ fun NewGameScreen(
                 modifier = Modifier.fillMaxWidth(),
                 accent = accent,
                 background = background,
-                title = "Name",
+                title = stringResource(R.string.newgame_name),
                 contentPadding = PaddingValues(pixelUnits(2)),
             ) {
                 PixelTextWell(
@@ -264,8 +270,8 @@ fun NewGameScreen(
                     // The twelve-character cap is what the save format and the top bar can show.
                     onValueChange = { if (it.length <= 12) name = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = "Name",
-                    placeholder = "Pip",
+                    label = stringResource(R.string.newgame_name),
+                    placeholder = defaultName,
                     singleLine = true,
                     textStyle = MaterialTheme.typography.titleMedium,
                     accent = accent,
@@ -278,14 +284,14 @@ fun NewGameScreen(
         PixelButton(
             // heir?.id rather than heirId: a selection that no longer matches anybody in the
             // list must not be handed on as if it did.
-            onClick = { onStart(name.ifBlank { "Pip" }, shownSpecies, heir?.id) },
+            onClick = { onStart(name.ifBlank { defaultName }, shownSpecies, heir?.id) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(pixelUnits(13)),
             accent = accent,
             background = background,
         ) {
-            Text("START", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
+            Text(stringResource(R.string.newgame_start), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface, maxLines = 1)
         }
         Spacer(Modifier.height(pixelUnits(3)))
     }

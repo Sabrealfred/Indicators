@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -48,6 +50,50 @@ android {
         versionName = "1.0.$buildNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        // The first native code this app has ever carried, and it changes which handsets can
+        // install it. Read this before assuming it is a formality.
+        //
+        // litertlm-android ships binaries for android_arm64 and android_x86_64 and nothing else —
+        // 32-bit ARM is not supported by the library at all — and Google's own sample apps filter
+        // to arm64-v8a. This does the same.
+        //
+        // The cost is real and it is not this feature's alone to pay. Until now the APK had no
+        // `lib/` directory whatsoever, so it installed on anything from API 24 up, armeabi-v7a
+        // included. An APK that *has* native libraries and none matching the device is refused by
+        // the installer outright, so those handsets stop being able to install NeoPal at all —
+        // not "without the on-device brain", at all. The alternative is per-ABI split APKs, which
+        // the in-app updater is not built for: it downloads one artifact from one release.
+        //
+        // Left as a single filter deliberately rather than solved quietly, because it is a
+        // product decision about who can play, not a build detail. It is still open.
+        ndk {
+            // Three, not one — and the reasoning changed once the published APK was opened and
+            // looked at rather than reasoned about.
+            //
+            // The claim this filter was written under was that the APK had no `lib/` at all, so
+            // narrowing to arm64 was the moment native code arrived. That was wrong:
+            // `libandroidx.graphics.path.so` (compose-ui) and `libdatastore_shared_counter.so`
+            // (datastore) have shipped in every build of this app, for every ABI, which is why it
+            // installed anywhere. What changes here is the filter, not the existence of `lib/`.
+            //
+            // So arm64-only would have *removed* an ability the app already had: an APK carrying
+            // native libraries and none matching the device is refused by the installer outright,
+            // and a 32-bit handset would lose NeoPal entirely rather than lose one optional
+            // feature. That is not a trade the on-device model is worth.
+            //
+            // The middle path costs almost nothing and needed no new code. litertlm publishes no
+            // 32-bit ARM slice, so an armeabi-v7a device gets the two androidx libraries and no
+            // engine — and `OnDeviceMindClient.buildEngine` already wraps construction in
+            // `runCatching`, which catches `UnsatisfiedLinkError` along with everything else. The
+            // engine comes back null, which is the same state as "no model downloaded", which the
+            // whole feature is already built to sit in. The 32-bit slices of those two libraries
+            // are about 17 KB.
+            //
+            // x86_64 is here for emulators. Anyone testing this without a handset is on one, and
+            // excluding it would make the first thing a developer tries the one thing that fails.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
     }
 
     buildTypes {
@@ -68,10 +114,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
         isCoreLibraryDesugaringEnabled = false
-    }
-
-    kotlinOptions {
-        jvmTarget = "17"
     }
 
     buildFeatures {
@@ -103,6 +145,20 @@ android {
     }
 }
 
+// Replaces `android { kotlinOptions { jvmTarget = "17" } }`, which the Kotlin Gradle plugin no
+// longer merely deprecates — from this version the String setter is an *error*, so the build
+// script itself stops compiling and no task is ever scheduled. That is what the first attempt at
+// this upgrade hit, in 24 seconds, before touching a line of Kotlin source.
+//
+// Worth recording because the diagnosis in hand was wrong: the risk everyone expected was the
+// Compose compiler plugin moving against a frozen compose runtime. The plugins resolved and
+// loaded without complaint. It was a two-line DSL migration in this file.
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -121,6 +177,22 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime.ktx)
+
+    // The engine for a model that runs on the handset. Resolved from google(), which
+    // settings.gradle.kts already lists first — Maven Central returns 404 for these coordinates.
+    //
+    // Unverified from here, and the honest list of what that means: Google Maven is blocked from
+    // this environment, so the coordinates have never been resolved by this machine, the
+    // artifact's own declared minSdk has never been read against this module's 24, and no
+    // transitive dependency it drags in has been seen. Every one of those is a way this line
+    // alone turns a build red, which is why it is a commit of its own rather than folded into the
+    // code that needs it.
+    //
+    // What *is* known, and it is why this version and not a newer one: CI resolved and downloaded
+    // exactly these coordinates once already (0d8adce), so this version is published and this
+    // repository can reach it. The compile then failed on Kotlin metadata 2.3.0 against a 2.0.21
+    // compiler, which is the thing 7835c34 fixed.
+    implementation(libs.litertlm.android)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 

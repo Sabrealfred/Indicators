@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -128,7 +129,7 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "MIND",
+                    stringResource(R.string.mind_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -136,7 +137,12 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    "${pet.name} · ${pet.autonomy.displayName} · intellect ${pet.intellect.toInt()}",
+                    stringResource(
+                        R.string.mind_subtitle,
+                        pet.name,
+                        pet.autonomy.displayName,
+                        pet.intellect.toInt(),
+                    ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -252,25 +258,25 @@ fun MindScreen(viewModel: PetViewModel, onBack: () -> Unit) {
 @Composable
 private fun DormantPanel(name: String, stage: String, dead: Boolean, modifier: Modifier = Modifier) {
     val accent = MaterialTheme.colorScheme.onSurfaceVariant
-    val headline = if (dead) "Nothing left to read" else "Not awake yet"
+    val headline = stringResource(if (dead) R.string.mind_dormant_dead else R.string.mind_dormant_young)
     val body = if (dead) {
-        "$name is no longer with us. The decision log closed with them."
+        stringResource(R.string.mind_dormant_dead_body, name)
     } else {
-        "$name is still at the ${stage.lowercase()} stage. A creature starts weighing its own " +
-            "days once it reaches childhood — until then every call is yours, and rightly so."
+        stringResource(R.string.mind_dormant_young_body, name, stage.lowercase())
     }
+    val dormantReadOut = stringResource(R.string.cd_headline_body, headline, body)
 
     PixelPanel(
         modifier = modifier,
         accent = accent,
-        title = "The mind",
+        title = stringResource(R.string.mind_panel_title),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics(mergeDescendants = true) { contentDescription = "$headline. $body" },
+                .semantics(mergeDescendants = true) { contentDescription = dormantReadOut },
         ) {
             Icon(
                 imageVector = Icons.Filled.Psychology,
@@ -313,7 +319,7 @@ private fun AutonomyPanel(
     PixelPanel(
         modifier = modifier,
         accent = NeoAccents.cyan,
-        title = "Who decides",
+        title = stringResource(R.string.mind_who_decides),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
@@ -353,6 +359,7 @@ private fun AutonomyOption(
     val background = MaterialTheme.colorScheme.background
     val accent = if (selected) NeoAccents.cyan else MaterialTheme.colorScheme.onSurfaceVariant
 
+    val optionReadOut = stringResource(R.string.cd_headline_body, option.displayName, option.description)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
@@ -367,9 +374,7 @@ private fun AutonomyOption(
             // Role.RadioButton rather than Button: "selected" is the state that has to be spoken.
             .selectable(selected = selected, role = Role.RadioButton, onClick = onChoose)
             .padding(pixelUnits(2))
-            .semantics(mergeDescendants = true) {
-                contentDescription = "${option.displayName}. ${option.description}"
-            },
+            .semantics(mergeDescendants = true) { contentDescription = optionReadOut },
     ) {
         // A filled block against an empty well, so which one is live survives a colour-blind eye
         // and a screenshot in greyscale.
@@ -424,24 +429,25 @@ private fun NowPanel(
     val accent = if (running && activity != null) NeoAccents.green else MaterialTheme.colorScheme.onSurfaceVariant
 
     val headline = when {
-        !running -> "$name is waiting on you"
-        activity == null -> "$name is between decisions"
-        targetName != null -> "$name is ${activity.kind.displayName} with $targetName"
-        else -> "$name is ${activity.kind.displayName}"
+        !running -> stringResource(R.string.mind_now_waiting, name)
+        activity == null -> stringResource(R.string.mind_now_between, name)
+        targetName != null -> stringResource(R.string.mind_now_doing_with, name, activity.kind.displayName, targetName)
+        else -> stringResource(R.string.mind_now_doing, name, activity.kind.displayName)
     }
     val detail = when {
-        !running -> "Nothing is running the day but you. The skills below still matter — they are " +
-            "what it would be able to do if you ever handed it the reins."
-        activity == null -> "It has not settled on anything yet. The brain commits to a choice for " +
-            "a stretch rather than re-deciding every second, so gaps like this are normal."
-        else -> "Started ${ago(ageSeconds - activity.startedAtSeconds)} · " +
-            "another ${span(activity.endsAtSeconds - ageSeconds)} of it"
+        !running -> stringResource(R.string.mind_now_waiting_body)
+        activity == null -> stringResource(R.string.mind_now_between_body)
+        else -> stringResource(
+            R.string.mind_now_timing,
+            ago(ageSeconds - activity.startedAtSeconds),
+            span(activity.endsAtSeconds - ageSeconds),
+        )
     }
 
     PixelPanel(
         modifier = modifier,
         accent = accent,
-        title = "Right now",
+        title = stringResource(R.string.mind_right_now),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Row(
@@ -497,28 +503,34 @@ private fun PlanPanel(board: PlanBoard, name: String, modifier: Modifier = Modif
     // of time is not a fault, it is a creature that aimed slightly beyond its afternoon.
     val accent = if (board.isOutOfTime) MaterialTheme.colorScheme.onSurfaceVariant else NeoAccents.green
     val clock = if (board.isOutOfTime) {
-        "Out of time — it will let this go."
+        stringResource(R.string.mind_plan_out_of_time)
     } else {
-        "${span(board.secondsLeft)} left to finish it"
+        stringResource(R.string.mind_plan_time_left, span(board.secondsLeft))
     }
-    val grown = when (board.extensions) {
-        0 -> null
-        1 -> "It liked how this was going and gave itself one more step."
-        else -> "It liked how this was going and gave itself ${board.extensions} more steps."
+    val grown = if (board.extensions == 0) {
+        null
+    } else {
+        pluralStringResource(R.plurals.mind_plan_extended, board.extensions, board.extensions)
     }
-    val readOut = "$name means to: ${board.goal} Step ${(board.done + 1).coerceAtMost(board.total)} " +
-        "of ${board.total}. $clock"
+    val readOut = stringResource(
+        R.string.cd_mind_plan,
+        name,
+        board.goal,
+        (board.done + 1).coerceAtMost(board.total),
+        board.total,
+        clock,
+    )
 
     PixelPanel(
         modifier = modifier,
         accent = accent,
-        title = "What it means to do",
+        title = stringResource(R.string.mind_plan_title),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
-                text = "${board.done}/${board.total}",
+                text = stringResource(R.string.fraction, board.done, board.total),
                 color = MaterialTheme.colorScheme.surface,
-                contentDescription = "${board.done} of ${board.total} steps done",
+                contentDescription = stringResource(R.string.cd_mind_steps_done, board.done, board.total),
             )
         },
     ) {
@@ -547,7 +559,7 @@ private fun PlanPanel(board: PlanBoard, name: String, modifier: Modifier = Modif
                 )
                 Spacer(Modifier.width(pixelUnits(2)))
                 PixelDigits(
-                    text = "${board.done}/${board.total}",
+                    text = stringResource(R.string.fraction, board.done, board.total),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -578,8 +590,7 @@ private fun PlanPanel(board: PlanBoard, name: String, modifier: Modifier = Modif
             // Said once, here, because a plan is the one thing on this screen a player could
             // mistake for a promise. Every step is re-checked when it comes up.
             Text(
-                text = "A plan is what it intends, not what it is allowed. Each step is checked " +
-                    "again when it gets there.",
+                text = stringResource(R.string.mind_plan_caveat),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -649,24 +660,21 @@ private fun DecisionLogPanel(
     PixelPanel(
         modifier = modifier,
         accent = NeoAccents.cyan,
-        title = "What it decided",
+        title = stringResource(R.string.mind_decided_title),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
                 text = "${decisions.size}",
                 color = MaterialTheme.colorScheme.surface,
-                contentDescription = "${decisions.size} decisions logged",
+                contentDescription = stringResource(R.string.cd_mind_decisions, decisions.size),
             )
         },
     ) {
         if (decisions.isEmpty()) {
             Text(
-                text = if (autonomy == Autonomy.OFF) {
-                    "Nothing logged. You are making the calls, so there is nothing for it to explain."
-                } else {
-                    "Nothing logged yet. The first thing it decides for itself will land here, " +
-                        "with its reasons."
-                },
+                text = stringResource(
+                    if (autonomy == Autonomy.OFF) R.string.mind_decided_none_off else R.string.mind_decided_none_yet,
+                ),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -695,13 +703,19 @@ private fun DecisionRow(
 ) {
     val accent = if (latest) NeoAccents.cyan else MaterialTheme.colorScheme.onSurfaceVariant
     val elapsed = ago(ageSeconds - decision.atSeconds)
-    val runnerUp = decision.runnerUp?.let { "Nearly ${it.displayName} instead." }
+    val runnerUp = decision.runnerUp?.let { stringResource(R.string.mind_runner_up, it.displayName) }
     // How it turned out, once it has. Null while the activity is still running, and null forever
     // for one the player cut short — either way there is nothing yet for the creature to say.
     val outcome = decision.outcome
-    val readOut = "${titled(decision.kind)}, $elapsed. ${decision.reason} " +
-        (outcome?.let { "$it " } ?: "") +
-        "Confidence ${percent(decision.utility)}." + (runnerUp?.let { " $it" } ?: "")
+    val readOut = stringResource(
+        R.string.cd_mind_decision,
+        titled(decision.kind),
+        elapsed,
+        decision.reason,
+        outcome?.let { "$it " } ?: "",
+        percent(decision.utility),
+        runnerUp?.let { " $it" } ?: "",
+    )
 
     Column(
         modifier = modifier
@@ -792,20 +806,19 @@ private fun WeighingPanel(
     PixelPanel(
         modifier = modifier,
         accent = NeoAccents.gold,
-        title = "What it is weighing",
+        title = stringResource(R.string.mind_weighing_title),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
                 text = "$blocked",
                 color = if (blocked > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surface,
-                contentDescription = "$blocked of ${considerations.size} options are out of reach",
+                contentDescription = stringResource(R.string.cd_mind_blocked, blocked, considerations.size),
             )
         },
     ) {
         if (autonomy == Autonomy.OFF) {
             Text(
-                text = "You are making the calls, so none of this is being acted on. It is still " +
-                    "what the creature wants — and what it would reach for first if you let it.",
+                text = stringResource(R.string.mind_weighing_off),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -820,7 +833,7 @@ private fun WeighingPanel(
 
         if (considerations.isEmpty()) {
             Text(
-                text = "Nothing on its mind at all just now.",
+                text = stringResource(R.string.mind_weighing_empty),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -847,7 +860,7 @@ private fun WeighingPanel(
  */
 @Composable
 private fun ThwartedBanner(want: Consideration, modifier: Modifier = Modifier) {
-    val readOut = "${titled(want.kind)} is what it wants most, and it cannot: ${want.blockedBy}."
+    val readOut = stringResource(R.string.cd_mind_thwarted, titled(want.kind), want.blockedBy.orEmpty())
     PixelPanel(
         modifier = modifier
             .fillMaxWidth()
@@ -870,14 +883,14 @@ private fun ThwartedBanner(want: Consideration, modifier: Modifier = Modifier) {
             Spacer(Modifier.width(pixelUnits(2)))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "WANTS TO, CANNOT",
+                    text = stringResource(R.string.mind_thwarted_title),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
                 Text(
-                    text = "${titled(want.kind)} — ${want.blockedBy}",
+                    text = stringResource(R.string.mind_thwarted_line, titled(want.kind), want.blockedBy.orEmpty()),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 3,
@@ -898,9 +911,15 @@ private fun ConsiderationRow(consideration: Consideration, modifier: Modifier = 
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val readOut = "${titled(consideration.kind)}, wanted ${percent(consideration.utility)}. " +
-        "${consideration.reason} " +
-        (consideration.blockedBy?.let { "Cannot: $it." } ?: "It could do this.")
+    val verdict = consideration.blockedBy?.let { stringResource(R.string.mind_cannot_sentence, it) }
+        ?: stringResource(R.string.mind_could_do_this)
+    val readOut = stringResource(
+        R.string.cd_mind_consideration,
+        titled(consideration.kind),
+        percent(consideration.utility),
+        consideration.reason,
+        verdict,
+    )
 
     Row(
         modifier = modifier
@@ -965,7 +984,7 @@ private fun ConsiderationRow(consideration: Consideration, modifier: Modifier = 
             )
             consideration.blockedBy?.let { reason ->
                 Text(
-                    text = "Cannot: $reason",
+                    text = stringResource(R.string.mind_cannot, reason),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
@@ -999,12 +1018,12 @@ private fun LearningPanel(
 ) {
     val accent = NeoAccents.gold
     val ceiling = Learning.MAX_INTELLECT
-    val intellectReadOut = "Intellect ${intellect.toInt()} of ${ceiling.toInt()}."
+    val intellectReadOut = stringResource(R.string.cd_mind_intellect, intellect.toInt(), ceiling.toInt())
 
     PixelPanel(
         modifier = modifier,
         accent = accent,
-        title = "Learning",
+        title = stringResource(R.string.mind_learning_title),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Row(
@@ -1024,14 +1043,14 @@ private fun LearningPanel(
             Spacer(Modifier.width(pixelUnits(2)))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Intellect",
+                    text = stringResource(R.string.mind_intellect),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "of ${ceiling.toInt()} — it decides what is within reach",
+                    text = stringResource(R.string.mind_intellect_ceiling, ceiling.toInt()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -1052,8 +1071,7 @@ private fun LearningPanel(
 
         if (studying == null) {
             Text(
-                text = "Nothing on the ladder is within reach. $name keeps getting cleverer all " +
-                    "the same, and the next rung opens the moment the intellect is there.",
+                text = stringResource(R.string.mind_nothing_in_reach, name),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -1061,14 +1079,14 @@ private fun LearningPanel(
         } else {
             // Not a live region: this creeps up every tick, and a screen reader that says so every
             // tick is one the player turns off.
-            val studyReadOut = "Studying ${studying.displayName}, ${percent(studyFraction)} done."
+            val studyReadOut = stringResource(R.string.cd_mind_studying, studying.displayName, percent(studyFraction))
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics(mergeDescendants = true) { contentDescription = studyReadOut },
             ) {
                 Text(
-                    text = "Studying ${studying.displayName}",
+                    text = stringResource(R.string.mind_studying, studying.displayName),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
@@ -1104,8 +1122,11 @@ private fun LearningPanel(
 
         Spacer(Modifier.height(pixelUnits(2)))
         Text(
-            text = "$studySessions ${sittingWord(studySessions)} sat through · " +
-                "$selfCareActions ${thingWord(selfCareActions)} done unasked",
+            text = stringResource(
+                R.string.mind_tally,
+                pluralStringResource(R.plurals.mind_sittings, studySessions, studySessions),
+                pluralStringResource(R.plurals.mind_things, selfCareActions, selfCareActions),
+            ),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.fillMaxWidth(),
@@ -1130,13 +1151,17 @@ private fun TeachButton(
     val armed = blocker == null
     val panel = MaterialTheme.colorScheme.surfaceVariant
     val accent = if (armed) NeoAccents.green else MaterialTheme.colorScheme.onSurfaceVariant
-    val label = if (armed) "TEACH" else "Not the moment for a lesson"
+    val label = stringResource(if (armed) R.string.mind_teach else R.string.mind_teach_blocked)
     val detail = when {
         !armed -> blocker.orEmpty()
-        target != null -> "One sitting towards ${target.displayName.lowercase()}"
-        else -> "Nothing new in reach — a sitting still raises intellect"
+        target != null -> stringResource(R.string.mind_teach_target, target.displayName.lowercase())
+        else -> stringResource(R.string.mind_teach_no_target)
     }
-    val readOut = if (armed) "Teach a lesson. $detail." else "Cannot teach. $detail"
+    val readOut = if (armed) {
+        stringResource(R.string.cd_mind_teach, detail)
+    } else {
+        stringResource(R.string.cd_mind_teach_blocked, detail)
+    }
 
     PixelButton(
         onClick = onTeach,
@@ -1191,13 +1216,13 @@ private fun SkillsPanel(rungs: List<SkillRung>, modifier: Modifier = Modifier) {
     PixelPanel(
         modifier = modifier,
         accent = NeoAccents.green,
-        title = "The ladder",
+        title = stringResource(R.string.mind_ladder_title),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
-                text = "$known/${rungs.size}",
+                text = stringResource(R.string.fraction, known, rungs.size),
                 color = if (known == rungs.size) NeoAccents.green else MaterialTheme.colorScheme.surface,
-                contentDescription = "$known of ${rungs.size} skills learned",
+                contentDescription = stringResource(R.string.cd_mind_skills, known, rungs.size),
             )
         },
     ) {
@@ -1224,15 +1249,21 @@ private fun SkillRow(rung: SkillRung, modifier: Modifier = Modifier) {
         reachable -> NeoAccents.cyan
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val state = when {
-        rung.known -> "Known. "
-        rung.studying -> "Studying now. "
-        reachable -> "Within reach. "
-        else -> "Out of reach. "
-    }
-    val readOut = state + "${rung.skill.displayName}. ${rung.skill.description} " +
-        "Needs an intellect of ${rung.skill.intellectRequired.toInt()}." +
-        (if (!rung.known && rung.blocker != null) " ${rung.blocker}" else "")
+    val state = stringResource(
+        when {
+            rung.known -> R.string.mind_rung_known
+            rung.studying -> R.string.mind_rung_studying
+            reachable -> R.string.mind_rung_reachable
+            else -> R.string.mind_rung_out_of_reach
+        },
+    )
+    val readOut = state + stringResource(
+        R.string.cd_mind_rung,
+        rung.skill.displayName,
+        rung.skill.description,
+        rung.skill.intellectRequired.toInt(),
+        if (!rung.known && rung.blocker != null) " ${rung.blocker}" else "",
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1300,7 +1331,7 @@ private fun SkillRow(rung: SkillRung, modifier: Modifier = Modifier) {
         Column(horizontalAlignment = Alignment.End) {
             if (rung.known) {
                 Text(
-                    text = "KNOWN",
+                    text = stringResource(R.string.mind_known),
                     style = MaterialTheme.typography.labelSmall,
                     color = accent,
                     fontWeight = FontWeight.Bold,
@@ -1315,7 +1346,7 @@ private fun SkillRow(rung: SkillRung, modifier: Modifier = Modifier) {
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    text = "INT",
+                    text = stringResource(R.string.mind_int),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -1329,35 +1360,35 @@ private fun SkillRow(rung: SkillRung, modifier: Modifier = Modifier) {
 private fun titled(kind: ActivityKind): String =
     kind.displayName.replaceFirstChar { it.uppercaseChar() }
 
-private fun percent(value: Float): String = "${(value.coerceIn(0f, 1f) * 100f).toInt()}%"
-
-private fun sittingWord(n: Int): String = if (n == 1) "sitting" else "sittings"
-
-private fun thingWord(n: Int): String = if (n == 1) "thing" else "things"
+@Composable
+private fun percent(value: Float): String =
+    stringResource(R.string.percent_value, (value.coerceIn(0f, 1f) * 100f).toInt())
 
 /**
  * Coarse on purpose. A decision made four minutes ago is information; one made four minutes and
  * thirteen seconds ago is a stopwatch, and it would rewrite itself on every tick of the clock.
  */
+@Composable
 private fun ago(seconds: Long): String {
     val past = seconds.coerceAtLeast(0L)
     val hours = past / 3600L
     val minutes = (past % 3600L) / 60L
     return when {
-        hours > 0L -> "${hours}h ${minutes}m ago"
-        minutes > 0L -> "${minutes}m ago"
-        else -> "just now"
+        hours > 0L -> stringResource(R.string.since_hours_minutes, hours, minutes)
+        minutes > 0L -> stringResource(R.string.since_minutes, minutes)
+        else -> stringResource(R.string.since_just_now)
     }
 }
 
 /** The same clock, forwards. Used for how much of the current activity is left to run. */
+@Composable
 private fun span(seconds: Long): String {
     val left = seconds.coerceAtLeast(0L)
     val hours = left / 3600L
     val minutes = (left % 3600L) / 60L
     return when {
-        hours > 0L -> "${hours}h ${minutes}m"
-        minutes > 0L -> "${minutes}m"
-        else -> "a moment"
+        hours > 0L -> stringResource(R.string.duration_hours_minutes, hours, minutes)
+        minutes > 0L -> stringResource(R.string.duration_minutes, minutes)
+        else -> stringResource(R.string.duration_a_moment)
     }
 }

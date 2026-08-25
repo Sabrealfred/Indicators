@@ -40,6 +40,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -199,7 +201,8 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     // reading it live would make "NEW RECORD" impossible to ever show.
     val best = remember { pet.highScores[GAME_ID] ?: 0 }
     val motion = if (ui.config.reducedMotion) 0.3f else 1f
-    val petName = pet.name.ifBlank { "Your pal" }
+    val unnamedPal = stringResource(R.string.unnamed_pal)
+    val petName = pet.name.ifBlank { unnamedPal }
 
     // Seeded from the pet rather than the clock: the same creature at the same moment of its life
     // deals itself the same boards, which is what makes a run reproducible at all.
@@ -501,12 +504,19 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         }
     }
 
+    // `clickable(onClickLabel = ...)` and `semantics {}` are not composition, so the fixed
+    // labels the board needs are read once here, above the effect that also wants the title.
+    val title = stringResource(R.string.game_puzzle)
+    val placeLabel = stringResource(R.string.puzzle_place_held)
+    val putDownLabel = stringResource(R.string.puzzle_put_down)
+    val pickUpLabel = stringResource(R.string.puzzle_pick_up)
+
     LaunchedEffect(finished) {
         if (!finished) return@LaunchedEffect
         viewModel.finishGame(
             won = won,
             score = (boardsCleared.toFloat() / TARGET_BOARDS).coerceIn(0f, 1f),
-            gameName = "Shape Sorter",
+            gameName = title,
             gameId = GAME_ID,
             points = total,
         )
@@ -522,16 +532,20 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Shape Sorter",
-            left = "Score $points",
-            right = if (best > 0) "Best $best" else "Board ${boardsCleared + 1}/$TARGET_BOARDS",
+            title = title,
+            left = stringResource(R.string.game_score, points),
+            right = if (best > 0) {
+                stringResource(R.string.game_best, best)
+            } else {
+                stringResource(R.string.fraction, boardsCleared + 1, TARGET_BOARDS)
+            },
             progress = (elapsed / DURATION).coerceIn(0f, 1f),
             onExit = onExit,
         )
         Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Board ${boardsCleared + 1} of $TARGET_BOARDS",
+            text = stringResource(R.string.puzzle_board_of, boardsCleared + 1, TARGET_BOARDS),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.semantics { heading() },
@@ -723,7 +737,7 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                             .slotTarget(slot, boxW, boxH)
                             .clickable(
                                 enabled = started && !finished && state == EMPTY,
-                                onClickLabel = "Place the held piece",
+                                onClickLabel = placeLabel,
                                 role = Role.Button,
                             ) {
                                 val piece = heldPiece
@@ -770,7 +784,7 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                             .slotTarget(slot, boxW, boxH)
                             .clickable(
                                 enabled = started && !finished,
-                                onClickLabel = if (held) "Put down" else "Pick up",
+                                onClickLabel = if (held) putDownLabel else pickUpLabel,
                                 role = Role.Button,
                             ) {
                                 if (placed[i]) return@clickable
@@ -810,7 +824,7 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         Spacer(Modifier.height(8.dp))
         // The one line a screen reader hears from: it always names who fitted the piece.
         Text(
-            text = announcement.ifBlank { "Tap a piece, then tap the hole it belongs in." },
+            text = announcement.ifBlank { stringResource(R.string.puzzle_hint) },
             style = MaterialTheme.typography.bodyMedium,
             color = NeoColors.NeonCyan,
             maxLines = 2,
@@ -821,10 +835,10 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         )
         Text(
             text = when {
-                !bright -> "$petName is watching. The shapes start to click at ${HELP_AT.toInt()} intellect."
-                !willing -> "$petName can see the answers, but autonomy is off."
-                pet.autonomy == Autonomy.ASSIST -> "$petName will join in once you have started the board."
-                else -> "$petName is solving alongside you. Sit back, or race it."
+                !bright -> stringResource(R.string.puzzle_pet_watching, petName, HELP_AT.toInt())
+                !willing -> stringResource(R.string.puzzle_pet_autonomy_off, petName)
+                pet.autonomy == Autonomy.ASSIST -> stringResource(R.string.puzzle_pet_will_join, petName)
+                else -> stringResource(R.string.puzzle_pet_solving, petName)
             },
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -833,12 +847,12 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         if (finished) {
             GameResult(
-                title = if (won) "TRAY EMPTY!" else "TIME UP",
+                title = stringResource(if (won) R.string.puzzle_result_win else R.string.game_time_up),
                 lines = listOf(
-                    "Score $total" + if (total > best) "  ★ NEW RECORD" else "",
-                    "You fitted $playerSolved  ·  $petName fitted $petSolved",
-                    "Taught bonus $taught  ·  $petName misjudged $petMisjudged",
-                    "Boards cleared $boardsCleared of $TARGET_BOARDS",
+                    stringResource(if (total > best) R.string.game_score_record else R.string.game_score, total),
+                    stringResource(R.string.puzzle_result_fitted, playerSolved, petName, petSolved),
+                    stringResource(R.string.puzzle_result_taught, taught, petName, petMisjudged),
+                    stringResource(R.string.puzzle_result_boards, boardsCleared, TARGET_BOARDS),
                 ),
                 onExit = onExit,
             )

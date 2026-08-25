@@ -47,13 +47,16 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.GameConfig
@@ -337,6 +340,8 @@ fun PetStage(
         }
     }
 
+    val context = LocalContext.current
+
     // A new reaction restarts the timeline, kicks the screen and fires its particle burst.
     LaunchedEffect(actionId) {
         if (action == PetAnimation.IDLE) return@LaunchedEffect
@@ -351,7 +356,13 @@ fun PetStage(
         emitFor(action, particles)
         deltas.forEachIndexed { index, delta ->
             labels += FloatLabel(
-                text = "${if (delta.positive) "+" else ""}${delta.amount} ${delta.label}",
+                // The effect is not composition, so the resources come through the context the
+                // composable resolved. `delta.label` is still the domain's word - see 6.1.
+                text = context.getString(
+                    if (delta.positive) R.string.stat_delta_up else R.string.stat_delta_down,
+                    delta.amount,
+                    delta.label,
+                ),
                 positive = delta.positive,
                 bornAt = time + index * 0.12f,
                 laneX = 0.5f + (index - 1) * 0.17f,
@@ -531,23 +542,41 @@ fun PetStage(
         zoomLevel = next
     }
 
+    // A custom accessibility action is built inside a `semantics {}` lambda, which is not
+    // composition. The four names are read here and closed over.
+    val petAction = stringResource(R.string.cd_pet_it, state.name)
+    val strokeAction = stringResource(R.string.cd_stroke_zone, TouchZone.HEAD.label)
+    val tickleAction = stringResource(R.string.cd_tickle_zone, TouchZone.BELLY.label)
+    val tugAction = stringResource(R.string.cd_tug_zone, TouchZone.TAIL.label)
+    val photoAction = stringResource(R.string.cd_take_photograph)
+    val zoomInAction = stringResource(R.string.cd_zoom_in)
+    val zoomOutAction = stringResource(R.string.cd_zoom_out)
+    val resetFramingAction = stringResource(R.string.cd_reset_framing)
+    val eggReadOut = stringResource(R.string.cd_stage_egg, state.name)
+    val aliveReadOut = stringResource(
+        R.string.cd_stage_alive,
+        state.name,
+        state.stage.displayName,
+        state.species.displayName,
+    )
+
     // The touch zones, said out loud. A zone that only exists for a finger that can find it is
     // not a zone everybody has, so each one is an action too — with the same anchors the burst
     // would have used, since there is no finger to spark under.
     fun touchActions(of: PetState): List<CustomAccessibilityAction> {
         if (!of.hasTouchZones()) {
-            return listOf(CustomAccessibilityAction("Pet ${of.name}") { onTap(); true })
+            return listOf(CustomAccessibilityAction(petAction) { onTap(); true })
         }
         return listOf(
-            CustomAccessibilityAction("Stroke the ${TouchZone.HEAD.label}") {
+            CustomAccessibilityAction(strokeAction) {
                 react(TouchZone.HEAD, wanderX, 0.52f)
                 true
             },
-            CustomAccessibilityAction("Tickle the ${TouchZone.BELLY.label}") {
+            CustomAccessibilityAction(tickleAction) {
                 react(TouchZone.BELLY, wanderX, 0.62f)
                 true
             },
-            CustomAccessibilityAction("Tug the ${TouchZone.TAIL.label}") {
+            CustomAccessibilityAction(tugAction) {
                 react(TouchZone.TAIL, (wanderX - 0.12f).coerceIn(0f, 1f), 0.64f)
                 true
             },
@@ -555,15 +584,7 @@ fun PetStage(
     }
 
     // Rebuilt only when the creature's identity changes, not on every frame this scene draws.
-    val readOut = remember(state.name, state.stage, state.species, state.isEgg) {
-        if (state.isEgg) {
-            "${state.name}'s egg."
-        } else {
-            "${state.name}, ${state.stage.displayName} ${state.species.displayName}. " +
-                "Touch its head to please it, its tummy to tickle it, or its tail to annoy it. " +
-                "Pinch to frame a photograph, then press and hold to take it."
-        }
-    }
+    val readOut = if (state.isEgg) eggReadOut else aliveReadOut
 
     Box(modifier = modifier.clip(RoundedCornerShape(18.dp))) {
         // Five gestures share this one surface, so the order they are settled in is written down
@@ -601,19 +622,19 @@ fun PetStage(
                     // them, and the plain whole-body pet the rest of the time, which is exactly
                     // what a tap falls back to on an egg, a sleeper or a creature that is gone.
                     customActions = touchActions(state) + listOf(
-                        CustomAccessibilityAction("Take a photograph") {
+                        CustomAccessibilityAction(photoAction) {
                             onLongPress()
                             true
                         },
-                        CustomAccessibilityAction("Zoom in") {
+                        CustomAccessibilityAction(zoomInAction) {
                             frameAt(zoomLevel * 1.4f)
                             true
                         },
-                        CustomAccessibilityAction("Zoom out") {
+                        CustomAccessibilityAction(zoomOutAction) {
                             frameAt(zoomLevel / 1.4f)
                             true
                         },
-                        CustomAccessibilityAction("Reset the framing") {
+                        CustomAccessibilityAction(resetFramingAction) {
                             frameAt(1f)
                             true
                         },
@@ -1374,20 +1395,24 @@ private fun emitFor(action: PetAnimation, particles: ParticleSystem) {
 /** The little thought bubble above the pet: what it wants, or what just happened. */
 @Composable
 private fun BoxScope.MoodBubble(state: PetState, action: PetAnimation) {
-    val text = when {
-        state.isDead -> "..."
-        state.stage == LifeStage.EGG -> "..."
-        action == PetAnimation.REFUSE -> "No!"
-        state.isSleeping -> "Zzz"
-        state.isSick -> "I feel awful..."
-        state.stats.satiety < 25f -> "I'm hungry!"
-        state.poops >= 3 -> "It stinks in here"
-        state.stats.hygiene < 30f -> "I need a bath"
-        state.stats.energy < 20f -> "So sleepy..."
-        state.stats.happiness < 30f -> "Play with me?"
-        state.stats.happiness > 80f -> "This is the best!"
+    // These read as the creature talking, but nothing authored them: the bubble is a *status
+    // indicator* the UI derives from five stat thresholds, wearing speech. Nothing in `domain/`
+    // knows they exist. So they move, and the diary — which the creature does write — does not.
+    val res = when {
+        state.isDead -> R.string.bubble_ellipsis
+        state.stage == LifeStage.EGG -> R.string.bubble_ellipsis
+        action == PetAnimation.REFUSE -> R.string.bubble_refuse
+        state.isSleeping -> R.string.bubble_asleep
+        state.isSick -> R.string.bubble_sick
+        state.stats.satiety < 25f -> R.string.bubble_hungry
+        state.poops >= 3 -> R.string.bubble_stinks
+        state.stats.hygiene < 30f -> R.string.bubble_bath
+        state.stats.energy < 20f -> R.string.bubble_sleepy
+        state.stats.happiness < 30f -> R.string.bubble_bored
+        state.stats.happiness > 80f -> R.string.bubble_delighted
         else -> null
     }
+    val text = res?.let { stringResource(it) }
     AnimatedVisibility(
         visible = text != null,
         enter = fadeIn() + scaleIn(initialScale = 0.85f),

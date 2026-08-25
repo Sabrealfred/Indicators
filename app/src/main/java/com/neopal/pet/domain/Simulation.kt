@@ -36,13 +36,32 @@ sealed interface GameEvent {
     data class LearnedSkill(val skill: Skill) : GameEvent
     data class IntellectGrew(val from: Int, val to: Int) : GameEvent
     data class MetPal(val pal: Pal) : GameEvent
-    data class PalLeft(val name: String) : GameEvent
+    /**
+     * Somebody is no longer in the room, and which of the three ways that happened.
+     *
+     * [departure] is the difference between a milestone and a non-event: see [Departure]. The
+     * name alone could not carry it, so every reader had to treat all three the same.
+     */
+    data class PalLeft(val name: String, val departure: Departure) : GameEvent
     data class Befriended(val pal: Pal) : GameEvent
     data class Paired(val pal: Pal) : GameEvent
     data class EggLaid(val egg: NestEgg) : GameEvent
     data class ChildHatched(val child: Pal) : GameEvent
-    /** A plan was dropped: refused, or simply too old to still be about this creature. */
-    data class PlanAbandoned(val goal: String) : GameEvent
+    /**
+     * A plan was dropped, and which of the two ways it was dropped.
+     *
+     * [ending] is the whole point of the event carrying more than a goal: one of the two is
+     * already on screen before it happens and the other is not, so a reader that cannot tell
+     * them apart has to treat both as the louder one or both as the quieter one, and either
+     * choice is wrong half the time. [done] of [steps] is how far it got, which is the
+     * difference between an afternoon that fell over immediately and one that nearly landed.
+     */
+    data class PlanAbandoned(
+        val goal: String,
+        val done: Int,
+        val steps: Int,
+        val ending: PlanEnding,
+    ) : GameEvent
     data class PlanMade(val goal: String, val steps: Int) : GameEvent
     /** A plan that was evidently working grew itself a further step instead of ending. */
     data class PlanExtended(val goal: String, val steps: Int) : GameEvent

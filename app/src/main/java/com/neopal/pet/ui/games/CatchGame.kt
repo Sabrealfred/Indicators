@@ -39,7 +39,9 @@ import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -113,6 +115,14 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     var flashColor by remember { mutableStateOf(NeoColors.NeonCyan) }
     var flashTick by remember { mutableIntStateOf(0) }
 
+    // The verdicts are set from inside the frame loop, where composition is long over. Read
+    // once here and assigned as values, which is the whole trick: the loop deals in what the
+    // moment *is*, and the words for it were fetched at the edge.
+    val title = stringResource(R.string.game_catch)
+    val flashGolden = stringResource(R.string.catch_flash_golden)
+    val flashOuch = stringResource(R.string.catch_flash_ouch)
+    val flashStreakLost = stringResource(R.string.catch_flash_streak_lost)
+
     val duration = 40f
     val target = 15
     val multiplier = min(1 + streak / 3, 5)
@@ -172,7 +182,7 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                             catchPulse = 1f
                             bursts += Burst(item.x, PET_Y, if (golden) NeoColors.NeonYellow else item.tint, item.phase)
                             if (golden) {
-                                flash = "GOLDEN x3"
+                                flash = flashGolden
                                 flashColor = NeoColors.NeonYellow
                                 flashTick += 1
                             }
@@ -182,7 +192,7 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                         hit -> {
                             lives -= 1
                             streak = 0
-                            flash = "OUCH"
+                            flash = flashOuch
                             flashColor = NeoColors.NeonRed
                             flashTick += 1
                             if (ui.config.soundEnabled) ChiptuneEngine.play(Sfx.GAME_MISS)
@@ -190,7 +200,7 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                         item.kind != ItemKind.BAD -> {
                             dropped += 1
                             if (streak >= 3) {
-                                flash = "STREAK LOST"
+                                flash = flashStreakLost
                                 flashColor = NeoColors.OnDarkMuted
                                 flashTick += 1
                             }
@@ -224,7 +234,7 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         viewModel.finishGame(
             won = caught >= target && lives > 0,
             score = normalised,
-            gameName = "Snack Catch",
+            gameName = title,
             gameId = GAME_ID,
             points = score,
         )
@@ -240,9 +250,13 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Snack Catch",
-            left = "Score $score  ·  $caught/$target",
-            right = if (multiplier > 1) "COMBO x$multiplier" else "Lives $lives",
+            title = title,
+            left = stringResource(R.string.catch_score_line, score, caught, target),
+            right = if (multiplier > 1) {
+                stringResource(R.string.catch_combo, multiplier)
+            } else {
+                stringResource(R.string.catch_lives, lives)
+            },
             progress = (time / duration).coerceIn(0f, 1f),
             onExit = onExit,
         )
@@ -365,7 +379,7 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         }
 
         Text(
-            text = "Drag to move. Catch the food, dodge the pills — gold is worth triple.",
+            text = stringResource(R.string.catch_hint),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 8.dp),
@@ -373,11 +387,13 @@ fun CatchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         if (finished) {
             GameResult(
-                title = if (caught >= target && lives > 0) "FEAST!" else "TIME UP",
+                title = stringResource(
+                    if (caught >= target && lives > 0) R.string.catch_result_win else R.string.game_time_up,
+                ),
                 lines = listOf(
-                    "Score $score" + if (score > best) "  ★ NEW RECORD" else "",
-                    "Caught $caught  ·  Dropped $dropped",
-                    "Best combo x$bestMultiplier  ·  Lives left $lives",
+                    stringResource(if (score > best) R.string.game_score_record else R.string.game_score, score),
+                    stringResource(R.string.catch_result_caught, caught, dropped),
+                    stringResource(R.string.catch_result_combo, bestMultiplier, lives),
                 ),
                 onExit = onExit,
             )

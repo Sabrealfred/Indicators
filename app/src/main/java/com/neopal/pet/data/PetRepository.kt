@@ -80,13 +80,18 @@ class PetRepository(context: Context) {
      * only the two files underneath know they are separate. Doing the split here rather than in
      * the type meant nothing above this line had to change, which is also the reason it can be
      * relied upon — there is one place to get it wrong instead of every call site.
+     *
+     * Sanitised on the way out of the file, for the same reason [PetState] is. Settings looked
+     * like the safe half of the save — they are "just preferences" — but the day length is a
+     * divisor, and the only thing that ever brought it into range was the slider's own clamp,
+     * which a value read off disk never passes through. See [GameConfig.sanitised].
      */
     val configFlow: Flow<GameConfig> = combine(store.data, secrets.data) { prefs, secret ->
         val stored = prefs[KEY_CONFIG]?.let { raw ->
             runCatching { json.decodeFromString(GameConfig.serializer(), raw) }.getOrNull()
         } ?: GameConfig.Default
         val key = secret[KEY_API] ?: stored.mind.apiKey
-        stored.copy(mind = stored.mind.copy(apiKey = key))
+        stored.sanitised().copy(mind = stored.mind.copy(apiKey = key))
     }
 
     suspend fun currentState(): PetState? = stateFlow.first()

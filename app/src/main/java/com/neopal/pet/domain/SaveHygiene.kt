@@ -52,6 +52,23 @@ fun PetState.sanitised(): PetState = copy(
     unlockedAchievements = unlockedAchievements.filter { Achievements.get(it) != null }.toSet(),
 )
 
+/**
+ * The same boundary, turned on the settings blob.
+ *
+ * [PetState] and [GameConfig] are two separate values decoded from two separate keys, and only the
+ * first of them was ever cleaned. That asymmetry is not obvious from either side: the settings are
+ * "just preferences", so nothing looked like it could be dangerous, and the one field that is
+ * dangerous is dangerous through a screen and a divisor rather than through a list length.
+ *
+ * The range each control offers is not a fact the control owns -- [PetClock] owns this one -- so
+ * the check on the way in and the clamp at the slider read the same numbers rather than two copies
+ * of them. That is the whole lesson of the range that shipped as a pair of literals not containing
+ * the game's own default.
+ */
+fun GameConfig.sanitised(): GameConfig = copy(
+    secondsPerPetDay = PetClock.sanitiseSeconds(secondsPerPetDay),
+)
+
 private fun Stats.sanitised(): Stats = Stats(
     satiety = satiety.safe(STAT_FALLBACK).coerceIn(0f, 100f),
     happiness = happiness.safe(STAT_FALLBACK).coerceIn(0f, 100f),

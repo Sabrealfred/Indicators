@@ -39,7 +39,7 @@ data class WidgetSnapshot(
     /** The room behind it. Always present, so an empty save still gets a real picture. */
     val scene: WidgetScene,
     /** What the pet wants, straight from [CareActions.topNeed]. Null when it wants nothing. */
-    val need: WidgetNeed?,
+    val need: PetNeed?,
     /** The one tap worth offering, or null when there is nothing useful a tap could do. */
     val offer: WidgetOffer?,
     /** Wall clock this snapshot describes. Everything above is true as of this instant. */
@@ -111,7 +111,7 @@ data class WidgetSnapshot(
             val saveAge = ((nowMillis - saved.lastTickMillis) / 1000L).coerceAtLeast(0L)
             val capped = saved.lastTickMillis > 0L && saveAge > config.maxOfflineSeconds
 
-            val need = WidgetNeed.ofLabel(CareActions.topNeed(now))
+            val need = CareActions.topNeed(now)
             val offer = offerFor(now, need)
             val face = when {
                 now.isDead -> WidgetFace.GONE
@@ -173,7 +173,7 @@ data class WidgetSnapshot(
         private fun detailFor(
             face: WidgetFace,
             state: PetState,
-            need: WidgetNeed?,
+            need: PetNeed?,
             offer: WidgetOffer?,
             config: GameConfig,
         ): String = when (face) {
@@ -190,9 +190,9 @@ data class WidgetSnapshot(
                 need == null -> "Doing fine"
                 // The one case worth spelling out: it wants something the cupboard cannot give,
                 // and a chip that is simply missing would look like a bug.
-                need == WidgetNeed.FOOD && offer == null && bestFoodFor(state) == null ->
+                need == PetNeed.HUNGRY && offer == null && bestFoodFor(state) == null ->
                     "Hungry · nothing left to serve"
-                need == WidgetNeed.SICK && offer == null && bestMedicineFor(state) == null ->
+                need == PetNeed.SICK && offer == null && bestMedicineFor(state) == null ->
                     "Sick · no medicine left"
                 else -> need.label
             }
@@ -263,22 +263,22 @@ data class WidgetSnapshot(
          * accepted it. That is what stops a meal being offered to a pet that is full or a nap to
          * one that is wide awake, without a single one of those rules being written down twice.
          */
-        private fun offerFor(state: PetState, need: WidgetNeed?): WidgetOffer? {
+        private fun offerFor(state: PetState, need: PetNeed?): WidgetOffer? {
             // The same three states the app refuses to suggest anything for. A sleeping pet in
             // particular: the widget has just said "Asleep", and a button under that word asking
             // to be pressed is the widget arguing with itself.
             if (state.isDead || state.isEgg || state.isSleeping) return null
             return when (need) {
                 null -> null
-                WidgetNeed.SICK -> bestMedicineFor(state)?.let { id ->
+                PetNeed.SICK -> bestMedicineFor(state)?.let { id ->
                     accepted(CareActions.useMedicine(state, id)) {
                         WidgetOffer(WidgetAction.MEDICATE, id, "Medicine")
                     }
                 }
-                WidgetNeed.FOOD -> bestFoodFor(state)?.let { id ->
+                PetNeed.HUNGRY -> bestFoodFor(state)?.let { id ->
                     accepted(CareActions.feed(state, id)) { WidgetOffer(WidgetAction.FEED, id, "Feed") }
                 }
-                WidgetNeed.DIRTY -> when {
+                PetNeed.DIRTY -> when {
                     // Mess on the floor is the loudest half of being dirty, and scooping it is
                     // what the app reaches for first.
                     state.poops > 0 -> accepted(CareActions.cleanRoom(state)) {
@@ -291,10 +291,10 @@ data class WidgetSnapshot(
                         WidgetOffer(WidgetAction.CLEAN, null, "Clean")
                     }
                 }
-                WidgetNeed.REST -> accepted(CareActions.putToSleep(state)) {
+                PetNeed.SLEEPY -> accepted(CareActions.putToSleep(state)) {
                     WidgetOffer(WidgetAction.TUCK_IN, null, "Lights out")
                 }
-                WidgetNeed.PLAY -> accepted(CareActions.pet(state)) {
+                PetNeed.BORED -> accepted(CareActions.pet(state)) {
                     WidgetOffer(WidgetAction.PET, null, "Pet")
                 }
             }
@@ -435,24 +435,12 @@ data class WidgetSnapshot(
 enum class WidgetFace { EMPTY, EGG, ALIVE, GONE }
 
 /**
- * What the pet most wants, in the widget's own vocabulary.
- *
- * The labels are [CareActions.topNeed]'s, spelled exactly, because that function is the game's
- * own answer to this question and the widget's job is to repeat it rather than to have an
- * opinion. [ofLabel] returning null for something it does not recognise is deliberate: a widget
- * that has fallen behind a change in the game says nothing rather than guessing.
+ * `WidgetNeed` used to live here: a second five-case enum whose only job was to recognise the
+ * five English words [CareActions.topNeed] returned and turn them back into cases. It is gone.
+ * The widget now takes [PetNeed] straight from the game, which is what the doc comment above
+ * this file always said it was doing — "the widget never answers a question the game can answer"
+ * — and the round trip through English that stood between the two is no longer there to drift.
  */
-enum class WidgetNeed(val label: String) {
-    SICK("Sick"),
-    FOOD("Hungry"),
-    DIRTY("Dirty"),
-    REST("Sleepy"),
-    PLAY("Bored");
-
-    companion object {
-        fun ofLabel(label: String?): WidgetNeed? = entries.firstOrNull { it.label == label }
-    }
-}
 
 /** What one tap on the widget does. [OPEN] is the whole widget; the rest are the chip. */
 enum class WidgetAction { OPEN, FEED, MEDICATE, CLEAN, BATHE, TUCK_IN, PET }

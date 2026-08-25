@@ -200,7 +200,7 @@ pantalla de cuatro tonos no tiene más oscuro adonde ir.
 
 | # | Qué | Por qué sigue ahí |
 |---|---|---|
-| 6.1 | ~170 textos hardcodeados en inglés | Mover requiere decidir cómo entra `Context` a un dominio hoy puro, que es lo que lo hace testeable |
+| 6.1 | ~~~170 textos hardcodeados en inglés~~ | ✅ **la mitad de cromo, cerrada**: 745 cadenas y 15 `<plurals>` en `strings.xml`, las 22 pantallas y los siete juegos. `Context` **no** entró en el dominio: la UI lee las palabras en el borde de la composición y pasa el *valor* hacia dentro, y donde el dominio tenía que decir algo devuelve una identidad — `CareActions.topNeed` es un enum ahora y el `WidgetNeed` que existía sólo para reconocer sus cinco palabras inglesas ha desaparecido. **Falta**: los mensajes de `CareActions`, `Nudges`, `Errands` y el catálogo, que son identidad y quieren el mismo trato; y `Lore`/`Chronicle`, que se argumenta que son contenido y no deberían moverse. Razonamiento entero en `docs/STRINGS.md` |
 | 6.2 | ~~Sin tests de UI ni regresión visual~~ | ✅ **cerrada para la criatura**: `CreatureArtInvariantsTest` implementa el `DrawScope` real, corre el `drawCreature` real y afirma **15 propiedades** — no imágenes doradas, que se rompen con cualquier cambio legítimo y se borran al mes. La regla de la costura de §6.4 ahora es algo que una máquina revisa. Verificado por mutación: meter el bug histórico de vuelta rompe 3 assertions. **Falta**: el resto de la UI (pantallas, juegos) sigue sin tests |
 | 6.7 | Nada de lo nuevo se corrió ni se escuchó | Los cuatro juegos, las dos pantallas retro y las zonas táctiles están verificados por aritmética y por simulación en JVM, nunca por una pantalla. El dueto en particular: **no se escuchó una sola nota** |
 | 6.8 | `onTugTail` es un parámetro que nadie pasa | Costura deliberada por si tironear la cola debe costar algo. Hoy el castigo es la caricia no cobrada, que alcanza |
@@ -288,6 +288,33 @@ para nada bajo `ui/`, `data/` o `work/`, y menos aún para código mezclado desd
 Los tests puros cubren el dominio; para todo lo demás, la ausencia de conflicto no es evidencia de
 nada.
 
+### La anotación que existe y no obliga a nada
+
+Al mover 745 textos a `strings.xml`, CI se puso roja con tres errores en un fichero:
+
+```
+Functions which invoke @Composable functions must be marked with the @Composable annotation
+```
+
+`stringResource` es `@Composable`, así que llamarla obliga a que lo sea también quien la llama. El
+sustituto del banco **sí lleva la anotación** — está transcrita fielmente. Lo que no hay es el
+*plugin* del compilador de Compose, que es quien la hace cumplir. Anotación presente, nadie
+comprobando. Así que la llamada compila aquí y falla allí.
+
+Es una variante nueva de la lección del `@DslMarker`, y peor: allí faltaba la anotación en el
+sustituto y se podía arreglar añadiéndola. Aquí **está** y no sirve, porque lo que falta no es una
+anotación sino un compilador. **No hay forma local de detectar esta clase de error**, y conviene
+decirlo en vez de fingir que sí.
+
+Escribí un detector por texto y lo tiré: daba 106 impactos de los que 103 eran falsos —atribuía
+cada llamada a la última `fun` vista, así que un lambda composable anidado dentro de una función
+normal se le contaba a la de fuera. Un comprobador que grita 103 veces en falso es peor que no
+tener ninguno: la siguiente persona aprende a ignorarlo.
+
+Lo que **sí** vale, y es lo que se usó: Kotlin reporta todos los errores del módulo, no se detiene
+en el primer fichero. Cuando CI dice «tres errores en un fichero», son tres, y son ahí. Confiar en
+esa enumeración es más barato y más exacto que cualquier heurística local.
+
 ---
 
 ## 7. Orden sugerido
@@ -299,10 +326,14 @@ cerrada y verde en CI. Lo que queda:
 decisiones tuyas o hardware que acá no hay.
 
 **Lo que yo elegiría hacer después, si seguimos:**
-1. Los ~170 textos hardcodeados (§6.1) — mover requiere decidir cómo entra `Context` a un dominio
-   hoy puro, que es justo lo que lo hace testeable
+1. Terminar §6.1 por donde quedó: `ActionResult.toast: String?` pasa a ser
+   `ActionResult.message: CareMessage?`, una jerarquía sellada, y `PetViewModel` la convierte en
+   palabras. Hay **un** consumidor, así que está acotado, y no necesita ni un import de Android en
+   el dominio. Detrás van `Nudges`, `Errands` y `ItemCatalog`, con la misma forma.
+   `Brain.blockedBy` es el mismo bug que `topNeed` tenía y sigue vivo — ver `docs/STRINGS.md` §2.3
 2. Extender el patrón de `CreatureArtInvariantsTest` a las pantallas y a los siete juegos: es la
    mitad de §6.2 que sigue abierta, y ahora hay un molde que se sabe que funciona
+3. Traducir: con §6.1 dentro, `values-es/strings.xml` es un fichero y cero Kotlin
 
 
 **Bloqueado por decisión tuya:**

@@ -145,7 +145,43 @@ class MissionsTest {
         val reborn = pet.copy(ageSeconds = 0L, generation = 2)
         val rolled = Missions.rollOver(reborn, config, mutableListOf())
         assertEquals(0, rolled.dayLedger.dayIndex)
-        assertEquals(0, rolled.careStreakDays)
+        // The streak used to be zeroed here, back when a death took the player's own history
+        // with it. `Simulation.nextGeneration` now carries `careStreakDays` across on purpose --
+        // "the streak counts days the player showed up, and a funeral is not a day skipped" --
+        // and this roll-over was quietly undoing that a tick later. See the test below.
+        assertEquals(3, rolled.careStreakDays)
+    }
+
+    @Test
+    fun `a backward day jump is not an absence and does not cost the streak`() {
+        // The age going *down* is not time the player was away for: it is a new generation
+        // starting its own clock at zero. Grading it as a skipped day told the player they had
+        // lost a streak that `nextGeneration` had just deliberately handed them.
+        val pet = petOnDay(6).copy(careStreakDays = 3, bestCareStreak = 7)
+        val reborn = pet.copy(ageSeconds = 0L, generation = 2)
+        val events = mutableListOf<GameEvent>()
+        val rolled = Missions.rollOver(reborn, config, events)
+
+        // Asserted first, because it is the part the player actually sees.
+        assertTrue(
+            "the player is told they lost a streak they did not lose: " +
+                events.filterIsInstance<GameEvent.Message>().map { it.text },
+            events.none { it is GameEvent.Message && it.text.contains("Streak lost") },
+        )
+        assertEquals("the day is re-labelled onto the new clock", 0, rolled.dayLedger.dayIndex)
+        assertEquals("the streak the player earned is still theirs", 3, rolled.careStreakDays)
+        assertEquals("the record is untouched", 7, rolled.bestCareStreak)
+    }
+
+    @Test
+    fun `a backward jump does not pay a streak bonus either`() {
+        // Not grading the day has to mean *not grading it*. Re-basing the ledger must not become
+        // a way to collect a perfect-day payout for a day that never happened.
+        val pet = satisfyAll(petOnDay(6)).copy(careStreakDays = 3, coins = 100)
+        val reborn = pet.copy(ageSeconds = 0L, generation = 2)
+        val rolled = Missions.rollOver(reborn, config, mutableListOf())
+        assertEquals("no payout for a day that was never lived", 100, rolled.coins)
+        assertEquals("and no free step on the streak", 3, rolled.careStreakDays)
     }
 
     @Test

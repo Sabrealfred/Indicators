@@ -18,6 +18,10 @@ import kotlin.random.Random
  * The rule this file pins down is the same one [SoloPlay] already states for the minigames — the
  * creature playing alone posts no score — extended to the rest of what it can do for itself. The
  * world moves (it is fed, dosed, tidied, and the tin really empties); the keeper's ledger does not.
+ *
+ * Skills were the last thing left outside the rule and are now inside it: a skill the creature
+ * worked out unasked still lands, still gets announced, still changes what the creature can do —
+ * and pays the keeper nothing. A lesson still pays in full. See [Learning] for the argument.
  */
 class AutonomousCreditTest {
 
@@ -110,6 +114,50 @@ class AutonomousCreditTest {
         assertEquals("the dose really left the cupboard", 0, after.inventory["medicine"] ?: 0)
         assertEquals("but the keeper nursed nobody", ill.medicineDoses, after.medicineDoses)
         assertEquals(ill.xp, after.xp)
+    }
+
+    /**
+     * The same rule, reached the long way round: a skill that lands inside [Brain]'s own study.
+     *
+     * [Learning.learn] is the only place a skill arrives, and it is reached down two paths — a
+     * lesson the player chose, and a study the creature committed to itself at FULL autonomy. This
+     * is the second one, driven end to end rather than by calling [Learning] directly, because the
+     * whole claim is about who was in the room.
+     */
+    @Test
+    fun `a skill the creature finishes on its own earns the keeper no experience`() {
+        // One second short of feeding itself, with the intellect the rung needs, so exactly one
+        // tick of the brain's own study is what lands it.
+        val nearly = pet(stats = Stats(energy = 80f, satiety = 80f, hygiene = 95f, happiness = 80f))
+            .copy(
+                intellect = 30f,
+                studying = Skill.SELF_FEED,
+                studySeconds = Skill.SELF_FEED.studySeconds - 1,
+                xp = 55,
+                level = 1,
+            )
+        val events = mutableListOf<GameEvent>()
+        val studying = Brain.adopt(nearly, ActivityKind.STUDY, "I fancied my book.", config, Random(5), events)
+            ?: error("a fully autonomous adult with energy to spare can always sit down with a book")
+        val after = Brain.tick(studying, config, 1L, Random(5), events)
+
+        assertTrue("it really worked it out", Skill.SELF_FEED in after.skills)
+        assertTrue("and said so", events.any { it is GameEvent.LearnedSkill })
+        assertEquals("but nobody taught it", nearly.xp, after.xp)
+        assertEquals(1, after.level)
+        assertTrue(events.none { it is GameEvent.LeveledUp })
+    }
+
+    /** And the lesson still pays, which is the half of the split that must not be over-applied. */
+    @Test
+    fun `a skill finished by the player's own lesson still pays the keeper`() {
+        val nearly = pet(stats = Stats(energy = 80f, satiety = 80f, hygiene = 95f, happiness = 80f))
+            .copy(intellect = 30f, studying = Skill.SELF_FEED, studySeconds = Skill.SELF_FEED.studySeconds - 1)
+        val events = mutableListOf<GameEvent>()
+        val after = Learning.teach(nearly, events)
+
+        assertTrue(Skill.SELF_FEED in after.skills)
+        assertTrue("the keeper sat down with it, so the keeper is paid", after.xp > nearly.xp)
     }
 
     // ------------------------------------------------------------------ the creature's own ledger

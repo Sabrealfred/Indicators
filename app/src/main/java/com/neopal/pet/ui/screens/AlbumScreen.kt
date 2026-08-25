@@ -94,9 +94,10 @@ fun AlbumScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     .semantics { heading() },
             )
             Spacer(Modifier.width(pixelUnits(2)))
+            val caption = stringResource(R.string.home_snapshot_caption, pet.name, pet.stage.displayName)
             // PixelButton claims the 48dp touch minimum itself, which a Material button does not.
             PixelButton(
-                onClick = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
+                onClick = { viewModel.snapshot(caption) },
                 accent = NeoAccents.gold,
             ) {
                 Text(

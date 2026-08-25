@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.data.Notifier
@@ -22,13 +23,20 @@ import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.Chronicle
 import com.neopal.pet.domain.Colony
 import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Departure
 import com.neopal.pet.domain.Distillation
 import com.neopal.pet.domain.Errands
 import com.neopal.pet.domain.GameConfig
 import com.neopal.pet.domain.GameEvent
 import com.neopal.pet.domain.Learning
+import com.neopal.pet.domain.MindAnswerer
+import com.neopal.pet.domain.MindAsk
 import com.neopal.pet.domain.MindConfig
 import com.neopal.pet.domain.MindProvider
+import com.neopal.pet.domain.MindReply
+import com.neopal.pet.domain.MindRoute
+import com.neopal.pet.domain.MindRouter
+import com.neopal.pet.domain.MindWiring
 import com.neopal.pet.domain.PetClock
 import com.neopal.pet.domain.MissionProgress
 import com.neopal.pet.domain.Missions
@@ -111,6 +119,24 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * until a route exists.
      */
     private var mind: MindProvider = RemoteMindClient { _ui.value.config.mind }
+
+    /**
+     * The brain on the handset, while a screen is holding one open. Null the rest of the time,
+     * which is nearly all of it.
+     *
+     * Not built here, and that is the entire arrangement rather than an implementation detail. An
+     * engine of this size costs seconds to load and is heat and battery while it is resident, so
+     * it belongs to a screen and dies with it — `rememberOnDeviceMind` builds it, the talk
+     * screen's lifecycle owns it, and this holds a borrowed reference for exactly as long as that
+     * screen is composed. A view model outlives every screen it serves, so an engine kept *here*
+     * would be an engine kept warm behind a backgrounded game, which is precisely what section 5
+     * of the design forbids.
+     *
+     * Every read of it goes through [MindWiring.onDeviceReady], never through a null check: a
+     * client that is attached but still ten seconds into reading its weights is not a brain that
+     * can answer.
+     */
+    private var onDevice: MindProvider? = null
 
     /** One reply at a time; a second send would race the first. */
     private var chatJob: Job? = null
@@ -500,25 +526,25 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
         val lines = mutableListOf<String>()
         events.filterIsInstance<GameEvent.Evolved>().lastOrNull()?.let {
-            lines += "Evolved into a ${it.to.displayName} (${it.branch.displayName})."
+            lines += say(R.string.away_evolved, it.to.displayName, it.branch.displayName)
         }
-        if (events.any { it is GameEvent.Hatched }) lines += "The egg hatched while you were out."
+        if (events.any { it is GameEvent.Hatched }) lines += say(R.string.away_hatched)
         if (after.isDead) {
-            lines += "${after.name} passed away: ${after.deathReason?.displayName ?: "unknown"}."
+            lines += say(R.string.away_died, after.name, after.deathReason?.displayName ?: say(R.string.cause_unknown))
         } else {
             val messes = after.poops - before.poops
-            if (messes > 0) lines += "Made $messes mess${if (messes > 1) "es" else ""} on the floor."
-            if (after.isSick && !before.isSick) lines += "Caught something and needs medicine."
+            if (messes > 0) lines += many(R.plurals.away_messes, messes)
+            if (after.isSick && !before.isSick) lines += say(R.string.away_sick)
             val hunger = before.stats.satiety - after.stats.satiety
-            if (hunger > 15f) lines += "Got hungry — satiety fell ${hunger.toInt()} points."
-            if (after.isSleeping && !before.isSleeping) lines += "Fell asleep on its own."
+            if (hunger > 15f) lines += say(R.string.away_hungry, hunger.toInt())
+            if (after.isSleeping && !before.isSleeping) lines += say(R.string.away_slept)
             val mistakes = after.careMistakes - before.careMistakes
-            if (mistakes > 0) lines += "Logged $mistakes care mistake${if (mistakes > 1) "s" else ""}."
+            if (mistakes > 0) lines += many(R.plurals.away_mistakes, mistakes)
         }
         events.filterIsInstance<GameEvent.LeveledUp>().lastOrNull()?.let {
-            lines += "You reached keeper level ${it.level}."
+            lines += say(R.string.away_levelled, it.level)
         }
-        if (lines.isEmpty()) lines += "Nothing eventful. ${after.name} held up fine."
+        if (lines.isEmpty()) lines += say(R.string.away_uneventful, after.name)
         return OfflineReport(minutesAway = minutes, lines = lines, petName = after.name)
     }
 
@@ -582,8 +608,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 deltas = statDeltas(pet, updated),
             )
         }
-        val label = if (reward.missions.size == 1) reward.missions.first().title else "${reward.missions.size} missions"
-        showToast("$label complete — +${reward.coins} coins")
+        val label = if (reward.missions.size == 1) {
+            reward.missions.first().title
+        } else {
+            many(R.plurals.mission_count, reward.missions.size)
+        }
+        showToast(say(R.string.toast_missions_complete, label, reward.coins))
         handleEvents(events, offline = false)
         persist(updated)
     }
@@ -696,12 +726,57 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
     fun isThinking(): Boolean = _ui.value.thinking
 
     /**
+     * Lends this view model the brain a screen is holding open, or takes it away again.
+     *
+     * The seam the on-device engine arrives through, and the only one. `rememberOnDeviceMind`
+     * builds the client against the talk screen's lifecycle and calls this with it; the same
+     * `DisposableEffect` calls it with null on the way out. Nothing else may call it, and nothing
+     * here ever builds an engine — see [onDevice] for why a view model is the wrong owner.
+     *
+     * Passing null rather than leaving a stale reference matters: the client answers null once it
+     * has handed its engine back, so a forgotten reference would not spend battery, but it would
+     * make [talkRoute] claim a brain that is not there and the composer would offer to send into
+     * nothing.
+     */
+    fun attachOnDeviceMind(provider: MindProvider?) {
+        onDevice = provider
+    }
+
+    /**
+     * Who would answer if the player sent something right now.
+     *
+     * Asked by the screen to decide whether there is a composer at all, and asked again by [say]
+     * to decide what to do with what was typed into it. One function rather than two readings of
+     * the same settings, because a screen that offers a text box the send path then refuses is
+     * worse than one that never offered.
+     *
+     * The route is [MindRouter]'s and the two booleans are [MindWiring]'s. Nothing about who
+     * answers is decided here — that is `docs/CEREBRO-LOCAL.md` §4, and it lives in one tested
+     * place rather than being re-derived at each call site, which is how the two halves of a rule
+     * start disagreeing.
+     */
+    fun talkRoute(): MindRoute {
+        val config = _ui.value.config
+        return MindRouter.route(
+            ask = MindAsk.TALK_REPLY,
+            onDeviceReady = MindWiring.onDeviceReady(config.localMind, onDevice?.isReady == true),
+            remoteReady = MindWiring.remoteReady(config.mind, MindAsk.TALK_REPLY, mind.isReady),
+        )
+    }
+
+    /**
      * Says something to the creature.
      *
      * The player's line is stored immediately and the reply arrives later or not at all. That
      * ordering matters: a message that only appears once the network answers looks like the app
      * dropped it, and on a free model tier "does not answer" is a normal outcome rather than an
      * exceptional one.
+     *
+     * Which brain answers is [talkRoute]'s, and the interesting case is
+     * [MindRoute.OnDeviceThenRemote]: the model on the phone writes immediately and the remote one
+     * is asked in the same breath, so the player is never waiting on a network and never shown a
+     * placeholder. If the better answer lands, it replaces the line; if it does not — a timeout, a
+     * 429, a proxy down since Tuesday — nobody ever learns it was asked for.
      */
     fun say(message: String) {
         val text = message.trim().take(MAX_MESSAGE_CHARS)
@@ -716,9 +791,10 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         _ui.update { it.copy(pet = asked) }
         persist(asked)
 
-        if (!config.mind.usable || !config.mind.conversation || !mind.isReady) {
+        val route = talkRoute()
+        if (!route.runsAModel) {
             play(Sfx.DENY)
-            showToast("${pet.name} has nowhere to think yet. Connect a brain in Settings.")
+            showToast(say(R.string.toast_no_brain, pet.name))
             return
         }
 
@@ -726,31 +802,91 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         chatJob?.cancel()
         chatJob = viewModelScope.launch {
             val brief = PetBrief.of(asked, config)
-            val reply = mind.speak(brief, asked.chat, text)
+            // Asked in the order MindWiring gives, until one of them answers. Which brain it
+            // came from matters afterwards: a reply that already came from the remote model is
+            // not a reply for the remote model to improve.
+            var answeredBy: MindAnswerer? = null
+            var first: MindReply? = null
+            for (who in MindWiring.askOrder(route)) {
+                first = answerFrom(who, brief, asked.chat, text)
+                if (first != null) {
+                    answeredBy = who
+                    break
+                }
+            }
             _ui.update { it.copy(thinking = false) }
             // Read the pet again rather than closing over `asked`: the simulation ticks once a
             // second and the state that went into the request is stale by the time it returns.
             val now = _ui.value.pet ?: return@launch
-            if (reply == null) {
+            if (first == null) {
                 play(Sfx.DENY)
-                showToast("${now.name} did not answer.")
+                showToast(say(R.string.toast_no_answer, now.name))
                 return@launch
             }
             val answered = now.copy(
-                chat = (now.chat + ChatTurn(fromPet = true, text = reply.text, atSeconds = now.ageSeconds))
+                chat = (now.chat + ChatTurn(fromPet = true, text = first.text, atSeconds = now.ageSeconds))
                     .takeLast(Simulation.MAX_CHAT_TURNS),
                 // A model may nudge the mood a little, and only a little: warmth is clamped at the
                 // source and applied to happiness and bond alone. Letting a reply move satiety or
                 // health would put the simulation's rules behind a text box.
                 stats = now.stats.copy(
-                    happiness = now.stats.happiness + reply.warmth.coerceIn(-1f, 1f) * 3f,
-                    bond = now.stats.bond + reply.warmth.coerceIn(0f, 1f) * 1.5f,
+                    happiness = now.stats.happiness + first.warmth.coerceIn(-1f, 1f) * 3f,
+                    bond = now.stats.bond + first.warmth.coerceIn(0f, 1f) * 1.5f,
                 ).coerced(),
             )
             play(Sfx.SELECT)
             _ui.update { it.copy(pet = answered) }
             persist(answered)
+            if (answeredBy == route.answersNow) {
+                reconsider(route, brief, asked.chat, text, first.text)
+            }
         }
+    }
+
+    /**
+     * Asks the second brain, if this route has one, and rewrites the line if it answers.
+     *
+     * Only the *words* change. The mood was moved when the creature answered and it is not moved
+     * again: a better wording of the same answer is not a second thing happening to the creature,
+     * and warmth applied twice would let one exchange count for two.
+     *
+     * [MindWiring.replacingPetLine] refuses to rewrite anything but the newest line, so a reply
+     * that arrives after the conversation moved on is dropped rather than editing something the
+     * player has already read and answered.
+     */
+    private suspend fun reconsider(
+        route: MindRoute,
+        brief: PetBrief,
+        history: List<ChatTurn>,
+        text: String,
+        said: String,
+    ) {
+        val better = answerFrom(route.mayReplace, brief, history, text) ?: return
+        val now = _ui.value.pet ?: return
+        val rewritten = MindWiring.replacingPetLine(now.chat, said, better.text) ?: return
+        val improved = now.copy(chat = rewritten)
+        _ui.update { it.copy(pet = improved) }
+        persist(improved)
+    }
+
+    /**
+     * One answer from whichever brain the route named, or null.
+     *
+     * [MindAnswerer.SCRIPTED] comes back null rather than throwing or inventing something, and
+     * that is a gap worth naming rather than hiding: the hand-written brain decides, remembers and
+     * plays, but it does not write conversation, so there is nothing for it to say here. Null
+     * lands on the same "did not answer" line the game has always shown when a model stayed
+     * quiet, which is what the player already sees today.
+     */
+    private suspend fun answerFrom(
+        who: MindAnswerer?,
+        brief: PetBrief,
+        history: List<ChatTurn>,
+        text: String,
+    ): MindReply? = when (who) {
+        MindAnswerer.ON_DEVICE -> onDevice?.speak(brief, history, text)
+        MindAnswerer.REMOTE -> mind.speak(brief, history, text)
+        MindAnswerer.SCRIPTED, null -> null
     }
 
     /**
@@ -764,6 +900,32 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * Deliberately reuses [MindProvider.speak] rather than adding a method. The event goes in as
      * the prompt but is *not* stored as a player turn: the player did not say it, and a chat log
      * that claims otherwise is a log that lies about who spoke.
+     *
+     * ## Why this one is not routed, decided rather than overlooked
+     *
+     * This is [MindAsk.CHATTER] — "un comentario al azar" — and `docs/CEREBRO-LOCAL.md` §4 puts
+     * chatter on the phone, always, even with a remote route sitting there configured. The router
+     * agrees and would send it to the phone or, with no engine loaded, to the written brain. It is
+     * still going to the network here, and that is a decision rather than an omission.
+     *
+     * Two things make routing it today a straight loss:
+     *
+     *  - **[MindAnswerer.SCRIPTED] has nothing to say at this call site.** The hand-written brain
+     *    decides, remembers and plays; it does not *write* the creature's lines. So the route the
+     *    router would give — scripted, because no engine is loaded on the screen this fires from —
+     *    means silence, and this is the one feature where silence is the whole absence of it.
+     *    Every player who has a brain connected today would simply stop hearing from their
+     *    creature unprompted, and nothing would tell them why.
+     *  - **Nobody can obtain a local model yet.** [com.neopal.pet.domain.FetchableModels.fetchable]
+     *    is empty, because no catalogue entry is pinned to a revision. So there is no player for
+     *    whom routing this would produce the on-device line §4 wants — only players for whom it
+     *    would produce nothing.
+     *
+     * The router is right and this call site should move to it. What has to exist first is one of
+     * the two: a hand-written writer of unprompted lines in `domain/`, so that
+     * [MindAnswerer.SCRIPTED] means something here, or a pinned catalogue, so that the on-device
+     * answer is reachable at all. Moving it before either is switching a working feature off and
+     * calling it compliance.
      */
     private fun maybeSpeakFirst(events: List<GameEvent>) {
         val worth = events.firstNotNullOfOrNull { unpromptedLine(it) } ?: return
@@ -783,7 +945,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     .takeLast(Simulation.MAX_CHAT_TURNS),
             )
             _ui.update { it.copy(pet = spoken) }
-            showToast("${now.name} said something.")
+            showToast(say(R.string.toast_said_something, now.name))
             persist(spoken)
         }
     }
@@ -794,6 +956,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * Only firsts and turning points. A creature that remarked on every meal would be a
      * notification, and people turn notifications off.
      */
+    // NOT localised, and not an oversight. These are the *prompt* handed to a language model,
+    // not anything a player reads. Translating them would change what the creature is asked and
+    // therefore what it says, which is a product decision about the model and has nothing to do
+    // with what language the buttons are in. If NeoPal ever speaks Spanish, this is written in
+    // whatever language the model is being asked to answer in — a different question, decided
+    // somewhere else. See docs/STRINGS.md.
     private fun unpromptedLine(event: GameEvent): String? = when (event) {
         is GameEvent.Evolved -> "You have just grown into a ${event.to.displayName}. Say something about it."
         is GameEvent.LearnedSkill -> "You have just worked out how to ${event.skill.displayName.lowercase()}. Mention it."
@@ -905,36 +1073,54 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------------------------------------------------------------- plumbing
 
+    /**
+     * Words, for the half of this class that produces them.
+     *
+     * An `AndroidViewModel` already holds an `Application`, so reading a resource here costs
+     * nothing and threads nothing: the `Context` was already in the constructor. This is the
+     * boundary §6.1 is about — the view model is UI, `domain/` is not, and only one of the two
+     * gets to know what language the phone is in.
+     */
+    private fun say(id: Int, vararg args: Any): String =
+        getApplication<Application>().getString(id, *args)
+
+    private fun many(id: Int, count: Int, vararg args: Any): String =
+        getApplication<Application>().resources
+            .getQuantityString(id, count, count, *args)
+
+    /** The pet's name, or a stand-in for the window where a toast outlives the creature. */
+    private fun petNameOrDefault(): String = _ui.value.pet?.name ?: say(R.string.your_pet)
+
     private fun handleEvents(events: List<GameEvent>, offline: Boolean) {
         events.forEach { event ->
             when (event) {
                 is GameEvent.Hatched -> {
                     triggerAnimation(PetAnimation.HATCH)
                     play(Sfx.HATCH)
-                    showToast("The egg hatched!")
+                    showToast(say(R.string.toast_hatched))
                 }
                 is GameEvent.Evolved -> {
                     triggerAnimation(PetAnimation.EVOLVE)
                     play(Sfx.EVOLVE)
                     _ui.update { it.copy(evolutionSplash = true) }
-                    showToast("Evolved into ${event.to.displayName} (${event.branch.displayName})!")
+                    showToast(say(R.string.toast_evolved, event.to.displayName, event.branch.displayName))
                 }
                 is GameEvent.LeveledUp -> {
                     if (!offline) triggerAnimation(PetAnimation.LEVEL_UP)
                     play(Sfx.LEVEL_UP)
-                    showToast("Keeper level ${event.level}!")
+                    showToast(say(R.string.toast_keeper_level, event.level))
                 }
                 is GameEvent.Died -> {
                     triggerAnimation(PetAnimation.DEAD)
                     play(Sfx.DEATH)
-                    showToast("${_ui.value.pet?.name ?: "Your pet"} passed away: ${event.reason.displayName}.")
+                    showToast(say(R.string.toast_died, petNameOrDefault(), event.reason.displayName))
                     // The other moment the out-of-sandbox copy exists for. A death is when a save
                     // becomes a record rather than a game in progress, and it is also when a
                     // player is most likely to uninstall.
                     _ui.value.pet?.let { mirror(it, force = true) }
                 }
-                is GameEvent.GotSick -> showToast("Your pet caught something.")
-                is GameEvent.Recovered -> showToast("Fully recovered!")
+                is GameEvent.GotSick -> showToast(say(R.string.toast_got_sick))
+                is GameEvent.Recovered -> showToast(say(R.string.toast_recovered))
                 is GameEvent.Pooped -> if (!offline) play(Sfx.BACK)
                 is GameEvent.Unlocked -> {
                     _ui.update { it.copy(achievementBanner = event.achievement) }
@@ -947,43 +1133,66 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 // the player goes looking for it rather than having it thrown at them.
                 is GameEvent.LearnedSkill -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("Learned to ${event.skill.displayName.lowercase()} without being asked.")
+                    showToast(say(R.string.toast_learned_skill, event.skill.displayName.lowercase()))
                 }
                 is GameEvent.MetPal -> {
                     if (!offline) play(Sfx.SELECT)
-                    showToast("${event.pal.name} came by.")
+                    showToast(say(R.string.toast_pal_visited, event.pal.name))
                 }
                 is GameEvent.Befriended -> {
                     play(Sfx.HAPPY)
-                    showToast("${event.pal.name} is a friend now.")
+                    showToast(say(R.string.toast_befriended, event.pal.name))
                 }
                 is GameEvent.Paired -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("${_ui.value.pet?.name ?: "Your pet"} and ${event.pal.name} paired off.")
+                    showToast(say(R.string.toast_paired, petNameOrDefault(), event.pal.name))
                 }
                 is GameEvent.EggLaid -> {
                     play(Sfx.CONFIRM)
-                    showToast("There's an egg in the nest.")
+                    showToast(say(R.string.toast_egg_laid))
                 }
                 is GameEvent.ChildHatched -> {
                     if (!offline) triggerAnimation(PetAnimation.HATCH)
                     play(Sfx.HATCH)
-                    showToast("${event.child.name} hatched.")
+                    showToast(say(R.string.toast_child_hatched, event.child.name))
                 }
 
                 is GameEvent.LearnedFromExperience -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("Worked something out on its own.")
+                    showToast(say(R.string.toast_self_taught))
+                }
+
+                // The other end of the line ChildHatched opens: a child that has grown up and
+                // gone. Once per child, never undone, and the household is a different shape
+                // afterwards — the same class of turning point as a hatching, which does get a
+                // toast, so this one does too. The other two departures do not: a visit ending
+                // is the room's ordinary rhythm several times a day, and being let go to keep
+                // the roster inside its cap is the app's own housekeeping. See [Departure].
+                is GameEvent.PalLeft -> when (event.departure) {
+                    Departure.MOVED_OUT -> {
+                        if (!offline) play(Sfx.CONFIRM)
+                        showToast(say(R.string.toast_moved_out, event.name))
+                    }
+                    Departure.WENT_HOME, Departure.FORGOTTEN -> Unit
                 }
 
                 // Deliberately silent *here*, not unhandled: Decided and Finished are the two
                 // halves of one log line and both are folded into the decision log in the
                 // domain (Brain.recordOutcome), which the Mind screen reads. A toast per
                 // finished tidy-up is the notification this app exists not to be.
+                //
+                // The three plan events are silent here too, for two different reasons. PlanMade
+                // and PlanExtended are already on screen: the Mind screen's plan panel *is* what
+                // a plan being made looks like, and it says in the creature's own words when one
+                // has grown itself another step, so a toast would be the app reading its own
+                // screen out. PlanAbandoned is the one with nothing to show for it, and it is
+                // answered in the diary instead — see Chronicle.lineFor, which also explains why
+                // only a refused plan gets a line and one that ran out of time does not. Not a
+                // toast either way: §4.2.5 of docs/PLAN.md keeps the autonomous half's
+                // interruptions to firsts and turning points, and an errand is neither.
                 is GameEvent.Decided,
                 is GameEvent.Finished,
                 is GameEvent.IntellectGrew,
-                is GameEvent.PalLeft,
                 is GameEvent.PlanAbandoned,
                 is GameEvent.PlanMade,
                 is GameEvent.PlanExtended,

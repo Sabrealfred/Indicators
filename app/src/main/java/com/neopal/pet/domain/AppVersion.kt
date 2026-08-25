@@ -183,22 +183,7 @@ object AppVersion {
      * Plain HTTP is refused outright: the whole integrity story below rests on the transport.
      */
     fun isTrustedReleaseUrl(url: String): Boolean {
-        val scheme = "https://"
-        if (!url.startsWith(scheme, ignoreCase = true)) return false
-        val rest = url.substring(scheme.length)
-        val cut = rest.indexOfFirst { it == '/' || it == '?' || it == '#' }
-        val authority = if (cut < 0) rest else rest.substring(0, cut)
-        // `https://github.com@evil.example/...` is a hostile URL that reads as a friendly one.
-        if (authority.contains('@')) return false
-        val host: String
-        if (authority.contains(':')) {
-            val port = authority.substringAfterLast(':')
-            if (port != "443") return false
-            host = authority.substringBeforeLast(':').lowercase()
-        } else {
-            host = authority.lowercase()
-        }
-        if (host.isEmpty()) return false
+        val host = httpsHostOrNull(url) ?: return false
         return host == "github.com" ||
             host == "api.github.com" ||
             host == "codeload.github.com" ||
@@ -206,6 +191,38 @@ object AppVersion {
             // sub-domain has changed at least twice, so the suffix is what is pinned. The leading
             // dot matters: without it `githubusercontent.com.evil.example` would pass.
             host.endsWith(".githubusercontent.com")
+    }
+
+    /**
+     * The host of an `https` URL, lowercased, or null if the URL is not one worth opening.
+     *
+     * Extracted out of [isTrustedReleaseUrl] when the model downloader needed the same
+     * refusals against a different list of hosts. It is the *refusals* that are worth having in
+     * one place, because each of them is a way a URL can read as one host and resolve to another:
+     *
+     * - anything that is not `https` — the whole integrity story rests on the transport;
+     * - a userinfo section, so that `https://github.com@evil.example/x` cannot pass for GitHub;
+     * - an explicit port that is not 443, which would take a pinned host somewhere unpinned.
+     *
+     * A second copy of this next door would eventually be a copy with one of the three missing.
+     */
+    fun httpsHostOrNull(url: String): String? {
+        val scheme = "https://"
+        if (!url.startsWith(scheme, ignoreCase = true)) return null
+        val rest = url.substring(scheme.length)
+        val cut = rest.indexOfFirst { it == '/' || it == '?' || it == '#' }
+        val authority = if (cut < 0) rest else rest.substring(0, cut)
+        // `https://github.com@evil.example/...` is a hostile URL that reads as a friendly one.
+        if (authority.contains('@')) return null
+        val host: String
+        if (authority.contains(':')) {
+            val port = authority.substringAfterLast(':')
+            if (port != "443") return null
+            host = authority.substringBeforeLast(':').lowercase()
+        } else {
+            host = authority.lowercase()
+        }
+        return host.ifEmpty { null }
     }
 
     // ------------------------------------------------------------------ internals

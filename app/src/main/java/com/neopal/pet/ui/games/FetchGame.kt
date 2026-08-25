@@ -46,12 +46,14 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.inset
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -564,6 +566,12 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     var flashColor by remember { mutableStateOf(NeoColors.NeonCyan) }
     var flashTick by remember { mutableIntStateOf(0) }
 
+    // The frame loop sets these; composition is over by then, so the words come from here.
+    val title = stringResource(R.string.game_fetch)
+    val flashReading = stringResource(R.string.fetch_flash_reading)
+    val flashSnatch = stringResource(R.string.fetch_flash_snatch)
+    val flashRead = stringResource(R.string.fetch_flash_read)
+
     // Anything the frame loop reads that composition owns goes through here. A plain capture in
     // a withFrameNanos body is read once and then goes stale for the life of the loop.
     val sound = rememberUpdatedState(ui.config.soundEnabled)
@@ -600,7 +608,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     thrown += 1
                     if (sound.value) ChiptuneEngine.play(Sfx.SELECT, pitch = 0.8f + aimPower * 0.4f)
                     if (sim.headStart > 0.05f) {
-                        flash = "READING YOU"
+                        flash = flashReading
                         flashColor = NeoColors.NeonPurple
                         flashTick += 1
                     }
@@ -613,7 +621,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     sim.eventCaught = false
                     if (sim.caughtInAir) {
                         snatches += 1
-                        flash = "SNATCH!"
+                        flash = flashSnatch
                         flashColor = NeoColors.NeonYellow
                         flashTick += 1
                     }
@@ -640,7 +648,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     winding = false
                     if (sound.value) ChiptuneEngine.play(Sfx.COIN, pitch = 1f + retrieved * 0.04f)
                     if (anticipated && !sim.caughtInAir) {
-                        flash = "READ +150"
+                        flash = flashRead
                         flashColor = NeoColors.NeonGreen
                         flashTick += 1
                     }
@@ -656,7 +664,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         viewModel.finishGame(
             won = retrieved >= THROWS,
             score = (points / TARGET_POINTS).coerceIn(0f, 1f),
-            gameName = "Fetch",
+            gameName = title,
             gameId = GAME_ID,
             points = points,
         )
@@ -680,7 +688,14 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         readPct < 55 -> "It is starting to guess your arc."
         else -> "It is already waiting where you always throw."
     }
-    val statusLine = "Score $points. Fetch ${retrieved.coerceAtMost(THROWS)} of $THROWS. Read $readPct per cent."
+    val statusLine = stringResource(
+        R.string.cd_fetch_status,
+        points,
+        retrieved.coerceAtMost(THROWS),
+        THROWS,
+        readPct,
+    )
+    val fieldReadOut = stringResource(R.string.cd_fetch_field, pet.name, petLine, readLine)
 
     Column(
         modifier = Modifier
@@ -692,9 +707,9 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Fetch",
-            left = "Score $points  ·  $retrieved/$THROWS",
-            right = "Read $readPct%",
+            title = title,
+            left = stringResource(R.string.fetch_score_line, points, retrieved, THROWS),
+            right = stringResource(R.string.fetch_read, readPct),
             progress = (time / DURATION).coerceIn(0f, 1f),
             onExit = onExit,
         )
@@ -707,7 +722,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                 .clip(RoundedCornerShape(16.dp))
                 .background(Color(0xFF12141B))
                 .semantics {
-                    contentDescription = "Fetch field. ${pet.name} $petLine $readLine"
+                    contentDescription = fieldReadOut
                 }
                 .pointerInput(Unit) {
                     var originX = 0f
@@ -891,14 +906,14 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             }
             Spacer(Modifier.size(8.dp))
             Text(
-                text = "Read $readPct%",
+                text = stringResource(R.string.fetch_read, readPct),
                 style = MaterialTheme.typography.labelSmall,
                 color = NeoColors.NeonPurple,
             )
         }
 
         Text(
-            text = readLine + if (lastGain > 0) "  (+$lastGain)" else "",
+            text = if (lastGain > 0) stringResource(R.string.fetch_gain, readLine, lastGain) else readLine,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier
@@ -914,7 +929,7 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Throw",
+            text = stringResource(R.string.fetch_throw_heading),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.semantics { heading() },
@@ -926,8 +941,8 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         // Dialling the aim counts as winding up, exactly as starting a drag does — otherwise the
         // creature would only ever anticipate players who throw with a gesture.
         AimRow(
-            label = "Angle",
-            value = "${aimAngle.roundToInt()}°",
+            label = stringResource(R.string.fetch_angle),
+            value = stringResource(R.string.fetch_degrees, aimAngle.roundToInt()),
             enabled = canThrow && ready,
             onLess = {
                 aimAngle = (aimAngle - 4f).coerceAtLeast(MIN_ANGLE)
@@ -941,8 +956,8 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             },
         )
         AimRow(
-            label = "Power",
-            value = "${powerPercent(aimPower)}%",
+            label = stringResource(R.string.fetch_power),
+            value = stringResource(R.string.percent_value, powerPercent(aimPower)),
             enabled = canThrow && ready,
             onLess = {
                 aimPower = (aimPower - 0.05f).coerceAtLeast(MIN_POWER)
@@ -956,6 +971,11 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             },
         )
         Spacer(Modifier.height(6.dp))
+        val throwReadOut = stringResource(
+            R.string.cd_fetch_throw,
+            aimAngle.roundToInt(),
+            powerPercent(aimPower),
+        )
         Button(
             onClick = { requestThrow() },
             enabled = canThrow && ready,
@@ -964,15 +984,13 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                 .fillMaxWidth()
                 .heightIn(min = 56.dp)
                 .semantics {
-                    contentDescription =
-                        "Throw the ball at ${aimAngle.roundToInt()} degrees, ${powerPercent(aimPower)} per cent power"
+                    contentDescription = throwReadOut
                 },
         ) {
-            Text("THROW", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.fetch_throw), style = MaterialTheme.typography.titleMedium)
         }
         Text(
-            text = if (idle) "Drag up and out to throw — steeper goes higher, faster goes further." else
-                "Watch where it decides to stand.",
+            text = stringResource(if (idle) R.string.fetch_hint_idle else R.string.fetch_hint_watch),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
@@ -980,11 +998,13 @@ fun FetchGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         if (finished) {
             GameResult(
-                title = if (retrieved >= THROWS) "ALL FETCHED!" else "TIME UP",
+                title = stringResource(
+                    if (retrieved >= THROWS) R.string.fetch_result_win else R.string.game_time_up,
+                ),
                 lines = listOf(
-                    "Score $points" + if (points > best) "  ★ NEW RECORD" else "",
-                    "Fetched $retrieved of $THROWS  ·  $snatches out of the air",
-                    "Read $readPct%  ·  anticipated $reads throws",
+                    stringResource(if (points > best) R.string.game_score_record else R.string.game_score, points),
+                    stringResource(R.string.fetch_result_fetched, retrieved, THROWS, snatches),
+                    stringResource(R.string.fetch_result_read, readPct, reads),
                 ),
                 onExit = onExit,
             )
@@ -1020,8 +1040,8 @@ private fun AimRow(
             color = NeoColors.OnDark,
             modifier = Modifier.sizeIn(minWidth = 56.dp),
         )
-        StepButton(symbol = "−", description = "Less $label", enabled = enabled, onClick = onLess)
-        StepButton(symbol = "+", description = "More $label", enabled = enabled, onClick = onMore)
+        StepButton(symbol = "−", description = stringResource(R.string.cd_step_less, label), enabled = enabled, onClick = onLess)
+        StepButton(symbol = "+", description = stringResource(R.string.cd_step_more, label), enabled = enabled, onClick = onMore)
     }
 }
 

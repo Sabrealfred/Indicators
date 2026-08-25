@@ -36,6 +36,30 @@ object PetClock {
     /** Intervals between [MIN_MINUTES_PER_DAY] and [MAX_MINUTES_PER_DAY], for the slider. */
     val NOTCHES: Int get() = (MAX_MINUTES_PER_DAY - MIN_MINUTES_PER_DAY) / MINUTES_PER_NOTCH
 
+    /** The same range the slider offers, in the unit the save actually stores. */
+    val LEGAL_SECONDS: LongRange =
+        (MIN_MINUTES_PER_DAY * 60L)..(MAX_MINUTES_PER_DAY * 60L)
+
+    /**
+     * A stored day length brought back into [LEGAL_SECONDS].
+     *
+     * The clamp above is applied to what a *thumb* produces. Nothing was applied to what a *file*
+     * produces, and a save arrives by three routes that never touch the slider: pasted through
+     * import, hand-edited, or written by a build whose range was a different pair of literals --
+     * which this game has already had once. The control then opens pinned to an end stop,
+     * misreporting the setting exactly as it did when the range was wrong, and the day clock runs
+     * on a number no part of the game ever agreed to.
+     *
+     * Zero and negatives are not merely out of range. [PetState.ageInPetDays] divides by this, so
+     * a stored `0` is an `ArithmeticException` on the first tick, and a negative runs the day
+     * counter backwards for as long as the pet lives.
+     *
+     * This clamps and does not snap to a notch. Rewriting a legal-but-off-grid value on every load
+     * would move the day counter under a streak that had done nothing wrong -- what [reclock]
+     * exists to prevent -- and would do it with no config change to trigger the re-base.
+     */
+    fun sanitiseSeconds(seconds: Long): Long = seconds.coerceIn(LEGAL_SECONDS)
+
     /** What the setting currently says, in minutes. */
     fun minutesOf(config: GameConfig): Int = (config.secondsPerPetDay / 60L).toInt()
 

@@ -78,4 +78,886 @@
     <string name="album_empty_body">Every evolution files itself here on its own. For everything in between, hold your finger on %1$s and the moment gets kept.</string>
     <string name="album_caption">%1$s · %2$s</string>
     <string name="cd_album_card">Photo: %1$s. %2$s, %3$s.</string>
+
+    <!-- Shared: quoting the creature's own line. The marks are chrome, the line inside them
+         is content. A locale that quotes with guillemets changes this resource and never
+         touches a diary entry. -->
+
+    <string name="quoted_line">“%1$s”</string>
+
+    <!-- Boot screen. The wordmark NEOPAL is deliberately not here: it is the mark, not copy. -->
+    <string name="boot_start">Start</string>
+    <string name="boot_tagline">VIRTUAL PET SYSTEM</string>
+    <string name="boot_tap_to_start">TAP TO START</string>
+    <string name="boot_loading">LOADING...</string>
+
+    <!-- Chronicle / diary screen -->
+    <string name="chronicle_title">DIARY</string>
+    <string name="chronicle_subtitle">%1$s\'s own words · %2$d entries</string>
+    <string name="chronicle_empty_title">The first page is blank</string>
+    <string name="chronicle_empty_body">%1$s writes this itself — the good days and the ones where nobody came. Give it a life worth writing about.</string>
+    <string name="chronicle_day">Day %1$d</string>
+
+    <!-- Memorial screen -->
+    <string name="memorial_title">IN MEMORY</string>
+    <string name="memorial_cause_unknown">Gone</string>
+    <string name="memorial_lived">Lived %1$d days as a %2$s, %3$s to the end.</string>
+    <string name="memorial_tally">%1$d meals shared · %2$d games won · %3$d pictures kept</string>
+    <string name="memorial_read_diary">Read the diary</string>
+    <string name="memorial_next_generation">When you\'re ready: generation %1$d</string>
+    <string name="memorial_stay">Stay a moment</string>
+
+    <!-- Update screen -->
+    <string name="update_title">UPDATE</string>
+    <string name="update_how_title">How this works</string>
+    <string name="update_how_source">NeoPal is not on a store. Every push builds an APK and attaches it to one rolling pre-release on the project\'s own GitHub page, and that page is the only place this screen will fetch from — a release that points its download anywhere else is left alone rather than followed.</string>
+    <string name="update_how_verified">A downloaded build is checked against the checksum on the release page and opened to confirm it really is NeoPal, and the version it claims to be, before it is ever offered for installing. Android then asks you to confirm the install itself — nothing here can install anything on its own.</string>
+    <string name="update_how_cached">The download lives in this app\'s cache, so Android may clear it to make room. If it does, the updater notices and offers to fetch it again.</string>
+
+    <!-- On-device model panel -->
+    <string name="model_panel_title">The brain on this device</string>
+
+    <!-- Shared value formats -->
+    <string name="percent_value">%1$d%%</string>
+    <string name="cd_percent_value">%1$d percent</string>
+    <string name="cd_minutes_value">%1$d minutes</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">SETTINGS</string>
+
+    <string name="settings_look">Look</string>
+    <string name="settings_look_blurb">How the pet and the room are drawn on screen.</string>
+    <string name="settings_pixel_mode">Pixel-art mode</string>
+    <string name="settings_detail_hint">Detail — lower is chunkier and more retro.</string>
+    <string name="settings_pixel_preset_chunky">Chunky</string>
+    <string name="settings_pixel_preset_classic">Classic</string>
+    <string name="settings_pixel_preset_fine">Fine</string>
+    <string name="settings_pixel_preset_crisp">Crisp</string>
+    <string name="settings_buffer_hint">%1$dpx tall buffer, upscaled with hard edges.</string>
+    <string name="settings_screen_hint">Screen — which machine you are pretending to hold.</string>
+    <string name="settings_reduced_motion">Reduced motion</string>
+
+    <string name="settings_sound">Sound and feel</string>
+    <string name="settings_sound_blurb">Audio and vibration feedback for taps, meals and games.</string>
+    <string name="settings_sound_effects">Sound effects</string>
+    <string name="settings_volume">Volume</string>
+    <string name="settings_haptics">Haptics</string>
+
+    <string name="settings_brain">The creature\'s brain</string>
+    <string name="settings_brain_blurb">Off by default. Everything else in NeoPal works with no network at all, and nothing here is needed to play — this only lets the creature talk back and think out loud.</string>
+    <string name="settings_brain_enable">Give it somewhere to think</string>
+    <string name="settings_route">Route: %1$s</string>
+    <string name="settings_own_key">Your own key (optional)</string>
+    <string name="settings_own_key_placeholder">Leave empty to use the shared service</string>
+    <string name="settings_own_key_hint">Stored on this device and sent only to the address below. It is never put into anything the creature says, and never written to the save\'s diary.</string>
+    <string name="settings_endpoint">Endpoint</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_model_hint">The default is a free model, so trying this costs nothing.</string>
+    <string name="settings_quick_model">Quick model (optional)</string>
+    <string name="settings_quick_model_placeholder">A smaller model, for deciding only</string>
+    <string name="settings_split_models">Deciding goes to %1$s; talking, planning and remembering go to %2$s.</string>
+    <string name="settings_split_models_hint">Deciding runs many times an hour and only has to pick from a list the game already checked. Sending it somewhere small leaves the quota for talking and planning, which is where a big model shows.</string>
+    <string name="settings_shared_service">Shared service (optional)</string>
+    <string name="settings_shared_service_placeholder">Used when no key of your own is set</string>
+    <string name="settings_let_it_talk">Let it talk</string>
+    <string name="settings_let_it_choose">Let it choose what to do</string>
+    <string name="settings_let_it_teach">Let it draw lessons for its children</string>
+    <string name="settings_let_it_teach_hint">Children inherit lessons from their parent\'s life whether this is on or off. This only changes who words them.</string>
+
+    <string name="settings_reminders">Reminders</string>
+    <string name="settings_reminders_blurb">Whether NeoPal nudges you when a need runs low.</string>
+
+    <string name="settings_finish">Finish</string>
+    <string name="settings_finish_blurb">How soft the picture is, and how much atmosphere sits over it.</string>
+    <string name="settings_softness">Pixel softness</string>
+    <string name="settings_softness_value">Pixel softness %1$d%%</string>
+    <string name="settings_softness_hint">At zero the blocks are razor-hard. Higher lets light bleed a pixel past an edge, which takes the glare off without blurring the art.</string>
+    <string name="settings_atmosphere">Atmosphere</string>
+    <string name="settings_atmosphere_value">Atmosphere %1$d%%</string>
+    <string name="settings_atmosphere_hint">Warm light by day, cool by night, and a soft vignette around the room.</string>
+
+    <string name="settings_pace">Pace</string>
+    <string name="settings_pace_blurb">How long a whole life takes, and how fast the clock runs.</string>
+    <string name="settings_lifetime">A full life takes about %1$.1f hours of real time.</string>
+    <string name="settings_pace_slow">Slow</string>
+    <string name="settings_pace_normal">Normal</string>
+    <string name="settings_pace_fast">Fast</string>
+    <string name="settings_pace_demo">Demo</string>
+    <string name="settings_clock">Clock: one pet day lasts %1$d minutes.</string>
+    <string name="settings_minutes_per_day">Minutes per pet day</string>
+    <string name="settings_clock_hint">The clock only sets day, night and the day counter. Time away is simulated at %1$d%% speed and capped at %2$d hours, and absence alone will never kill a healthy pet — only illness you left untreated can.</string>
+
+    <string name="settings_help">Help</string>
+    <string name="settings_help_blurb">The first-run coach marks that explain the room.</string>
+    <string name="settings_replay_tips">Replay the tips</string>
+    <string name="settings_replay_tips_done">The tips will show again next time you open the room.</string>
+
+    <string name="settings_save_data">Save data</string>
+    <string name="settings_save_data_blurb">Move this pet between devices, or restore an older copy.</string>
+    <string name="settings_export">Export</string>
+    <string name="settings_import">Import</string>
+    <string name="settings_paste_save">Paste a save here</string>
+    <string name="settings_save_copied">Save copied to the clipboard.</string>
+    <string name="settings_save_imported">Save imported.</string>
+    <string name="settings_save_unreadable">That save could not be read.</string>
+
+    <string name="settings_updates">App updates</string>
+    <string name="settings_updates_blurb">Where new builds come from, and whether there is one.</string>
+    <string name="settings_check_updates">Check for updates</string>
+    <string name="settings_updates_hint">NeoPal installs from its own release page rather than a store, so it does not update itself in the background. Nothing is downloaded or installed without you asking for it.</string>
+
+    <string name="settings_danger">Danger zone</string>
+    <string name="settings_danger_blurb">Ends this pet\'s life and starts a fresh save.</string>
+    <string name="settings_delete_save">Delete save and start over</string>
+    <string name="settings_delete_confirm_title">Delete this pet?</string>
+    <string name="settings_delete_confirm_body">The save, the album and every unlock are erased. This cannot be undone.</string>
+    <string name="settings_colophon">NeoPal is an original virtual pet. All art is drawn procedurally in code; the console styling is a generic handheld design and carries no third-party branding.</string>
+
+    <!-- Voice panel, inside settings -->
+    <string name="voice_title">Its voice</string>
+    <string name="voice_blurb">Silent both ways until you say otherwise. Speaking uses the voice already on this phone and needs no network; listening needs the microphone, and is asked for the first time you reach for it rather than now.</string>
+    <string name="voice_let_it_speak">Let it speak aloud</string>
+    <string name="voice_read_replies">Read its replies aloud</string>
+    <string name="voice_read_replies_hint">Replies are the only thing read out today. Its diary and its decisions are written where they happen and stay on the page.</string>
+    <string name="voice_volume">Speaking volume</string>
+    <string name="voice_descriptor">%1$s sounds %2$s — its age, its temperament and what it was bred from, not a setting.</string>
+    <string name="voice_hear_it">HEAR IT</string>
+    <string name="cd_voice_preview">Hear %1$s say something.</string>
+    <string name="voice_let_it_listen">Let it listen when you talk</string>
+    <string name="voice_listen_no_recogniser">This device has no speech recognition, so there is nothing to switch on. Typing to it works exactly as well.</string>
+    <string name="voice_listen_off">Off. The talking screen shows no microphone at all while this is.</string>
+    <string name="voice_listen_granted">The microphone is granted. It opens when you press speak on the talking screen and closes as soon as you stop talking, and what it hears goes into the message box for you to read before anything is sent.</string>
+    <string name="voice_listen_unasked">The microphone has not been asked for. It is asked the first time you press speak on the talking screen, and refusing is a complete answer — the keyboard is not a fallback, it is the way in.</string>
+    <string name="voice_on_device">Keep recognition on this phone</string>
+    <string name="voice_on_device_hint">A request, not a promise. With it on, a phone that has an on-device recogniser uses it and nothing you say leaves the handset. Without one, the system\'s own speech service handles the audio under its own policy — this app never receives it either way.</string>
+
+    <!-- Shared -->
+    <string name="action_close">Close</string>
+    <string name="conjunction_and"> and </string>
+    <string name="default_pet_name">Pip</string>
+
+    <!-- Game names. One set of words for the select grid, the header inside each game and the
+         name the finished game hands to the score line. They were three copies of the same
+         English before. -->
+    <string name="game_rhythm">Rhythm Tap</string>
+    <string name="game_memory">Memory Match</string>
+    <string name="game_catch">Snack Catch</string>
+    <string name="game_hide">Hide and Seek</string>
+    <string name="game_fetch">Fetch</string>
+    <string name="game_duet">Duet</string>
+    <string name="game_puzzle">Shape Sorter</string>
+
+    <!-- Game-select screen -->
+    <string name="games_title">PLAY</string>
+    <string name="games_blocked_title">No games right now</string>
+    <string name="games_blurb">Winning raises mood and bond, and burns energy. Play often for an Athletic evolution.</string>
+    <string name="games_record">Record: %1$d wins in %2$d games</string>
+    <string name="cd_best_score">Best score %1$d</string>
+    <string name="game_rhythm_blurb">4 lanes · 30 s\nTiming drill — big mood, small bond, ~10 energy</string>
+    <string name="game_memory_blurb">6 rounds\nRecall drill — steady mood and bond, ~8 energy</string>
+    <string name="game_catch_blurb">40 s · 3 lives\nReflex drill — best bond gain, ~12 energy</string>
+    <string name="game_hide_blurb">4 rounds · both sides\nPlayed with it, not against it — its genome hunts</string>
+    <string name="game_fetch_blurb">6 throws · 60 s\nIt learns your throw — and you can watch it guess</string>
+    <string name="game_duet_blurb">6 verses · no wrong note\nYou sing, it answers — nothing is being scored</string>
+    <string name="game_puzzle_blurb">4 boards · 95 s\nIt can solve this one alone — if it is clever enough</string>
+
+    <!-- Shop screen -->
+    <string name="shop_title">SHOP</string>
+    <string name="shop_tab_food">Food</string>
+    <string name="shop_tab_care">Care</string>
+    <string name="shop_tab_toys">Toys</string>
+    <string name="shop_tab_hats">Hats</string>
+    <string name="shop_tab_rooms">Rooms</string>
+    <string name="shop_equipped">EQUIPPED</string>
+    <string name="shop_in_use">In use</string>
+    <string name="shop_tap_to_equip">Tap to equip</string>
+    <string name="shop_owned">Owned</string>
+    <string name="shop_owned_count">x%1$d</string>
+    <string name="shop_you_have">You have %1$d</string>
+    <string name="shop_price">%1$d coins</string>
+    <string name="shop_price_and_purse">%1$d coins · you have %2$d</string>
+    <string name="shop_cosmetic_only">Pure decoration. It changes nothing but how your pet looks.</string>
+    <string name="shop_take_off">Take off</string>
+    <string name="shop_wear_it">Wear it</string>
+    <string name="shop_use_it">Use it</string>
+    <string name="shop_buy">Buy</string>
+    <string name="shop_not_enough_coins">Not enough coins</string>
+    <string name="cd_item_effect">%1$s %2$s</string>
+
+    <!-- New game / next generation -->
+    <string name="newgame_title">NEW PET</string>
+    <string name="newgame_generation">GENERATION %1$d</string>
+    <string name="newgame_carry_over">Coins, cosmetics and the album carry over.</string>
+    <string name="newgame_pick_an_egg">Pick an egg. Every family grows up differently.</string>
+    <string name="newgame_who_continues">Who continues</string>
+    <string name="newgame_heir_blurb">An heir keeps its own body and family, and whatever it was taught in time. The nursery sends something unrelated.</string>
+    <string name="newgame_nursery">From the nursery</string>
+    <string name="newgame_nursery_detail">A new family, nothing behind it</string>
+    <string name="newgame_name">Name</string>
+    <string name="newgame_start">START</string>
+
+    <!-- Home screen: dock, quick-care strip, meters, pantry, tips -->
+    <string name="action_missions">Missions</string>
+    <string name="action_lights_on">Lights on</string>
+    <string name="action_lights_off">Lights off</string>
+    <string name="action_mind">Mind</string>
+    <string name="action_talk">Talk</string>
+    <string name="action_colony">Colony</string>
+    <string name="action_diary">Diary</string>
+    <string name="action_memorial">Memorial</string>
+    <string name="action_skip">Skip</string>
+
+    <string name="home_snapshot_caption">%1$s, %2$s</string>
+    <string name="home_subtitle">%1$s · %2$s · day %3$d</string>
+    <string name="bullet_prefix">"·  "</string>
+
+    <string name="quick_give_dose">Give %1$s</string>
+    <string name="quick_is_sick">%1$s is sick</string>
+    <string name="quick_buy_medicine">Buy medicine</string>
+    <string name="quick_is_sick_no_medicine">%1$s is sick and the cabinet is empty</string>
+    <string name="quick_feed_food">Feed %1$s</string>
+    <string name="quick_satiety">Satiety %1$d</string>
+    <string name="quick_buy_food">Buy food</string>
+    <string name="quick_satiety_empty_pantry">Satiety %1$d and the pantry is empty</string>
+    <string name="quick_clean_room">Clean the room</string>
+    <string name="quick_scrub">Scrub with %1$s</string>
+    <string name="quick_hygiene">Hygiene %1$d</string>
+    <string name="quick_tuck_in">Tuck %1$s in</string>
+    <string name="quick_energy">Energy %1$d</string>
+    <string name="quick_play_game">Play a game</string>
+    <string name="quick_happiness">Happiness %1$d</string>
+    <string name="quick_pet_it">Pet %1$s</string>
+    <string name="quick_happiness_no_game">Happiness %1$d, not up for a game</string>
+    <string name="cd_quick_care">%1$s. %2$s</string>
+    <plurals name="quick_mess_on_floor">
+        <item quantity="one">%1$d mess on the floor</item>
+        <item quantity="other">%1$d messes on the floor</item>
+    </plurals>
+
+    <string name="calm_egg">The egg is warming up.</string>
+    <string name="calm_asleep">%1$s is asleep. Nothing needed.</string>
+    <string name="calm_dead">%1$s is no longer with us.</string>
+    <string name="calm_fine">Nothing urgent. %1$s is doing fine.</string>
+
+    <string name="cd_tray_wash">Wash %1$s with %2$s, %3$d left. Or drag it onto %1$s.</string>
+    <string name="cd_tray_feed">Feed %1$s to %2$s, %3$d left. Or drag it onto %2$s.</string>
+    <string name="drag_rub_to_scrub">Rub to scrub</string>
+    <string name="drag_let_go_to_feed">Let go to feed</string>
+
+    <!-- The five-across strip has room for a word, not a name: these are the short forms of
+         stat_satiety and friends, not separate facts. -->
+    <string name="stat_short_food">FOOD</string>
+    <string name="stat_short_mood">MOOD</string>
+    <string name="stat_short_energy">ENERGY</string>
+    <string name="stat_short_clean">CLEAN</string>
+    <string name="stat_short_health">HP</string>
+
+    <string name="pantry_title">Pantry</string>
+    <string name="pantry_subtitle">Satiety %1$d · weight %2$d g</string>
+    <string name="pantry_empty">The pantry is empty.</string>
+    <string name="pantry_go_to_shop">Go to the shop</string>
+    <string name="cd_pantry_item">%1$s, %2$d left</string>
+
+    <string name="award_toast_detail">"%1$s  ·  +%2$d coins"</string>
+
+    <string name="tip_counter">TIP %1$d/%2$d</string>
+    <string name="tip_gestures">Tap %1$s to pet it. Double-tap to tickle, swipe up to toss it in the air.</string>
+    <string name="tip_gestures_next">Say hello</string>
+    <string name="tip_mess">Tap a mess on the floor to scoop it. Long-press %1$s for a photo.</string>
+    <string name="tip_mess_next">Got it</string>
+    <string name="tip_tray">Drag food from the tray onto %1$s to feed it, and rub the soap over it to wash.</string>
+    <string name="tip_tray_next">Nice</string>
+    <string name="tip_raise">Feed, play and clean to raise it well — how you care decides what it evolves into.</string>
+    <string name="tip_raise_next">Start</string>
+
+    <string name="away_title">WHILE YOU WERE AWAY</string>
+    <string name="away_without_you">%1$s without you</string>
+    <string name="away_dismiss">I\'m back</string>
+    <plurals name="away_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="away_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="away_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+
+    <!-- Shared value formats -->
+    <string name="fraction">%1$d/%2$d</string>
+    <string name="plus_value">+%1$d</string>
+    <string name="plus_xp">+%1$d XP</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_minutes">%1$dm</string>
+    <plurals name="mission_count">
+        <item quantity="one">%1$d mission</item>
+        <item quantity="other">%1$d missions</item>
+    </plurals>
+    <plurals name="day_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+
+    <!-- Missions screen -->
+    <string name="missions_title">MISSIONS</string>
+    <string name="missions_day">Day %1$d · new set in %2$s</string>
+    <string name="missions_today">Today</string>
+    <string name="cd_missions_finished">%1$d of %2$d missions finished</string>
+    <string name="missions_state_collected">"Collected. "</string>
+    <string name="missions_state_ready">"Ready to collect. "</string>
+    <string name="cd_mission_row">%1$s. %2$s %3$d of %4$d done. Reward %5$d coins and %6$d experience.</string>
+    <string name="missions_collected">COLLECTED</string>
+    <string name="missions_collect_coins">COLLECT +%1$d coins</string>
+    <string name="missions_all_collected">All collected today</string>
+    <string name="missions_nothing_yet">Nothing to collect yet</string>
+    <string name="missions_finished_detail">%1$s finished · +%2$d XP</string>
+    <string name="missions_come_back">Come back when the day turns</string>
+    <string name="missions_finish_one">Finish a mission and the reward lands here</string>
+    <string name="cd_missions_collect">Collect %1$s, %2$d coins and %3$d experience.</string>
+    <string name="cd_missions_all_collected">Everything is already collected today.</string>
+    <string name="cd_missions_nothing_yet">Nothing to collect yet. %1$s.</string>
+    <string name="cd_missions_receipt">Collected %1$s. Plus %2$d coins and %3$d experience.</string>
+    <string name="missions_receipt">+%1$d coins · +%2$d XP</string>
+
+    <!-- Care streak panel -->
+    <string name="streak_title">Care streak</string>
+    <string name="streak_none">no streak running</string>
+    <string name="streak_best">best %1$s</string>
+    <string name="streak_worth_done">Every mission done — the day turns over with +%1$d coins.</string>
+    <string name="streak_worth_pending">Finish every mission before the day ends and the turnover pays +%1$d coins.</string>
+    <string name="streak_capped">%1$s The bonus is at its maximum.</string>
+    <string name="streak_warning">Miss a day, or come back to find one gone by, and the streak drops to zero.</string>
+    <string name="cd_streak_alive">Care streak, %1$s. Best %2$d.</string>
+    <string name="cd_streak_none">No care streak running. Best %1$s.</string>
+    <string name="cd_streak_best">Best streak %1$s</string>
+    <plurals name="streak_in_a_row">
+        <item quantity="one">day in a row</item>
+        <item quantity="other">days in a row</item>
+    </plurals>
+
+    <!-- Shared game chrome. The double spaces around the separators are load-bearing, which is
+         why these values are wrapped in quotes: AAPT collapses whitespace runs otherwise. -->
+    <string name="game_back_to_room">Back to the room</string>
+    <string name="game_go">GO!</string>
+    <string name="game_best_chip">BEST %1$d</string>
+    <string name="game_score">Score %1$d</string>
+    <string name="game_score_record">"Score %1$d  ★ NEW RECORD"</string>
+    <string name="game_best">Best %1$d</string>
+    <string name="game_time_up">TIME UP</string>
+    <string name="cd_step_less">Less %1$s</string>
+    <string name="cd_step_more">More %1$s</string>
+
+    <!-- Snack Catch -->
+    <string name="catch_score_line">"Score %1$d  ·  %2$d/%3$d"</string>
+    <string name="catch_combo">COMBO x%1$d</string>
+    <string name="catch_lives">Lives %1$d</string>
+    <string name="catch_hint">Drag to move. Catch the food, dodge the pills — gold is worth triple.</string>
+    <string name="catch_flash_golden">GOLDEN x3</string>
+    <string name="catch_flash_ouch">OUCH</string>
+    <string name="catch_flash_streak_lost">STREAK LOST</string>
+    <string name="catch_result_win">FEAST!</string>
+    <string name="catch_result_caught">"Caught %1$d  ·  Dropped %2$d"</string>
+    <string name="catch_result_combo">"Best combo x%1$d  ·  Lives left %2$d"</string>
+
+    <!-- Memory Match -->
+    <string name="memory_round">Round %1$d/%2$d</string>
+    <string name="memory_flash_nice">NICE</string>
+    <string name="memory_flash_wrong">WRONG</string>
+    <string name="memory_get_ready">Get ready...</string>
+    <string name="memory_watch">Watch the pattern...</string>
+    <string name="memory_repeat">Repeat it back</string>
+    <string name="memory_result_win">PERFECT MEMORY!</string>
+    <string name="memory_result_lose">MISSED IT</string>
+    <string name="memory_result_reached">Sequence reached %1$d of %2$d</string>
+    <string name="memory_result_speed">Speed bonus %1$d</string>
+
+    <!-- Rhythm Tap -->
+    <string name="rhythm_combo">Combo x%1$d</string>
+    <string name="rhythm_result_win">CLEARED!</string>
+    <string name="rhythm_result_lose">SONG OVER</string>
+    <string name="rhythm_result_accuracy">"Accuracy %1$d%%  ·  %2$d perfect"</string>
+    <string name="rhythm_result_combo">Best combo %1$d</string>
+
+    <!-- Fetch -->
+    <string name="fetch_score_line">"Score %1$d  ·  %2$d/%3$d"</string>
+    <string name="fetch_read">Read %1$d%%</string>
+    <string name="fetch_gain">"%1$s  (+%2$d)"</string>
+    <string name="fetch_flash_reading">READING YOU</string>
+    <string name="fetch_flash_snatch">SNATCH!</string>
+    <string name="fetch_flash_read">READ +150</string>
+    <string name="fetch_throw_heading">Throw</string>
+    <string name="fetch_throw">THROW</string>
+    <string name="fetch_angle">Angle</string>
+    <string name="fetch_degrees">%1$d°</string>
+    <string name="fetch_power">Power</string>
+    <string name="fetch_hint_idle">Drag up and out to throw — steeper goes higher, faster goes further.</string>
+    <string name="fetch_hint_watch">Watch where it decides to stand.</string>
+    <string name="fetch_result_win">ALL FETCHED!</string>
+    <string name="fetch_result_fetched">"Fetched %1$d of %2$d  ·  %3$d out of the air"</string>
+    <string name="fetch_result_read">"Read %1$d%%  ·  anticipated %2$d throws"</string>
+    <string name="cd_fetch_throw">Throw the ball at %1$d degrees, %2$d per cent power</string>
+    <string name="cd_fetch_status">Score %1$d. Fetch %2$d of %3$d. Read %4$d per cent.</string>
+    <string name="cd_fetch_field">Fetch field. %1$s %2$s %3$s</string>
+
+    <!-- Duet -->
+    <string name="duet_verse">Verse %1$d of %2$d</string>
+    <string name="duet_they_sing">%1$s sings</string>
+    <string name="duet_your_turn">Your turn</string>
+    <string name="duet_song_so_far">The song so far</string>
+    <string name="duet_sing">Sing %1$s</string>
+    <string name="duet_take_it_back">Take it back</string>
+    <string name="duet_hear_again">Hear it again</string>
+    <string name="duet_over_to_you">Over to you</string>
+    <string name="duet_you_start">You start</string>
+    <string name="duet_result_title">THE SONG ENDS</string>
+    <string name="duet_result_notes">You sang %1$d notes, %2$s answered with %3$d</string>
+    <string name="duet_result_echoes">You picked its line back up %1$d times</string>
+    <string name="duet_result_own_line">You kept a line of your own throughout</string>
+    <string name="cd_duet_song">The song so far: %1$d notes from you and %2$d from %3$s, drawn as blocks with pitch as height.</string>
+    <string name="cd_duet_answering">%1$s is answering, note %2$d of %3$d</string>
+    <string name="cd_duet_your_phrase">Your phrase: %1$d of %2$d notes</string>
+    <string name="cd_duet_pad">Sing %1$s, pad %2$d of %3$d</string>
+    <string name="cd_duet_take_it_back">Take back the last note you sang</string>
+    <string name="cd_duet_hear_again">Hear the last answer from %1$s again</string>
+    <string name="cd_duet_hand_over">Hand your phrase of %1$d notes to %2$s</string>
+    <string name="cd_duet_let_it_start">Let %1$s start this verse</string>
+
+    <!-- Hide and Seek -->
+    <string name="hide_final_score">Final score %1$d</string>
+    <string name="hide_status">"%1$s  ·  Score %2$d"</string>
+    <string name="hide_score_line">"Score %1$d  ·  Won %2$d/%3$d"</string>
+    <string name="hide_pick_a_side">PICK A SIDE</string>
+    <string name="hide_you_hide">YOU HIDE</string>
+    <string name="hide_you_seek">YOU SEEK</string>
+    <string name="hide_who_first">Who hides first?</string>
+    <string name="hide_sides_swap">Rounds swap over, so you play both sides either way.</string>
+    <string name="hide_i_hide">I hide</string>
+    <string name="hide_they_hide">%1$s hides</string>
+    <string name="hide_instincts">Instincts</string>
+    <string name="hide_result_win">WELL PLAYED!</string>
+    <string name="hide_result_draw">HONOURS EVEN</string>
+    <string name="hide_result_lose">OUT-FOXED</string>
+    <string name="hide_result_rounds">"Rounds won %1$d of %2$d  ·  hidden %3$s s"</string>
+    <string name="hide_result_searched">"%1$s searched %2$d places  ·  doubled back %3$d"</string>
+    <string name="hide_result_quickest">"You lifted %1$d lids  ·  quickest find %2$s s"</string>
+    <string name="hide_result_never_found">"You lifted %1$d lids  ·  never found %2$s"</string>
+    <string name="gene_curiosity">Curiosity</string>
+    <string name="gene_company">Company</string>
+    <string name="gene_vigour">Vigour</string>
+    <string name="gene_wit">Wit</string>
+    <string name="cd_gene_value">%1$s %2$d out of 10</string>
+
+    <!-- Shape Sorter -->
+    <string name="puzzle_board_of">Board %1$d of %2$d</string>
+    <string name="puzzle_hint">Tap a piece, then tap the hole it belongs in.</string>
+    <string name="puzzle_place_held">Place the held piece</string>
+    <string name="puzzle_put_down">Put down</string>
+    <string name="puzzle_pick_up">Pick up</string>
+    <string name="puzzle_pet_watching">%1$s is watching. The shapes start to click at %2$d intellect.</string>
+    <string name="puzzle_pet_autonomy_off">%1$s can see the answers, but autonomy is off.</string>
+    <string name="puzzle_pet_will_join">%1$s will join in once you have started the board.</string>
+    <string name="puzzle_pet_solving">%1$s is solving alongside you. Sit back, or race it.</string>
+    <string name="puzzle_result_win">TRAY EMPTY!</string>
+    <string name="puzzle_result_fitted">"You fitted %1$d  ·  %2$s fitted %3$d"</string>
+    <string name="puzzle_result_taught">"Taught bonus %1$d  ·  %2$s misjudged %3$d"</string>
+    <string name="puzzle_result_boards">Boards cleared %1$d of %2$d</string>
+
+    <!-- Console frame rails -->
+    <string name="pad_up">Up</string>
+    <string name="pad_down">Down</string>
+    <string name="pad_left">Left</string>
+    <string name="pad_right">Right</string>
+    <string name="pad_menu">Menu</string>
+    <string name="pad_home">Home</string>
+    <string name="pad_confirm">Confirm</string>
+    <string name="cd_analog_stick">Analog stick</string>
+
+    <!-- The stage: floating stat deltas, touch zones, the mood bubble -->
+    <string name="stat_delta_up">+%1$d %2$s</string>
+    <string name="stat_delta_down">-%1$d %2$s</string>
+    <string name="cd_pet_it">Pet %1$s</string>
+    <string name="cd_stroke_zone">Stroke the %1$s</string>
+    <string name="cd_tickle_zone">Tickle the %1$s</string>
+    <string name="cd_tug_zone">Tug the %1$s</string>
+    <string name="cd_take_photograph">Take a photograph</string>
+    <string name="cd_zoom_in">Zoom in</string>
+    <string name="cd_zoom_out">Zoom out</string>
+    <string name="cd_reset_framing">Reset the framing</string>
+    <string name="cd_stage_egg">%1$s\'s egg.</string>
+    <string name="cd_stage_alive">%1$s, %2$s %3$s. Touch its head to please it, its tummy to tickle it, or its tail to annoy it. Pinch to frame a photograph, then press and hold to take it.</string>
+
+    <!-- The speech bubble over the creature. Derived by the UI from stat thresholds, not
+         authored anywhere in domain/ — a status light wearing speech, so it belongs here. -->
+    <string name="bubble_ellipsis">...</string>
+    <string name="bubble_refuse">No!</string>
+    <string name="bubble_asleep">Zzz</string>
+    <string name="bubble_sick">I feel awful...</string>
+    <string name="bubble_hungry">I\'m hungry!</string>
+    <string name="bubble_stinks">It stinks in here</string>
+    <string name="bubble_bath">I need a bath</string>
+    <string name="bubble_sleepy">So sleepy...</string>
+    <string name="bubble_bored">Play with me?</string>
+    <string name="bubble_delighted">This is the best!</string>
+
+    <!-- Stats screen: identity line, rename, generation comparison -->
+    <string name="action_save">Save</string>
+    <string name="stats_identity">%1$s · %2$s · %3$s · %4$s</string>
+    <string name="stats_rename">Rename</string>
+    <string name="cd_rename_pet">Rename %1$s</string>
+    <string name="stats_rename_hint">Twelve characters. It keeps everything else — the diary is still its diary.</string>
+    <string name="generations_title">Generations</string>
+    <string name="cd_generation">Generation %1$d</string>
+    <string name="generations_unrecorded_body">%1$s — this save is older than the log. Generation %2$d is being recorded, so the pet after it will have something to be measured against.</string>
+    <string name="generations_in_progress">Generation %1$d is a finished life. This one is still being lived, so its counts are still filling in.</string>
+    <plurals name="generations_unrecorded">
+        <item quantity="one">The generation before this one was never written down</item>
+        <item quantity="other">The %1$d generations before this one were never written down</item>
+    </plurals>
+    <string name="compare_now">Now</string>
+    <string name="compare_generation">Gen %1$d</string>
+    <string name="compare_pet_days">Pet days</string>
+    <string name="compare_stage">Stage</string>
+    <string name="compare_lifetime_care">Lifetime care</string>
+    <string name="compare_care">Care</string>
+    <string name="compare_mistakes_per_hour">Mistakes per hour</string>
+    <string name="compare_meals">Meals</string>
+    <string name="compare_peak_bond">Peak bond</string>
+    <string name="cd_compare_row">%1$s. This generation %2$s. Generation before %3$s.</string>
+    <string name="cd_compare_bars">%1$s. This generation %2$s percent. Generation %3$d %4$s percent.</string>
+    <string name="ending_unfinished">Unfinished</string>
+    <string name="ending_old_age">A whole life, ended by nothing but time.</string>
+    <string name="ending_cut_short">It never saw the end of %1$s.</string>
+    <string name="ending_replaced">Replaced rather than lost.</string>
+    <string name="cd_ending">Ending. %1$s. %2$s. %3$s</string>
+
+    <!-- Relative time, shared -->
+    <string name="since_hours_minutes">%1$dh %2$dm ago</string>
+    <string name="since_minutes">%1$dm ago</string>
+    <string name="since_just_now">just now</string>
+
+    <!-- Talk screen -->
+    <string name="talk_title">TALK</string>
+    <string name="talk_subtitle">%1$s · %2$s</string>
+    <string name="talk_conversation">Conversation</string>
+    <string name="talk_forget">FORGET</string>
+    <string name="talk_you">You</string>
+    <string name="talk_thinking">%1$s is turning it over…</string>
+    <string name="talk_opening_title">Nothing said yet</string>
+    <string name="talk_opening_ready">Ask %1$s anything. It answers as itself — it knows how it feels, what it has been doing and who is about, and it will tell you in its own words.</string>
+    <string name="talk_opening_quiet">Nothing has been said yet. Whatever you two end up saying will be kept here.</string>
+    <string name="talk_message_to">Message to %1$s</string>
+    <string name="talk_say_something">Say something</string>
+    <string name="talk_send">SEND</string>
+    <string name="talk_full">That is as much as it can hold</string>
+    <string name="talk_open_settings">OPEN SETTINGS</string>
+    <plurals name="talk_characters_left">
+        <item quantity="one">%1$d character left</item>
+        <item quantity="other">%1$d characters left</item>
+    </plurals>
+
+    <string name="talk_gate_title">Not talking</string>
+    <string name="talk_gate_gone_title">Nobody left to answer</string>
+    <string name="talk_gate_gone_body">%1$s is no longer with us. Whatever was said is still here to read, and it stays here — the next generation starts its own conversation.</string>
+    <string name="talk_gate_egg_title">Still an egg</string>
+    <string name="talk_gate_egg_body">%1$s has not hatched. There is nobody in there to talk to yet; it will come out on its own, and this is where you will hear from it first.</string>
+    <string name="talk_gate_no_brain_title">No brain connected</string>
+    <string name="talk_gate_no_brain_body">%1$s can only hold a conversation with a brain connected, and there is not one yet. You can set that up in Settings. Nothing else about the creature depends on it — it eats, sleeps and makes its own decisions either way.</string>
+    <string name="talk_gate_off_title">Talking is switched off</string>
+    <string name="talk_gate_off_body">A brain is connected, but conversation is turned off for it. Switch it back on in Settings and %1$s will start answering again.</string>
+    <string name="talk_gate_asleep_title">%1$s is asleep</string>
+    <string name="talk_gate_asleep_body">%1$s is asleep and will not answer while it is. Rest is doing it more good than conversation would; the lights are on the home screen if it truly cannot wait.</string>
+
+    <string name="cd_talk_remembered">%1$d of %2$d lines remembered</string>
+    <string name="cd_talk_forget">Forget the conversation. %1$d of %2$d lines remembered.</string>
+    <string name="cd_talk_nothing_to_forget">Nothing to forget. The conversation is empty.</string>
+    <string name="cd_talk_turn">%1$s said: %2$s. %3$s.</string>
+    <string name="cd_talk_thinking">%1$s is thinking.</string>
+    <string name="cd_talk_send_waiting">Send. Waiting — %1$s is still thinking.</string>
+    <string name="cd_talk_send_empty">Send. Nothing written yet.</string>
+    <string name="cd_talk_send">Send to %1$s.</string>
+    <string name="cd_talk_gate">%1$s. %2$s</string>
+    <string name="cd_talk_open_settings">Open Settings to connect a brain.</string>
+
+    <!-- Shared -->
+    <string name="cd_headline_body">%1$s. %2$s</string>
+    <string name="duration_a_moment">a moment</string>
+
+    <!-- Mind screen -->
+    <string name="mind_title">MIND</string>
+    <string name="mind_subtitle">%1$s · %2$s · intellect %3$d</string>
+    <string name="mind_panel_title">The mind</string>
+    <string name="mind_dormant_dead">Nothing left to read</string>
+    <string name="mind_dormant_dead_body">%1$s is no longer with us. The decision log closed with them.</string>
+    <string name="mind_dormant_young">Not awake yet</string>
+    <string name="mind_dormant_young_body">%1$s is still at the %2$s stage. A creature starts weighing its own days once it reaches childhood — until then every call is yours, and rightly so.</string>
+
+    <string name="mind_who_decides">Who decides</string>
+
+    <string name="mind_right_now">Right now</string>
+    <string name="mind_now_waiting">%1$s is waiting on you</string>
+    <string name="mind_now_waiting_body">Nothing is running the day but you. The skills below still matter — they are what it would be able to do if you ever handed it the reins.</string>
+    <string name="mind_now_between">%1$s is between decisions</string>
+    <string name="mind_now_between_body">It has not settled on anything yet. The brain commits to a choice for a stretch rather than re-deciding every second, so gaps like this are normal.</string>
+    <string name="mind_now_doing">%1$s is %2$s</string>
+    <string name="mind_now_doing_with">%1$s is %2$s with %3$s</string>
+    <string name="mind_now_timing">Started %1$s · another %2$s of it</string>
+
+    <string name="mind_plan_title">What it means to do</string>
+    <string name="mind_plan_out_of_time">Out of time — it will let this go.</string>
+    <string name="mind_plan_time_left">%1$s left to finish it</string>
+    <string name="mind_plan_caveat">A plan is what it intends, not what it is allowed. Each step is checked again when it gets there.</string>
+    <plurals name="mind_plan_extended">
+        <item quantity="one">It liked how this was going and gave itself one more step.</item>
+        <item quantity="other">It liked how this was going and gave itself %1$d more steps.</item>
+    </plurals>
+    <string name="cd_mind_plan">%1$s means to: %2$s Step %3$d of %4$d. %5$s</string>
+    <string name="cd_mind_steps_done">%1$d of %2$d steps done</string>
+
+    <string name="mind_decided_title">What it decided</string>
+    <string name="cd_mind_decisions">%1$d decisions logged</string>
+    <string name="mind_decided_none_off">Nothing logged. You are making the calls, so there is nothing for it to explain.</string>
+    <string name="mind_decided_none_yet">Nothing logged yet. The first thing it decides for itself will land here, with its reasons.</string>
+    <string name="mind_runner_up">Nearly %1$s instead.</string>
+    <string name="cd_mind_decision">"%1$s, %2$s. %3$s %4$sConfidence %5$s.%6$s"</string>
+
+    <string name="mind_weighing_title">What it is weighing</string>
+    <string name="cd_mind_blocked">%1$d of %2$d options are out of reach</string>
+    <string name="mind_weighing_off">You are making the calls, so none of this is being acted on. It is still what the creature wants — and what it would reach for first if you let it.</string>
+    <string name="mind_weighing_empty">Nothing on its mind at all just now.</string>
+    <string name="mind_cannot">Cannot: %1$s</string>
+    <string name="mind_cannot_sentence">Cannot: %1$s.</string>
+    <string name="mind_could_do_this">It could do this.</string>
+    <string name="cd_mind_consideration">%1$s, wanted %2$s. %3$s %4$s</string>
+    <string name="mind_thwarted_title">WANTS TO, CANNOT</string>
+    <string name="mind_thwarted_line">%1$s — %2$s</string>
+    <string name="cd_mind_thwarted">%1$s is what it wants most, and it cannot: %2$s.</string>
+
+    <string name="mind_learning_title">Learning</string>
+    <string name="mind_intellect">Intellect</string>
+    <string name="mind_intellect_ceiling">of %1$d — it decides what is within reach</string>
+    <string name="cd_mind_intellect">Intellect %1$d of %2$d.</string>
+    <string name="mind_nothing_in_reach">Nothing on the ladder is within reach. %1$s keeps getting cleverer all the same, and the next rung opens the moment the intellect is there.</string>
+    <string name="mind_studying">Studying %1$s</string>
+    <string name="cd_mind_studying">Studying %1$s, %2$s done.</string>
+    <string name="mind_tally">%1$s sat through · %2$s done unasked</string>
+    <plurals name="mind_sittings">
+        <item quantity="one">%1$d sitting</item>
+        <item quantity="other">%1$d sittings</item>
+    </plurals>
+    <plurals name="mind_things">
+        <item quantity="one">%1$d thing</item>
+        <item quantity="other">%1$d things</item>
+    </plurals>
+
+    <string name="mind_teach">TEACH</string>
+    <string name="mind_teach_blocked">Not the moment for a lesson</string>
+    <string name="mind_teach_target">One sitting towards %1$s</string>
+    <string name="mind_teach_no_target">Nothing new in reach — a sitting still raises intellect</string>
+    <string name="cd_mind_teach">Teach a lesson. %1$s.</string>
+    <string name="cd_mind_teach_blocked">Cannot teach. %1$s</string>
+
+    <string name="mind_ladder_title">The ladder</string>
+    <string name="cd_mind_skills">%1$d of %2$d skills learned</string>
+    <string name="mind_rung_known">"Known. "</string>
+    <string name="mind_rung_studying">"Studying now. "</string>
+    <string name="mind_rung_reachable">"Within reach. "</string>
+    <string name="mind_rung_out_of_reach">"Out of reach. "</string>
+    <string name="cd_mind_rung">%1$s. %2$s Needs an intellect of %3$d.%4$s</string>
+    <string name="mind_known">KNOWN</string>
+    <string name="mind_int">INT</string>
+
+    <!-- Shared -->
+    <string name="list_separator">", "</string>
+    <string name="cd_labelled_line">%1$s: %2$s</string>
+    <string name="duration_seconds">%1$ds</string>
+    <plurals name="creature_count">
+        <item quantity="one">%1$d creature</item>
+        <item quantity="other">%1$d creatures</item>
+    </plurals>
+    <plurals name="child_count">
+        <item quantity="one">%1$d child</item>
+        <item quantity="other">%1$d children</item>
+    </plurals>
+    <plurals name="egg_count">
+        <item quantity="one">%1$d egg</item>
+        <item quantity="other">%1$d eggs</item>
+    </plurals>
+
+    <!-- The silhouette in words: read off the same houndliness number the art reads. -->
+    <string name="silhouette_round">a round, upright little thing</string>
+    <string name="silhouette_leggy">still rounded, but longer in the leg</string>
+    <string name="silhouette_half_hound">half hound: a real muzzle and a low stance</string>
+    <string name="silhouette_houndish">clearly houndish, going on all fours</string>
+    <string name="silhouette_hound">a long-muzzled hound, four-footed</string>
+    <string name="colony_describe">%1$s %2$s, %3$s</string>
+
+    <!-- Colony screen -->
+    <string name="colony_nobody_met">%1$s has not met anyone yet</string>
+    <string name="colony_known_summary">%1$s known · %2$s</string>
+    <string name="colony_none_here">none here now</string>
+    <string name="colony_count_here">%1$d here now</string>
+    <string name="colony_who_knows">Who %1$s knows</string>
+    <string name="cd_colony_in_room">%1$d in the room now</string>
+    <string name="cd_colony_room_empty">Nobody in the room now</string>
+    <string name="colony_tap_a_name">Tap a name to read what a pairing with them would produce. The colony remembers %1$d creatures; a stranger nobody grew fond of is the first to be forgotten.</string>
+    <string name="colony_needs_socialise">Fondness creeps up on its own while somebody is in the room, but it takes about six visits that way. %1$s has not learned %2$s yet, which is what makes it two.</string>
+    <string name="colony_needs_autonomy">Going over to say hello is %1$s\'s own move, and on %2$s it is not allowed to make it. Set the day to %3$s for it to approach anyone rather than waiting for company to do the work.</string>
+    <string name="colony_pal_line">%1$s %2$s · %3$s</string>
+    <string name="colony_here_now">here now</string>
+    <string name="colony_away">away</string>
+    <string name="colony_past_courting">past courting at %1$d</string>
+    <string name="colony_rung_friendship">friendship</string>
+    <string name="colony_rung_courting">courting</string>
+    <string name="colony_mark_caption">%1$d to %2$s at %3$d</string>
+
+    <string name="colony_nobody_yet">Nobody yet</string>
+    <string name="colony_alone">%1$s is the only creature in the room.</string>
+    <string name="colony_what_is_a_visitor">A visitor is another creature that lets itself in for a while. Nothing you press summons one — they wander by on their own, a stranger stays about a quarter of an hour, and somebody %1$s already knows stays far longer. Whoever turns up brings their own genes with them, which is where every shape this line has not got yet comes from.</string>
+    <string name="colony_before_calls">BEFORE ANYONE CALLS</string>
+    <string name="colony_old_enough">%1$s is old enough to notice a caller.</string>
+    <string name="colony_too_young">%1$s is still a %2$s. Nobody calls on a creature younger than a child — it would not know what to do with them.</string>
+    <string name="colony_awake">%1$s is awake, so the door is effectively open.</string>
+    <string name="colony_asleep">%1$s is asleep. Nobody calls while the lights are out.</string>
+    <string name="colony_sociability">Sociability %1$d out of 100 — a warmer creature is called on more often. It is inherited, so breeding for it is the only way to change it.</string>
+    <string name="colony_before_friend">BEFORE A CALLER BECOMES A FRIEND</string>
+    <string name="colony_knows_socialise">%1$s has learned %2$s.</string>
+    <string name="colony_lacks_socialise">%1$s has not learned %2$s yet. Until it does, a visitor is somebody it sits across the room from — fondness still creeps up, at about a third of the pace.</string>
+    <string name="colony_may_approach">The day is %1$s, so %2$s will go over and say hello by itself.</string>
+    <string name="colony_may_not_approach">Going over is %1$s\'s own move to make, and on %2$s it is not allowed to make it. Company still counts while somebody is here; set the day to %3$s for it to do more than share a room.</string>
+    <string name="colony_currency">Time together is the whole currency: friendship at %1$d fondness, courting at %2$d, and one visit is not enough for either.</string>
+
+    <string name="colony_family">Family</string>
+    <string name="cd_colony_children">%1$s of %2$s\'s own</string>
+    <string name="colony_parents">Parents</string>
+    <string name="colony_founder">%1$s is a founder. This line starts here — there is no generation above it to record.</string>
+    <string name="colony_mates">Mates</string>
+    <string name="colony_no_mates">None. A friend becomes a mate at %1$d fondness, or the moment a pairing is made.</string>
+    <string name="colony_children">Children</string>
+    <string name="colony_no_children">None yet. Children hatch from the nest and stay — they are family from the first second, not visitors who have to be won round.</string>
+    <string name="colony_child_name_stage">%1$s (%2$s)</string>
+    <string name="colony_expecting">Expecting</string>
+    <string name="colony_with_parent">With %1$s</string>
+    <string name="colony_friends">Friends</string>
+    <string name="colony_generation">Generation %1$d.</string>
+
+    <string name="colony_nest">Nest</string>
+    <string name="cd_colony_nest">%1$s in the nest, room for %2$d</string>
+    <string name="colony_nest_empty">The nest is empty. An egg appears the moment %1$s pairs off, and the nest holds %2$d at once. At this pace one takes about %3$s to hatch.</string>
+    <string name="colony_egg_due">Due now.</string>
+    <string name="colony_next_hatch">Next hatches in %1$s.</string>
+    <string name="colony_genes_fixed">The genes inside were fixed when the egg was laid, so closing the app cannot change what comes out.</string>
+    <string name="colony_egg_ready">%1$s · ready to hatch</string>
+    <string name="colony_egg_left">%1$s · %2$s left</string>
+
+    <string name="colony_breeding">Breeding</string>
+    <string name="colony_partner_gone">%1$s is no longer in the colony.</string>
+    <string name="colony_pair_with">PAIR WITH %1$s</string>
+    <string name="colony_cannot_pair">CANNOT PAIR YET</string>
+    <string name="colony_pair_detail">An egg goes into the nest straight away</string>
+    <string name="colony_pair_blocked_detail">See the reason above</string>
+    <string name="cd_colony_pair">Pair %1$s with %2$s. An egg goes straight into the nest.</string>
+    <string name="cd_colony_pair_blocked">Pairing with %1$s is not possible. %2$s</string>
+    <string name="cd_colony_parent_chip">%1$s, %2$s.</string>
+
+    <string name="colony_likely_child">LIKELY CHILD</string>
+    <string name="cd_colony_child_portrait">The likely child of %1$s and %2$s, shown grown up: %3$s. %4$s</string>
+    <string name="colony_shape">SHAPE</string>
+    <string name="colony_shift_hound">further towards a hound</string>
+    <string name="colony_shift_blob">back towards a round blob</string>
+    <string name="colony_shift_same">about where %1$s already is</string>
+    <string name="colony_shift_line">%1$s (%2$s is at %3$d of 100)</string>
+    <string name="cd_colony_shape">Shape: %1$s. %2$s on the hound scale, where %3$s sits at %4$d out of 100.</string>
+    <string name="colony_bloodlines">Bloodlines %1$d per cent apart. Below %2$d per cent a pair only repeats itself and the match is refused.</string>
+    <string name="colony_palette_caveat">Drawn in %1$s colours. Either family can carry, so the egg is as likely to hatch a %2$s — the palette changes, the shape above does not.</string>
+    <string name="colony_average_caveat">This is the halfway point between the two, not a roll. The real egg lands near it, sometimes one trait further out.</string>
+
+    <string name="unnamed_pal">Your pal</string>
+
+    <!-- Colony read-outs -->
+    <string name="cd_colony_pal">%1$s, %2$s. %3$s. %4$sFondness %5$d of 100. %6$s</string>
+    <string name="cd_colony_present">"In the room now. "</string>
+    <string name="cd_colony_absent">"Away at the moment. "</string>
+    <string name="cd_colony_chosen">" Chosen for the pairing preview."</string>
+    <string name="cd_colony_fond_enough">Fond enough to court.</string>
+    <string name="cd_colony_mark_sentence">%1$d more before %2$s at %3$d.</string>
+    <string name="cd_condition_met">"Already true. "</string>
+    <string name="cd_condition_unmet">"Still outstanding. "</string>
+    <string name="cd_colony_egg">Egg with %1$s, a %2$s. %3$s</string>
+    <string name="cd_colony_egg_ready">Ready to hatch.</string>
+    <string name="cd_colony_egg_progress">%1$d per cent incubated, %2$s left.</string>
+
+    <!-- Memory Match -->
+    <string name="memory_flash_your_turn">YOUR TURN</string>
+
+    <!-- Duet -->
+    <string name="duet_opening">Sing anything on the five pads, then hand over. %1$s will answer.</string>
+
+    <!-- Hide and Seek: the sentence around the prop, not the prop's own noun -->
+    <string name="cd_hide_in">Hide in %1$s</string>
+    <string name="cd_hide_bolt_for">Bolt for %1$s</string>
+    <string name="cd_hide_look_in">Look in %1$s</string>
+    <string name="cd_hide_you_are_here">%1$s, you are hiding here</string>
+    <string name="cd_hide_already_searched">%1$s, already searched</string>
+    <string name="cd_hide_already_emptied">%1$s, already emptied</string>
+
+    <string name="your_pet">Your pet</string>
+    <string name="cause_unknown">unknown</string>
+
+    <!-- The "while you were away" report -->
+    <string name="away_evolved">Evolved into a %1$s (%2$s).</string>
+    <string name="away_hatched">The egg hatched while you were out.</string>
+    <string name="away_died">%1$s passed away: %2$s.</string>
+    <string name="away_sick">Caught something and needs medicine.</string>
+    <string name="away_hungry">Got hungry — satiety fell %1$d points.</string>
+    <string name="away_slept">Fell asleep on its own.</string>
+    <string name="away_levelled">You reached keeper level %1$d.</string>
+    <string name="away_uneventful">Nothing eventful. %1$s held up fine.</string>
+    <plurals name="away_messes">
+        <item quantity="one">Made %1$d mess on the floor.</item>
+        <item quantity="other">Made %1$d messes on the floor.</item>
+    </plurals>
+    <plurals name="away_mistakes">
+        <item quantity="one">Logged %1$d care mistake.</item>
+        <item quantity="other">Logged %1$d care mistakes.</item>
+    </plurals>
+
+    <!-- Toasts raised by the view model -->
+    <string name="toast_missions_complete">%1$s complete — +%2$d coins</string>
+    <string name="toast_no_brain">%1$s has nowhere to think yet. Connect a brain in Settings.</string>
+    <string name="toast_no_answer">%1$s did not answer.</string>
+    <string name="toast_said_something">%1$s said something.</string>
+    <string name="toast_hatched">The egg hatched!</string>
+    <string name="toast_evolved">Evolved into %1$s (%2$s)!</string>
+    <string name="toast_keeper_level">Keeper level %1$d!</string>
+    <string name="toast_died">%1$s passed away: %2$s.</string>
+    <string name="toast_got_sick">Your pet caught something.</string>
+    <string name="toast_recovered">Fully recovered!</string>
+    <string name="toast_learned_skill">Learned to %1$s without being asked.</string>
+    <string name="toast_pal_visited">%1$s came by.</string>
+    <string name="toast_befriended">%1$s is a friend now.</string>
+    <string name="toast_paired">%1$s and %2$s paired off.</string>
+    <string name="toast_egg_laid">There\'s an egg in the nest.</string>
+    <string name="toast_child_hatched">%1$s hatched.</string>
+    <string name="toast_self_taught">Worked something out on its own.</string>
+    <string name="toast_moved_out">%1$s has grown up and moved out.</string>
+
+    <!-- Generation verdict, stats screen -->
+    <string name="verdict_ahead">%1$s has already outgrown generation %2$d.</string>
+    <string name="verdict_behind">Generation %1$d reached %2$s. %3$s is not there yet.</string>
+    <string name="verdict_quicker">Same stage as generation %1$d, and %2$s quicker about it.</string>
+    <string name="verdict_slower">Same stage as generation %1$d, %2$s later.</string>
+    <string name="verdict_level">Neck and neck with generation %1$d so far.</string>
+
+    <!-- On-device model storage -->
+    <string name="model_storage_none">Using no storage on this device.</string>
+    <string name="model_storage_used">Using %1$s of this device\'s storage.</string>
+
+    <!-- Updater -->
+    <string name="update_installer_open">The system installer is open. If you confirm, NeoPal closes and comes back as the new build; if you back out, the downloaded file is still here.</string>
+    <string name="update_no_per_app_screen">This version of Android has no per-app screen for this. The switch is under Settings, Security, \"unknown sources\".</string>
 </resources>

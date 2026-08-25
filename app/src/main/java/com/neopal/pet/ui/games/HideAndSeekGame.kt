@@ -43,6 +43,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -50,6 +51,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -539,20 +541,22 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         }
     }
 
+    val title = stringResource(R.string.game_hide)
+
     LaunchedEffect(finished) {
         if (!finished) return@LaunchedEffect
         viewModel.finishGame(
             won = roundsWon >= 3,
             score = (roundsWon.toFloat() / ROUNDS).coerceIn(0f, 1f),
-            gameName = "Hide and Seek",
+            gameName = title,
             gameId = GAME_ID,
             points = score,
         )
     }
 
     val status = when {
-        finished -> "Final score $score"
-        else -> "$caption  ·  Score $score"
+        finished -> stringResource(R.string.hide_final_score, score)
+        else -> stringResource(R.string.hide_status, caption, score)
     }
 
     Column(
@@ -565,13 +569,15 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Hide and Seek",
-            left = "Score $score  ·  Won $roundsWon/$ROUNDS",
-            right = when {
-                playerHidesFirst == null -> "PICK A SIDE"
-                playerHides -> "YOU HIDE"
-                else -> "YOU SEEK"
-            },
+            title = title,
+            left = stringResource(R.string.hide_score_line, score, roundsWon, ROUNDS),
+            right = stringResource(
+                when {
+                    playerHidesFirst == null -> R.string.hide_pick_a_side
+                    playerHides -> R.string.hide_you_hide
+                    else -> R.string.hide_you_seek
+                },
+            ),
             progress = barProgress,
             onExit = onExit,
         )
@@ -672,17 +678,24 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             val tappable = started && !finished &&
                 (phase == HidePhase.CHOOSE || phase == HidePhase.SEEKER_HUNT || phase == HidePhase.PLAYER_HUNT)
             board.forEachIndexed { index, spot ->
+                // The prop's own noun is still `HideProp.label`'s English -- see the commit that
+                // moved the games. What moved here is the sentence built around it.
                 val label = spot.prop.label
-                val action = when {
-                    phase == HidePhase.CHOOSE -> "Hide in $label"
-                    phase == HidePhase.SEEKER_HUNT -> "Bolt for $label"
-                    else -> "Look in $label"
-                }
+                val action = stringResource(
+                    when (phase) {
+                        HidePhase.CHOOSE -> R.string.cd_hide_in
+                        HidePhase.SEEKER_HUNT -> R.string.cd_hide_bolt_for
+                        else -> R.string.cd_hide_look_in
+                    },
+                    label,
+                )
                 val emptied = (checkedMask shr index) and 1 == 1
                 val state = when {
-                    index == playerSpot && phase != HidePhase.PLAYER_HUNT -> "$label, you are hiding here"
-                    emptied && phase == HidePhase.PLAYER_HUNT -> "$label, already searched"
-                    emptied -> "$label, already emptied"
+                    index == playerSpot && phase != HidePhase.PLAYER_HUNT ->
+                        stringResource(R.string.cd_hide_you_are_here, label)
+                    emptied && phase == HidePhase.PLAYER_HUNT ->
+                        stringResource(R.string.cd_hide_already_searched, label)
+                    emptied -> stringResource(R.string.cd_hide_already_emptied, label)
                     else -> label
                 }
                 Box(
@@ -734,15 +747,21 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         if (finished) {
             GameResult(
-                title = if (roundsWon >= 3) "WELL PLAYED!" else if (roundsWon >= 2) "HONOURS EVEN" else "OUT-FOXED",
+                title = stringResource(
+                    when {
+                        roundsWon >= 3 -> R.string.hide_result_win
+                        roundsWon >= 2 -> R.string.hide_result_draw
+                        else -> R.string.hide_result_lose
+                    },
+                ),
                 lines = listOf(
-                    "Score $score" + if (score > best) "  ★ NEW RECORD" else "",
-                    "Rounds won $roundsWon of $ROUNDS  ·  hidden ${hideOneDecimal(hiddenSeconds)} s",
-                    "${pet.name} searched $checksMade places  ·  doubled back $repeats",
+                    stringResource(if (score > best) R.string.game_score_record else R.string.game_score, score),
+                    stringResource(R.string.hide_result_rounds, roundsWon, ROUNDS, hideOneDecimal(hiddenSeconds)),
+                    stringResource(R.string.hide_result_searched, pet.name, checksMade, repeats),
                     if (bestFind > 0f) {
-                        "You lifted $lifted lids  ·  quickest find ${hideOneDecimal(bestFind)} s"
+                        stringResource(R.string.hide_result_quickest, lifted, hideOneDecimal(bestFind))
                     } else {
-                        "You lifted $lifted lids  ·  never found ${pet.name}"
+                        stringResource(R.string.hide_result_never_found, lifted, pet.name)
                     },
                 ),
                 onExit = onExit,
@@ -770,13 +789,13 @@ private fun HideSidePicker(name: String, onPick: (Boolean) -> Unit) {
             modifier = Modifier.padding(20.dp),
         ) {
             Text(
-                text = "Who hides first?",
+                text = stringResource(R.string.hide_who_first),
                 style = MaterialTheme.typography.titleMedium,
                 color = NeoColors.OnDark,
                 modifier = Modifier.semantics { heading() },
             )
             Text(
-                text = "Rounds swap over, so you play both sides either way.",
+                text = stringResource(R.string.hide_sides_swap),
                 style = MaterialTheme.typography.labelSmall,
                 color = NeoColors.OnDarkMuted,
                 textAlign = TextAlign.Center,
@@ -785,11 +804,11 @@ private fun HideSidePicker(name: String, onPick: (Boolean) -> Unit) {
                 Button(
                     onClick = { onPick(true) },
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("I hide") }
+                ) { Text(stringResource(R.string.hide_i_hide)) }
                 Button(
                     onClick = { onPick(false) },
                     modifier = Modifier.heightIn(min = 48.dp),
-                ) { Text("$name hides") }
+                ) { Text(stringResource(R.string.hide_they_hide, name)) }
             }
         }
     }
@@ -806,7 +825,7 @@ private fun HideSidePicker(name: String, onPick: (Boolean) -> Unit) {
 private fun HideInstinctStrip(name: String, genome: Genome) {
     Column(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
         Text(
-            text = "Instincts",
+            text = stringResource(R.string.hide_instincts),
             style = MaterialTheme.typography.labelSmall,
             color = NeoColors.NeonCyan,
             modifier = Modifier.semantics { heading() },
@@ -816,10 +835,10 @@ private fun HideInstinctStrip(name: String, genome: Genome) {
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            HideGeneBar("Curiosity", genome.curiosity, NeoColors.NeonYellow, Modifier.weight(1f))
-            HideGeneBar("Company", genome.sociability, NeoColors.NeonPurple, Modifier.weight(1f))
-            HideGeneBar("Vigour", genome.vigor, NeoColors.NeonRed, Modifier.weight(1f))
-            HideGeneBar("Wit", genome.wit, NeoColors.NeonGreen, Modifier.weight(1f))
+            HideGeneBar(stringResource(R.string.gene_curiosity), genome.curiosity, NeoColors.NeonYellow, Modifier.weight(1f))
+            HideGeneBar(stringResource(R.string.gene_company), genome.sociability, NeoColors.NeonPurple, Modifier.weight(1f))
+            HideGeneBar(stringResource(R.string.gene_vigour), genome.vigor, NeoColors.NeonRed, Modifier.weight(1f))
+            HideGeneBar(stringResource(R.string.gene_wit), genome.wit, NeoColors.NeonGreen, Modifier.weight(1f))
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -835,7 +854,8 @@ private fun HideInstinctStrip(name: String, genome: Genome) {
 @Composable
 private fun HideGeneBar(label: String, value: Float, color: Color, modifier: Modifier = Modifier) {
     val tenths = (value * 10f).roundToInt().coerceIn(0, 10)
-    Column(modifier = modifier.semantics { contentDescription = "$label $tenths out of 10" }) {
+    val readOut = stringResource(R.string.cd_gene_value, label, tenths)
+    Column(modifier = modifier.semantics { contentDescription = readOut }) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,

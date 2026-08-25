@@ -30,11 +30,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.ui.theme.NeoColors
 
 /** The four face buttons on the right rail. */
@@ -150,15 +152,15 @@ private fun LeftRail(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            RailKey("▲", "Up", railWidth, RoundedCornerShape(6.dp), Modifier.fillMaxWidth()) { onPad(PadDirection.UP) }
+            RailKey("▲", stringResource(R.string.pad_up), railWidth, RoundedCornerShape(6.dp), Modifier.fillMaxWidth()) { onPad(PadDirection.UP) }
             Row(Modifier.fillMaxWidth()) {
-                RailKey("◀", "Left", railWidth, RoundedCornerShape(6.dp), Modifier.weight(1f)) { onPad(PadDirection.LEFT) }
-                RailKey("▶", "Right", railWidth, RoundedCornerShape(6.dp), Modifier.weight(1f)) { onPad(PadDirection.RIGHT) }
+                RailKey("◀", stringResource(R.string.pad_left), railWidth, RoundedCornerShape(6.dp), Modifier.weight(1f)) { onPad(PadDirection.LEFT) }
+                RailKey("▶", stringResource(R.string.pad_right), railWidth, RoundedCornerShape(6.dp), Modifier.weight(1f)) { onPad(PadDirection.RIGHT) }
             }
-            RailKey("▼", "Down", railWidth, RoundedCornerShape(6.dp), Modifier.fillMaxWidth()) { onPad(PadDirection.DOWN) }
+            RailKey("▼", stringResource(R.string.pad_down), railWidth, RoundedCornerShape(6.dp), Modifier.fillMaxWidth()) { onPad(PadDirection.DOWN) }
         }
 
-        RailKey("–", "Menu", railWidth, CircleShape, Modifier.fillMaxWidth(), glyphScale = 0.34f) { onMenu() }
+        RailKey("–", stringResource(R.string.pad_menu), railWidth, CircleShape, Modifier.fillMaxWidth(), glyphScale = 0.34f) { onMenu() }
     }
 }
 
@@ -175,19 +177,19 @@ private fun RightRail(
             ShoulderPad(railWidth)
         }
 
-        RailKey("+", "Home", railWidth, CircleShape, Modifier.fillMaxWidth(), glyphScale = 0.34f) { onHome() }
+        RailKey("+", stringResource(R.string.pad_home), railWidth, CircleShape, Modifier.fillMaxWidth(), glyphScale = 0.34f) { onHome() }
 
         // Face buttons, diamond layout.
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            RailKey("X", "Play", railWidth, CircleShape, Modifier.fillMaxWidth(), bold = true) { onFace(FaceButton.X) }
+            RailKey("X", stringResource(R.string.action_play), railWidth, CircleShape, Modifier.fillMaxWidth(), bold = true) { onFace(FaceButton.X) }
             Row(Modifier.fillMaxWidth()) {
-                RailKey("Y", "Feed", railWidth, CircleShape, Modifier.weight(1f), bold = true) { onFace(FaceButton.Y) }
-                RailKey("A", "Confirm", railWidth, CircleShape, Modifier.weight(1f), bold = true) { onFace(FaceButton.A) }
+                RailKey("Y", stringResource(R.string.action_feed), railWidth, CircleShape, Modifier.weight(1f), bold = true) { onFace(FaceButton.Y) }
+                RailKey("A", stringResource(R.string.pad_confirm), railWidth, CircleShape, Modifier.weight(1f), bold = true) { onFace(FaceButton.A) }
             }
-            RailKey("B", "Back", railWidth, CircleShape, Modifier.fillMaxWidth(), bold = true) { onFace(FaceButton.B) }
+            RailKey("B", stringResource(R.string.nav_back), railWidth, CircleShape, Modifier.fillMaxWidth(), bold = true) { onFace(FaceButton.B) }
         }
 
         if (ornaments) {
@@ -236,13 +238,15 @@ private fun ShoulderPad(railWidth: Dp) {
 
 @Composable
 private fun AnalogStick(railWidth: Dp) {
+    // read outside `semantics {}`, which is not composition
+    val stickReadOut = stringResource(R.string.cd_analog_stick)
     Box(
         modifier = Modifier
             .size((railWidth * 0.55f).coerceIn(30.dp, 54.dp))
             .clip(CircleShape)
             .background(NeoColors.ChassisBlack)
             .border(BorderStroke(2.dp, Color.White.copy(alpha = 0.12f)), CircleShape)
-            .semantics { contentDescription = "Analog stick" },
+            .semantics { contentDescription = stickReadOut },
     )
 }
 

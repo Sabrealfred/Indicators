@@ -37,7 +37,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -77,6 +79,12 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     var flashColor by remember { mutableStateOf(NeoColors.NeonCyan) }
     var flashTick by remember { mutableIntStateOf(0) }
 
+    // Set from inside a click handler, so read here and assigned as values.
+    val title = stringResource(R.string.game_memory)
+    val flashYourTurn = stringResource(R.string.memory_flash_your_turn)
+    val flashNice = stringResource(R.string.memory_flash_nice)
+    val flashWrong = stringResource(R.string.memory_flash_wrong)
+
     val points = cleared * 100 + speedBonus
 
     // Freeze the incoming best once the run ends, or finishGame's own update would quietly
@@ -105,7 +113,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         inputIndex = 0
         turnStart = System.currentTimeMillis()
         playingBack = false
-        flashText = "YOUR TURN"
+        flashText = flashYourTurn
         flashColor = NeoColors.NeonCyan
         flashTick += 1
     }
@@ -116,7 +124,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         viewModel.finishGame(
             won = won,
             score = score,
-            gameName = "Memory Match",
+            gameName = title,
             gameId = GAME_ID,
             points = points,
         )
@@ -132,9 +140,13 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Memory Match",
-            left = "Score $points",
-            right = if (best > 0) "Best $best" else "Round ${sequence.size}/$targetRounds",
+            title = title,
+            left = stringResource(R.string.game_score, points),
+            right = if (best > 0) {
+                stringResource(R.string.game_best, best)
+            } else {
+                stringResource(R.string.memory_round, sequence.size, targetRounds)
+            },
             progress = sequence.size.toFloat() / targetRounds,
             onExit = onExit,
         )
@@ -196,7 +208,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                                                     won = true
                                                     finished = true
                                                 } else {
-                                                    flashText = "NICE"
+                                                    flashText = flashNice
                                                     flashColor = NeoColors.NeonGreen
                                                     flashTick += 1
                                                     round += 1
@@ -205,7 +217,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                                         } else {
                                             if (ui.config.soundEnabled) ChiptuneEngine.play(Sfx.GAME_MISS)
                                             wrongPad = pad
-                                            flashText = "WRONG"
+                                            flashText = flashWrong
                                             flashColor = NeoColors.NeonRed
                                             flashTick += 1
                                             won = false
@@ -254,11 +266,13 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
         Text(
-            text = when {
-                !started -> "Get ready..."
-                playingBack -> "Watch the pattern..."
-                else -> "Repeat it back"
-            },
+            text = stringResource(
+                when {
+                    !started -> R.string.memory_get_ready
+                    playingBack -> R.string.memory_watch
+                    else -> R.string.memory_repeat
+                },
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 12.dp),
@@ -266,11 +280,11 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
         if (finished) {
             GameResult(
-                title = if (won) "PERFECT MEMORY!" else "MISSED IT",
+                title = stringResource(if (won) R.string.memory_result_win else R.string.memory_result_lose),
                 lines = listOf(
-                    "Score $points" + if (points > best) "  ★ NEW RECORD" else "",
-                    "Sequence reached $cleared of $targetRounds",
-                    "Speed bonus $speedBonus",
+                    stringResource(if (points > best) R.string.game_score_record else R.string.game_score, points),
+                    stringResource(R.string.memory_result_reached, cleared, targetRounds),
+                    stringResource(R.string.memory_result_speed, speedBonus),
                 ),
                 onExit = onExit,
             )

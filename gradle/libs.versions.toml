@@ -1,6 +1,19 @@
 [versions]
 agp = "8.7.2"
-kotlin = "2.0.21"
+# Moved from 2.0.21 for one reason, stated here because nothing else in this file explains it:
+# com.google.ai.edge.litertlm carries Kotlin metadata 2.3.0, and a compiler only reads metadata
+# one minor ahead of itself. 2.0.21 and 2.1.x reject it outright; 2.2.x reads it on a tolerance
+# that expires at Kotlin 2.4; 2.3.x reads it properly. That was measured — every version's
+# metadata was read out of its own jar with javap, and acceptance was probed by putting a
+# 2.3.0-metadata jar on each compiler's classpath — rather than inferred from version numbers.
+#
+# AGP does not move with it. The Kotlin Gradle plugin declares its own AGP floor (8.2.2 for this
+# version) and has no "AGP too new" check at all, so 8.7.2 clears it.
+#
+# This is the one change in its commit, deliberately: the Compose compiler plugin's version is
+# derived from this line, and nothing in the local harness can run that plugin. CI is the only
+# instrument that can answer, so it is asked exactly one question.
+kotlin = "2.3.21"
 coreKtx = "1.13.1"
 lifecycle = "2.8.7"
 activityCompose = "1.9.3"
@@ -11,6 +24,22 @@ serialization = "1.7.3"
 workManager = "2.9.1"
 junit = "4.13.2"
 coroutinesTest = "1.9.0"
+# Pinned, never latest.release: a moving version is exactly how a build goes red by surprise.
+#
+# Held at 0.12.0 rather than moved forward now that Kotlin can read it, and the reasons are
+# evidence rather than caution. This is the only version of these coordinates that is *known* to
+# exist on Google Maven — CI resolved and downloaded it (0d8adce) — and Google Maven is blocked
+# from this environment, so no newer version's publication can be checked from here. It is also
+# the only one whose Kotlin metadata version is known: 2.3.0, read out of CI's own error text,
+# which the 2.3.21 compiler reads natively. A newer release recompiled with Kotlin 2.5 would be
+# rejected by this project's compiler and nothing here could see that coming.
+#
+# And there is nothing to gain. The API this app uses was read at the tags: between v0.12.0 and
+# v0.16.1 EngineConfig is identical field for field, and Conversation's sendMessage(text),
+# cancelProcess, close and isAlive are unchanged. The one difference on the used surface is that
+# Backend.CPU gained `threadCount` and deprecated `numOfThreads` — a rename, which is a cost of
+# moving rather than a reason to move.
+litertlm = "0.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,6 +58,7 @@ androidx-navigation-compose = { group = "androidx.navigation", name = "navigatio
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workManager" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
 

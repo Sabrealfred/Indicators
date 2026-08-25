@@ -82,8 +82,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
 
     val games = listOf(
         GameEntry(
-            title = "Rhythm Tap",
-            subtitle = "4 lanes · 30 s\nTiming drill — big mood, small bond, ~10 energy",
+            title = stringResource(R.string.game_rhythm),
+            subtitle = stringResource(R.string.game_rhythm_blurb),
             accent = NeoColors.NeonCyan,
             gameId = MiniGame.RHYTHM.id,
             route = Routes.GAME_RHYTHM,
@@ -99,8 +99,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Memory Match",
-            subtitle = "6 rounds\nRecall drill — steady mood and bond, ~8 energy",
+            title = stringResource(R.string.game_memory),
+            subtitle = stringResource(R.string.game_memory_blurb),
             accent = NeoColors.NeonPurple,
             gameId = MiniGame.MEMORY.id,
             route = Routes.GAME_MEMORY,
@@ -118,8 +118,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Snack Catch",
-            subtitle = "40 s · 3 lives\nReflex drill — best bond gain, ~12 energy",
+            title = stringResource(R.string.game_catch),
+            subtitle = stringResource(R.string.game_catch_blurb),
             accent = NeoColors.NeonYellow,
             gameId = MiniGame.CATCH.id,
             route = Routes.GAME_CATCH,
@@ -136,8 +136,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Hide and Seek",
-            subtitle = "4 rounds · both sides\nPlayed with it, not against it — its genome hunts",
+            title = stringResource(R.string.game_hide),
+            subtitle = stringResource(R.string.game_hide_blurb),
             accent = NeoColors.NeonGreen,
             gameId = MiniGame.HIDE.id,
             route = Routes.GAME_HIDE,
@@ -164,8 +164,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Fetch",
-            subtitle = "6 throws · 60 s\nIt learns your throw — and you can watch it guess",
+            title = stringResource(R.string.game_fetch),
+            subtitle = stringResource(R.string.game_fetch_blurb),
             accent = NeoColors.NeonRed,
             gameId = MiniGame.FETCH.id,
             route = Routes.GAME_FETCH,
@@ -189,8 +189,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Duet",
-            subtitle = "6 verses · no wrong note\nYou sing, it answers — nothing is being scored",
+            title = stringResource(R.string.game_duet),
+            subtitle = stringResource(R.string.game_duet_blurb),
             accent = NeoColors.NeonPurple,
             gameId = MiniGame.DUET.id,
             route = Routes.GAME_DUET,
@@ -215,8 +215,8 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
             }
         },
         GameEntry(
-            title = "Shape Sorter",
-            subtitle = "4 boards · 95 s\nIt can solve this one alone — if it is clever enough",
+            title = stringResource(R.string.game_puzzle),
+            subtitle = stringResource(R.string.game_puzzle_blurb),
             accent = NeoColors.NeonCyan,
             gameId = MiniGame.PUZZLE.id,
             route = Routes.GAME_PUZZLE,
@@ -263,7 +263,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
                 )
             }
             Text(
-                "PLAY",
+                stringResource(R.string.games_title),
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
@@ -278,14 +278,14 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
                 modifier = Modifier.fillMaxWidth(),
                 fill = lerp(MaterialTheme.colorScheme.surfaceVariant, NeoColors.NeonRed, 0.12f),
                 accent = NeoColors.NeonRed,
-                title = "No games right now",
+                title = stringResource(R.string.games_blocked_title),
                 contentPadding = PaddingValues(pixelUnits(3)),
             ) {
                 Text(blocker, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         } else {
             Text(
-                text = "Winning raises mood and bond, and burns energy. Play often for an Athletic evolution.",
+                text = stringResource(R.string.games_blurb),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -330,7 +330,7 @@ fun GamesScreen(viewModel: PetViewModel, onPlay: (String) -> Unit, onBack: () ->
 
         Spacer(Modifier.height(pixelUnits(5)))
         Text(
-            "Record: ${pet.gamesWon} wins in ${pet.gamesPlayed} games",
+            stringResource(R.string.games_record, pet.gamesWon, pet.gamesPlayed),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -383,11 +383,13 @@ private fun GameTile(
             if (best > 0) {
                 Spacer(Modifier.width(pixelUnits(1)))
                 // The chip is a bare number so it fits a half-width tile; the readout says what it is.
+                // `semantics {}` is not composition, so the sentence is read out here.
+                val bestReadOut = stringResource(R.string.cd_best_score, best)
                 PixelBadge(
                     text = "$best",
                     color = NeoColors.NeonYellow,
                     contentColor = NeoColors.OnLight,
-                    modifier = Modifier.semantics { contentDescription = "Best score $best" },
+                    modifier = Modifier.semantics { contentDescription = bestReadOut },
                 )
             }
         }

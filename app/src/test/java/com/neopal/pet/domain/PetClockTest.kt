@@ -115,4 +115,57 @@ class PetClockTest {
         assertEquals("a day with no missions finished breaks the streak, as it always did",
             0, after.careStreakDays)
     }
+
+    // ------------------------------------------------------- the range, on the way in
+
+    @Test
+    fun `a saved day length below the range is brought back into it on load`() {
+        val stored = GameConfig.Default.copy(secondsPerPetDay = 30L)
+        val loaded = stored.sanitised()
+        assertEquals(
+            "the slider clamps what a thumb produces; nothing clamped what a file produced",
+            PetClock.MIN_MINUTES_PER_DAY.toLong() * 60L,
+            loaded.secondsPerPetDay,
+        )
+    }
+
+    @Test
+    fun `a saved day length above the range is brought back into it on load`() {
+        val stored = GameConfig.Default.copy(secondsPerPetDay = 86_400L)
+        val loaded = stored.sanitised()
+        assertEquals(
+            PetClock.MAX_MINUTES_PER_DAY.toLong() * 60L,
+            loaded.secondsPerPetDay,
+        )
+    }
+
+    @Test
+    fun `a day length the control can display survives the trip untouched`() {
+        // Sanitising is a clamp, not a snap. Rewriting a legal value on every load would move the
+        // day counter under a streak that had done nothing wrong -- the very thing reclock exists
+        // to prevent -- and would do it silently, with no config change to trigger the re-base.
+        val offGrid = GameConfig.Default.copy(secondsPerPetDay = 63L * 60L)
+        assertEquals(63L * 60L, offGrid.sanitised().secondsPerPetDay)
+        assertEquals(GameConfig.Default, GameConfig.Default.sanitised())
+    }
+
+    @Test
+    fun `a day length of zero cannot reach the day counter`() {
+        // Not a cosmetic clamp. `ageInPetDays` divides by this, and Long division by zero throws
+        // ArithmeticException -- so a save carrying 0 takes the app down on the first tick rather
+        // than merely misreporting a slider.
+        val loaded = GameConfig.Default.copy(secondsPerPetDay = 0L).sanitised()
+        val pet = keeper(loaded, ageSeconds = 5_000L)
+        assertEquals(5_000L / loaded.secondsPerPetDay, pet.ageInPetDays(loaded).toLong())
+    }
+
+    @Test
+    fun `a negative day length cannot make the pet younger every second`() {
+        val loaded = GameConfig.Default.copy(secondsPerPetDay = -600L).sanitised()
+        assertTrue(
+            "a negative clock runs the day counter backwards forever",
+            loaded.secondsPerPetDay > 0L,
+        )
+        assertTrue(PetClock.minutesOf(loaded) in PetClock.MIN_MINUTES_PER_DAY..PetClock.MAX_MINUTES_PER_DAY)
+    }
 }
