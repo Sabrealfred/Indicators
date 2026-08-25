@@ -24,11 +24,16 @@ package com.neopal.pet.domain
  *
  * ## What is still missing, and is therefore still a parameter
  *
- * 1. **The commit hash.** Nobody could reach the publishing host from the machine this was
- *    written on, so no revision could be read. [FetchableModel.revision] is blank in every
- *    catalogue entry, [ModelFetchRules.fault] refuses a blank one, and the screen says which
- *    fact is missing rather than pretending there is nothing to download. Filling it in is one
- *    string per model.
+ * 1. ~~**The commit hash.**~~ **Filled in.** The publishing host is still unreachable from the
+ *    machine this was written on — `huggingface.co` is refused at the proxy gateway — so the
+ *    revisions were not read from it. They come from the same place every other number in this
+ *    file does: the allowlist Google's own on-device app ships, which pins each model to a commit
+ *    precisely because a branch would let the bytes move. That is a better source than a
+ *    `git ls-remote` would have been, because it is the revision Google itself ships against.
+ *
+ *    [ModelFetchRules.fault] still refuses a blank revision, and [FetchableModels.UNPINNED] still
+ *    exists, because the next model added to this catalogue will start blank and must not be
+ *    silently fetchable.
  * 2. **The checksum.** The allowlist gives sizes and no digests, and a fabricated digest would be
  *    worse than none — it would fail every download for a reason nobody could act on. So
  *    [FetchableModel.sha256] is nullable, and what a download is worth without one is spelled out
@@ -144,7 +149,7 @@ object FetchableModels {
         displayName = "the small brain",
         repoId = "litert-community/Gemma3-1B-IT",
         fileName = "gemma3-1b-it-int4.litertlm",
-        revision = UNPINNED,
+        revision = "42d538a932e8d5b12e6b3b455f5572560bd60b2c",
         sizeBytes = 584_417_280L,
     )
 
@@ -153,7 +158,7 @@ object FetchableModels {
         displayName = "the everyday brain",
         repoId = "litert-community/gemma-4-E2B-it-litert-lm",
         fileName = "gemma-4-E2B-it.litertlm",
-        revision = UNPINNED,
+        revision = "6e5c4f1e395deb959c494953478fa5cec4b8008f",
         sizeBytes = 2_588_147_712L,
     )
 
@@ -162,7 +167,7 @@ object FetchableModels {
         displayName = "the big brain",
         repoId = "litert-community/gemma-4-E4B-it-litert-lm",
         fileName = "gemma-4-E4B-it.litertlm",
-        revision = UNPINNED,
+        revision = "28299f30ee4d43294517a4ac93abd6163412f07f",
         sizeBytes = 3_659_530_240L,
     )
 
@@ -171,10 +176,11 @@ object FetchableModels {
     /**
      * The subset that can actually be downloaded by this build.
      *
-     * Empty today, because no entry is pinned to a revision. That is a state the player is told
-     * about rather than a feature that silently does nothing: this project has shipped two bugs
-     * whose only symptom was a working-looking screen doing nothing at all, and the rule that came
-     * out of them is that anything which decides *not* to act says so out loud.
+     * All three today. It was empty until the revisions were filled in, and the machinery for
+     * that state is kept rather than deleted: the next model added here starts unpinned, and must
+     * be refused loudly rather than offered as a download that cannot resolve. This project has
+     * shipped two bugs whose only symptom was a working-looking screen doing nothing at all, and
+     * the rule that came out of them is that anything which decides *not* to act says so out loud.
      */
     val fetchable: List<FetchableModel> get() = known.filter { ModelFetchRules.fault(it) == null }
 

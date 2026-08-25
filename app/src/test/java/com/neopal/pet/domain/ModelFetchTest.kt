@@ -146,26 +146,62 @@ class ModelFetchTest {
     }
 
     @Test
-    fun `every catalogue entry is complete except for the one fact nobody could read`() {
-        // The sizes and names are exact, from the publisher's own allowlist. The revision is the
-        // one thing this machine could not reach the host to find out, so every entry stops at
-        // exactly that fault -- and none of them stops at a different one, which is what would
-        // mean a name or a size had been mistyped.
+    fun `every catalogue entry is complete and none of them stops at a different fault`() {
+        // This test used to assert that every entry stopped at UNPINNED_REVISION, because the
+        // revision was the one fact the machine this was written on could not reach the host to
+        // read. It can be read now -- not from the host, which is still refused, but from the
+        // allowlist the publisher's own app ships, which pins each model to a commit for the same
+        // reason we need one. So the assertion flips: nothing is faulty.
+        //
+        // The half that was always the point survives unchanged. Every entry must stop at *no*
+        // fault rather than at some other one, because a different fault is what a mistyped name,
+        // a wrong repository or a bad size would look like.
         assertEquals(3, FetchableModels.known.size)
         FetchableModels.known.forEach { entry ->
-            assertEquals(
-                "unexpected fault for ${entry.id}",
-                ModelDescriptorFault.UNPINNED_REVISION,
-                ModelFetchRules.fault(entry),
-            )
+            assertNull("unexpected fault for ${entry.id}", ModelFetchRules.fault(entry))
             assertTrue(ModelFetchRules.isRepoId(entry.repoId))
             assertTrue(ModelFetchRules.isPlainFileName(entry.fileName))
             assertTrue(entry.fileName.endsWith(".litertlm"))
+            assertTrue(ModelFetchRules.isPinnedRevision(entry.revision))
             assertTrue(entry.sizeBytes > ModelFetchRules.MIN_MODEL_BYTES)
             assertTrue(entry.sizeBytes < ModelFetchRules.MAX_MODEL_BYTES)
         }
-        // Nothing is fetchable yet, and that is a fact the screen reports rather than hides.
-        assertTrue(FetchableModels.fetchable.isEmpty())
+        assertEquals(3, FetchableModels.fetchable.size)
+    }
+
+    @Test
+    fun `an entry added without a revision is still refused rather than quietly offered`() {
+        // The guard the flipped assertion above used to provide, kept alive on a synthetic entry.
+        // The next model added to this catalogue starts blank, and the failure it must not have
+        // is the silent one: appearing in `fetchable` and producing a URL that cannot resolve.
+        val unpinned = FetchableModels.SMALL.copy(revision = FetchableModels.UNPINNED)
+        assertEquals(ModelDescriptorFault.UNPINNED_REVISION, ModelFetchRules.fault(unpinned))
+        assertNull(unpinned.downloadUrl)
+        assertFalse(ModelFetchRules.isPinnedRevision("6e5c4f1e"))
+        assertFalse(ModelFetchRules.isPinnedRevision("main"))
+    }
+
+    @Test
+    fun `the download URL is the one the publisher's own app builds`() {
+        // Character for character. A revision transcribed with one digit wrong would fail as a
+        // 404, and a 404 on this host is indistinguishable from "the repository is gated" -- so a
+        // typo here would be diagnosed as a licensing problem and chased in the wrong place
+        // entirely.
+        assertEquals(
+            "https://huggingface.co/litert-community/Gemma3-1B-IT/resolve/" +
+                "42d538a932e8d5b12e6b3b455f5572560bd60b2c/gemma3-1b-it-int4.litertlm?download=true",
+            FetchableModels.SMALL.downloadUrl,
+        )
+        assertEquals(
+            "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/" +
+                "6e5c4f1e395deb959c494953478fa5cec4b8008f/gemma-4-E2B-it.litertlm?download=true",
+            FetchableModels.MEDIUM.downloadUrl,
+        )
+        assertEquals(
+            "https://huggingface.co/litert-community/gemma-4-E4B-it-litert-lm/resolve/" +
+                "28299f30ee4d43294517a4ac93abd6163412f07f/gemma-4-E4B-it.litertlm?download=true",
+            FetchableModels.LARGE.downloadUrl,
+        )
     }
 
     @Test
