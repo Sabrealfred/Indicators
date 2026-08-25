@@ -68,7 +68,31 @@ android {
         // Left as a single filter deliberately rather than solved quietly, because it is a
         // product decision about who can play, not a build detail. It is still open.
         ndk {
-            abiFilters += "arm64-v8a"
+            // Three, not one — and the reasoning changed once the published APK was opened and
+            // looked at rather than reasoned about.
+            //
+            // The claim this filter was written under was that the APK had no `lib/` at all, so
+            // narrowing to arm64 was the moment native code arrived. That was wrong:
+            // `libandroidx.graphics.path.so` (compose-ui) and `libdatastore_shared_counter.so`
+            // (datastore) have shipped in every build of this app, for every ABI, which is why it
+            // installed anywhere. What changes here is the filter, not the existence of `lib/`.
+            //
+            // So arm64-only would have *removed* an ability the app already had: an APK carrying
+            // native libraries and none matching the device is refused by the installer outright,
+            // and a 32-bit handset would lose NeoPal entirely rather than lose one optional
+            // feature. That is not a trade the on-device model is worth.
+            //
+            // The middle path costs almost nothing and needed no new code. litertlm publishes no
+            // 32-bit ARM slice, so an armeabi-v7a device gets the two androidx libraries and no
+            // engine — and `OnDeviceMindClient.buildEngine` already wraps construction in
+            // `runCatching`, which catches `UnsatisfiedLinkError` along with everything else. The
+            // engine comes back null, which is the same state as "no model downloaded", which the
+            // whole feature is already built to sit in. The 32-bit slices of those two libraries
+            // are about 17 KB.
+            //
+            // x86_64 is here for emulators. Anyone testing this without a handset is on one, and
+            // excluding it would make the first thing a developer tries the one thing that fails.
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
     }
 

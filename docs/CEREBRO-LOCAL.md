@@ -186,6 +186,30 @@ Lo que hay que hacer, en orden: comprobar con un `curl -I` sin autenticar si esa
 200. Si sí, la ruta simple vale y esto se queda en una nota. Si no, hay que diseñar el paso por el
 navegador antes de prometer nada en pantalla.
 
+## 5 ter. Las ABI: una decisión que se tomó sobre un dato falso
+
+Se filtró el APK a `arm64-v8a` con esta consecuencia escrita al lado: los teléfonos de 32 bits
+perderían la capacidad de **instalar NeoPal**, no sólo esta función. Era cierto. Lo que era falso
+era la premisa: que el APK no tenía `lib/` hasta ahora.
+
+Sí lo tenía. `libandroidx.graphics.path.so` viene de compose-ui y `libdatastore_shared_counter.so`
+de datastore, y llevan ahí desde el primer día — para *todas* las ABI, que es exactamente por lo
+que la app se instalaba en cualquier parte. Lo que este trabajo cambia es el **filtro**, no la
+existencia de código nativo. Y filtrar a arm64 no era «añadir una restricción nueva», era
+**quitar algo que la app ya tenía**.
+
+Se vio abriendo el APK publicado y mirando dentro, no razonando sobre él.
+
+El camino intermedio no costó código. LiteRT-LM no publica binario para ARM de 32 bits, así que un
+teléfono así recibe las dos librerías de androidx y ningún motor — y `buildEngine` ya envuelve la
+construcción en `runCatching`, que captura `UnsatisfiedLinkError` igual que cualquier otra cosa.
+El motor vuelve como `null`, que es el mismo estado que «no hay modelo descargado», que es el
+estado en el que toda esta función está construida para vivir. Las rebanadas de 32 bits de esas
+dos librerías pesan unos 17 KB.
+
+`x86_64` está por los emuladores. Quien pruebe esto sin un teléfono estará en uno, y excluirlo
+convertiría lo primero que alguien intenta en lo único que falla.
+
 ## 6. Lo que esto le cuesta al proyecto
 
 **«Cero recursos» deja de ser literalmente cierto.** Hasta hoy no hay ni un PNG ni un WAV en el
