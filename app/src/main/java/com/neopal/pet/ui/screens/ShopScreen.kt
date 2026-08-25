@@ -43,9 +43,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import com.neopal.pet.R
 import com.neopal.pet.domain.Item
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
@@ -72,7 +74,13 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     val pet = ui.pet ?: return
     var tab by remember { mutableIntStateOf(0) }
     var inspecting by remember { mutableStateOf<Item?>(null) }
-    val tabs = listOf("Food", "Care", "Toys", "Hats", "Rooms")
+    val tabs = listOf(
+        stringResource(R.string.shop_tab_food),
+        stringResource(R.string.shop_tab_care),
+        stringResource(R.string.shop_tab_toys),
+        stringResource(R.string.shop_tab_hats),
+        stringResource(R.string.shop_tab_rooms),
+    )
 
     val items = when (tab) {
         0 -> ItemCatalog.foods
@@ -101,9 +109,9 @@ fun ShopScreen(viewModel: PetViewModel, onBack: () -> Unit) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.nav_back), tint = MaterialTheme.colorScheme.onBackground)
             }
-            Text("SHOP", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
+            Text(stringResource(R.string.shop_title), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
             Spacer(Modifier.weight(1f))
             CoinPill(pet.coins)
         }
@@ -186,7 +194,7 @@ private fun ShopCard(item: Item, pet: PetState, shine: Boolean, onClick: () -> U
             }
             if (equipped) {
                 PixelBadge(
-                    text = "EQUIPPED",
+                    text = stringResource(R.string.shop_equipped),
                     color = NeoColors.NeonGreen,
                     contentColor = NeoColors.ChassisBlack,
                     modifier = Modifier.align(Alignment.TopEnd),
@@ -212,8 +220,9 @@ private fun ShopCard(item: Item, pet: PetState, shine: Boolean, onClick: () -> U
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = when {
-                    item.isCosmetic && owned > 0 -> if (equipped) "In use" else "Tap to equip"
-                    else -> "${item.price} coins"
+                    item.isCosmetic && owned > 0 ->
+                        stringResource(if (equipped) R.string.shop_in_use else R.string.shop_tap_to_equip)
+                    else -> stringResource(R.string.shop_price, item.price)
                 },
                 style = MaterialTheme.typography.labelMedium,
                 // Straight neon cyan/red land near 2:1 on the light theme; both have AA-safe twins.
@@ -223,7 +232,7 @@ private fun ShopCard(item: Item, pet: PetState, shine: Boolean, onClick: () -> U
             )
             Spacer(Modifier.weight(1f))
             if (owned > 0 && !item.isCosmetic) {
-                Text("x$owned", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text(stringResource(R.string.shop_owned_count, owned), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
         }
     }
@@ -251,14 +260,16 @@ private fun ItemDetailDialog(
     val equipped = pet.equippedHat == item.id || pet.roomTheme == item.id
     val canAfford = pet.coins >= item.price
     val tint = Color(item.tint)
+    // The same seven names the stats screen already had resources for; they were spelled out
+    // again here in English and are now the one set of words in both places.
     val effects = listOfNotNull(
-        item.satiety.takeIf { it != 0f }?.let { ItemEffect("Satiety", it, NeoColors.StatSatiety) },
-        item.happiness.takeIf { it != 0f }?.let { ItemEffect("Happiness", it, NeoColors.StatHappiness) },
-        item.energy.takeIf { it != 0f }?.let { ItemEffect("Energy", it, NeoColors.StatEnergy) },
-        item.hygiene.takeIf { it != 0f }?.let { ItemEffect("Hygiene", it, NeoColors.StatHygiene) },
-        item.health.takeIf { it != 0f }?.let { ItemEffect("Health", it, NeoColors.StatHealth) },
-        item.bond.takeIf { it != 0f }?.let { ItemEffect("Bond", it, NeoColors.StatBond) },
-        item.weight.takeIf { it != 0f }?.let { ItemEffect("Weight", it, null) },
+        item.satiety.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_satiety), it, NeoColors.StatSatiety) },
+        item.happiness.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_happiness), it, NeoColors.StatHappiness) },
+        item.energy.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_energy), it, NeoColors.StatEnergy) },
+        item.hygiene.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_hygiene), it, NeoColors.StatHygiene) },
+        item.health.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_health), it, NeoColors.StatHealth) },
+        item.bond.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stat_bond), it, NeoColors.StatBond) },
+        item.weight.takeIf { it != 0f }?.let { ItemEffect(stringResource(R.string.stats_weight), it, null) },
     )
 
     AlertDialog(
@@ -273,7 +284,7 @@ private fun ItemDetailDialog(
                 Spacer(Modifier.height(pixelUnits(3)))
                 if (effects.isEmpty()) {
                     Text(
-                        "Pure decoration. It changes nothing but how your pet looks.",
+                        stringResource(R.string.shop_cosmetic_only),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -283,9 +294,10 @@ private fun ItemDetailDialog(
                 Spacer(Modifier.height(pixelUnits(3)))
                 Text(
                     text = when {
-                        item.isCosmetic && owned > 0 -> if (equipped) "In use" else "Owned"
-                        owned > 0 -> "You have $owned"
-                        else -> "${item.price} coins · you have ${pet.coins}"
+                        item.isCosmetic && owned > 0 ->
+                            stringResource(if (equipped) R.string.shop_in_use else R.string.shop_owned)
+                        owned > 0 -> stringResource(R.string.shop_you_have, owned)
+                        else -> stringResource(R.string.shop_price_and_purse, item.price, pet.coins)
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (canAfford || owned > 0) NeoAccents.cyan else MaterialTheme.colorScheme.error,
@@ -300,7 +312,13 @@ private fun ItemDetailDialog(
                     background = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Text(
-                        if (item.isCosmetic) (if (equipped) "Take off" else "Wear it") else "Use it",
+                        stringResource(
+                            when {
+                                !item.isCosmetic -> R.string.shop_use_it
+                                equipped -> R.string.shop_take_off
+                                else -> R.string.shop_wear_it
+                            },
+                        ),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -313,7 +331,7 @@ private fun ItemDetailDialog(
                     background = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Text(
-                        "Buy",
+                        stringResource(R.string.shop_buy),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -326,7 +344,7 @@ private fun ItemDetailDialog(
                     background = MaterialTheme.colorScheme.surfaceVariant,
                 ) {
                     Text(
-                        "Not enough coins",
+                        stringResource(R.string.shop_not_enough_coins),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
@@ -342,7 +360,7 @@ private fun ItemDetailDialog(
                 background = MaterialTheme.colorScheme.surfaceVariant,
             ) {
                 Text(
-                    "Close",
+                    stringResource(R.string.action_close),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -356,7 +374,7 @@ private fun ItemDetailDialog(
 private fun EffectRow(effect: ItemEffect) {
     val signed = (if (effect.value > 0) "+" else "") + effect.value.toInt()
     // Label, number and meter are one fact; three fragments is what TalkBack reads otherwise.
-    val readOut = "${effect.label} $signed"
+    val readOut = stringResource(R.string.cd_item_effect, effect.label, signed)
     Column(
         modifier = Modifier
             .fillMaxWidth()

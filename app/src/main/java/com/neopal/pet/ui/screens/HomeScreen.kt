@@ -83,6 +83,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -91,6 +93,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.domain.Autonomy
 import com.neopal.pet.domain.CareActions
 import com.neopal.pet.domain.GameConfig
@@ -222,6 +225,8 @@ fun HomeScreen(
     val rubDistancePx = with(LocalDensity.current) { RubDistance.toPx() }
 
     // The scene is passed down as a slot so each layout can size it without re-plumbing PetStage.
+    // Read here: the long-press handler runs long after composition is over.
+    val snapshotCaption = stringResource(R.string.home_snapshot_caption, pet.name, pet.stage.displayName)
     val stage: @Composable (Modifier) -> Unit = { stageModifier ->
         PetStage(
             state = pet,
@@ -233,7 +238,7 @@ fun HomeScreen(
             modifier = stageModifier.onGloballyPositioned { stageBounds.value = it.boundsInRoot() },
             onTapPet = { viewModel.petPet() },
             onDoubleTapPet = { viewModel.tickle() },
-            onLongPressPet = { viewModel.snapshot("${pet.name}, ${pet.stage.displayName}") },
+            onLongPressPet = { viewModel.snapshot(snapshotCaption) },
             onScoopPoop = { viewModel.scoopPoop() },
             onSwipeUp = { viewModel.toss() },
         )
@@ -250,31 +255,31 @@ fun HomeScreen(
     val wantsTeaching = pet.autonomy != Autonomy.OFF &&
         viewModel.considerations().any { it.blockedBy == "not learned yet" }
     val actions = listOf(
-        HomeAction("Feed", Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
-        HomeAction("Clean", Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
-        HomeAction("Play", Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue("Bored")) { onOpen(Routes.GAMES) },
-        HomeAction("Missions", Icons.Filled.Assignment, NeoColors.NeonYellow, badge = collectable) { onOpen(Routes.MISSIONS) },
-        HomeAction("Medicine", Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
-        HomeAction(if (pet.lightsOff) "Lights on" else "Lights off", Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
-        HomeAction("Praise", Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
-        HomeAction("Scold", Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
+        HomeAction(stringResource(R.string.action_feed), Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
+        HomeAction(stringResource(R.string.action_clean), Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
+        HomeAction(stringResource(R.string.action_play), Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue("Bored")) { onOpen(Routes.GAMES) },
+        HomeAction(stringResource(R.string.action_missions), Icons.Filled.Assignment, NeoColors.NeonYellow, badge = collectable) { onOpen(Routes.MISSIONS) },
+        HomeAction(stringResource(R.string.action_medicine), Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
+        HomeAction(stringResource(if (pet.lightsOff) R.string.action_lights_on else R.string.action_lights_off), Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
+        HomeAction(stringResource(R.string.action_praise), Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
+        HomeAction(stringResource(R.string.action_scold), Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
         // The badge is the pet asking to be taught: an autonomous creature that wants something
         // it never learned how to do is the one state this screen cannot show on its own.
-        HomeAction("Mind", Icons.Filled.Psychology, NeoColors.NeonCyan, badge = if (wantsTeaching) 1 else 0) { onOpen(Routes.MIND) },
+        HomeAction(stringResource(R.string.action_mind), Icons.Filled.Psychology, NeoColors.NeonCyan, badge = if (wantsTeaching) 1 else 0) { onOpen(Routes.MIND) },
         // No badge: an unread count would be a lie, since the creature only ever speaks when
         // spoken to. It never starts a conversation on its own.
-        HomeAction("Talk", Icons.AutoMirrored.Filled.Chat, NeoColors.StatBond, enabled = !pet.isDead) { onOpen(Routes.TALK) },
-        HomeAction("Colony", Icons.Filled.Groups, NeoColors.NeonGreen, badge = pet.presentPals.size) { onOpen(Routes.COLONY) },
-        HomeAction("Shop", Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },
-        HomeAction("Album", Icons.Filled.PhotoCamera, NeoColors.NeonYellow) { onOpen(Routes.ALBUM) },
-        HomeAction("Diary", Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene) { onOpen(Routes.CHRONICLE) },
-        HomeAction("Awards", Icons.Filled.EmojiEvents, NeoColors.NeonGreen) { onOpen(Routes.ACHIEVEMENTS) },
-        HomeAction("Settings", Icons.Filled.Settings, NeoColors.OnDarkMuted) { onOpen(Routes.SETTINGS) },
+        HomeAction(stringResource(R.string.action_talk), Icons.AutoMirrored.Filled.Chat, NeoColors.StatBond, enabled = !pet.isDead) { onOpen(Routes.TALK) },
+        HomeAction(stringResource(R.string.action_colony), Icons.Filled.Groups, NeoColors.NeonGreen, badge = pet.presentPals.size) { onOpen(Routes.COLONY) },
+        HomeAction(stringResource(R.string.action_shop), Icons.Filled.ShoppingBag, NeoColors.NeonPurple) { onOpen(Routes.SHOP) },
+        HomeAction(stringResource(R.string.action_album), Icons.Filled.PhotoCamera, NeoColors.NeonYellow) { onOpen(Routes.ALBUM) },
+        HomeAction(stringResource(R.string.action_diary), Icons.AutoMirrored.Filled.MenuBook, NeoColors.StatHygiene) { onOpen(Routes.CHRONICLE) },
+        HomeAction(stringResource(R.string.action_awards), Icons.Filled.EmojiEvents, NeoColors.NeonGreen) { onOpen(Routes.ACHIEVEMENTS) },
+        HomeAction(stringResource(R.string.action_settings), Icons.Filled.Settings, NeoColors.OnDarkMuted) { onOpen(Routes.SETTINGS) },
     ) + if (pet.isDead) {
         // The way back. The memorial opens itself once per death and then stops, so without this
         // a player who chose "Stay a moment" would be sitting in a room with no door: the next
         // generation is started from the memorial and nowhere else.
-        listOf(HomeAction("Memorial", Icons.Filled.LocalFlorist, NeoColors.OnDarkMuted) { onOpen(Routes.MEMORIAL) })
+        listOf(HomeAction(stringResource(R.string.action_memorial), Icons.Filled.LocalFlorist, NeoColors.OnDarkMuted) { onOpen(Routes.MEMORIAL) })
     } else {
         emptyList()
     }
@@ -458,6 +463,7 @@ fun HomeScreen(
  * Resolves the most urgent need into one concrete, nameable action. Returns null when there is
  * genuinely nothing pressing — an affordance that fires blanks teaches players to ignore it.
  */
+@Composable
 private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String) -> Unit): QuickCare? {
     if (pet.isDead || pet.isEgg || pet.isSleeping) return null
     fun owned(id: String): Boolean = (pet.inventory[id] ?: 0) > 0
@@ -468,15 +474,15 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
             .maxByOrNull { it.health }
         return if (dose != null) {
             QuickCare(
-                label = "Give ${dose.name}",
-                reason = "${pet.name} is sick",
+                label = stringResource(R.string.quick_give_dose, dose.name),
+                reason = stringResource(R.string.quick_is_sick, pet.name),
                 icon = Icons.Filled.Medication,
                 accent = NeoColors.StatHealth,
             ) { viewModel.useMedicine(dose.id) }
         } else {
             QuickCare(
-                label = "Buy medicine",
-                reason = "${pet.name} is sick and the cabinet is empty",
+                label = stringResource(R.string.quick_buy_medicine),
+                reason = stringResource(R.string.quick_is_sick_no_medicine, pet.name),
                 icon = Icons.Filled.ShoppingBag,
                 accent = NeoColors.StatHealth,
             ) { onOpen(Routes.SHOP) }
@@ -488,15 +494,15 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
             val food = ItemCatalog.foods.filter { owned(it.id) }.maxByOrNull { it.satiety }
             if (food != null) {
                 QuickCare(
-                    label = "Feed ${food.name}",
-                    reason = "Satiety ${pet.stats.satiety.roundToInt()}",
+                    label = stringResource(R.string.quick_feed_food, food.name),
+                    reason = stringResource(R.string.quick_satiety, pet.stats.satiety.roundToInt()),
                     icon = Icons.Filled.Restaurant,
                     accent = NeoColors.StatSatiety,
                 ) { viewModel.feed(food.id) }
             } else {
                 QuickCare(
-                    label = "Buy food",
-                    reason = "Satiety ${pet.stats.satiety.roundToInt()} and the pantry is empty",
+                    label = stringResource(R.string.quick_buy_food),
+                    reason = stringResource(R.string.quick_satiety_empty_pantry, pet.stats.satiety.roundToInt()),
                     icon = Icons.Filled.ShoppingBag,
                     accent = NeoColors.StatSatiety,
                 ) { onOpen(Routes.SHOP) }
@@ -505,30 +511,30 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
 
         "Dirty" -> when {
             pet.poops > 0 -> QuickCare(
-                label = "Clean the room",
-                reason = "${pet.poops} mess${if (pet.poops > 1) "es" else ""} on the floor",
+                label = stringResource(R.string.quick_clean_room),
+                reason = pluralStringResource(R.plurals.quick_mess_on_floor, pet.poops, pet.poops),
                 icon = Icons.Filled.CleaningServices,
                 accent = NeoColors.StatHygiene,
             ) { viewModel.cleanRoom() }
 
             owned(SOAP_ID) -> QuickCare(
-                label = "Scrub with Bubble Soap",
-                reason = "Hygiene ${pet.stats.hygiene.roundToInt()}",
+                label = stringResource(R.string.quick_scrub, ItemCatalog[SOAP_ID]?.name.orEmpty()),
+                reason = stringResource(R.string.quick_hygiene, pet.stats.hygiene.roundToInt()),
                 icon = Icons.Filled.CleaningServices,
                 accent = NeoColors.StatHygiene,
             ) { viewModel.bathe() }
 
             else -> QuickCare(
-                label = "Clean the room",
-                reason = "Hygiene ${pet.stats.hygiene.roundToInt()}",
+                label = stringResource(R.string.quick_clean_room),
+                reason = stringResource(R.string.quick_hygiene, pet.stats.hygiene.roundToInt()),
                 icon = Icons.Filled.CleaningServices,
                 accent = NeoColors.StatHygiene,
             ) { viewModel.cleanRoom() }
         }
 
         "Sleepy" -> QuickCare(
-            label = "Tuck ${pet.name} in",
-            reason = "Energy ${pet.stats.energy.roundToInt()}",
+            label = stringResource(R.string.quick_tuck_in, pet.name),
+            reason = stringResource(R.string.quick_energy, pet.stats.energy.roundToInt()),
             icon = Icons.Filled.Lightbulb,
             accent = NeoColors.StatEnergy,
         ) { viewModel.putToSleep() }
@@ -536,15 +542,15 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
         // Too tired or too ill to play is still boredom; petting is the one thing always accepted.
         "Bored" -> if (CareActions.canPlay(pet) == null) {
             QuickCare(
-                label = "Play a game",
-                reason = "Happiness ${pet.stats.happiness.roundToInt()}",
+                label = stringResource(R.string.quick_play_game),
+                reason = stringResource(R.string.quick_happiness, pet.stats.happiness.roundToInt()),
                 icon = Icons.Filled.SportsEsports,
                 accent = NeoColors.NeonCyan,
             ) { onOpen(Routes.GAMES) }
         } else {
             QuickCare(
-                label = "Pet ${pet.name}",
-                reason = "Happiness ${pet.stats.happiness.roundToInt()}, not up for a game",
+                label = stringResource(R.string.quick_pet_it, pet.name),
+                reason = stringResource(R.string.quick_happiness_no_game, pet.stats.happiness.roundToInt()),
                 icon = Icons.Filled.Favorite,
                 accent = NeoColors.StatHappiness,
             ) { viewModel.petPet() }
@@ -661,7 +667,12 @@ private fun TopBar(
     dense: Boolean = false,
 ) {
     val name = pet.name
-    val subtitle = "${pet.stage.displayName} · ${pet.branch.displayName} · day ${pet.ageInPetDays(config)}"
+    val subtitle = stringResource(
+        R.string.home_subtitle,
+        pet.stage.displayName,
+        pet.branch.displayName,
+        pet.ageInPetDays(config),
+    )
     if (dense) {
         // In a ~200-360dp panel the pills and a name cannot share a line without the name vanishing.
         Column(modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -755,10 +766,11 @@ private fun CareStrip(
 
 @Composable
 private fun QuickCareButton(care: QuickCare, modifier: Modifier = Modifier) {
+    val readOut = stringResource(R.string.cd_quick_care, care.label, care.reason)
     PixelButton(
         onClick = care.onAct,
         modifier = modifier.semantics(mergeDescendants = true) {
-            contentDescription = "${care.label}. ${care.reason}"
+            contentDescription = readOut
         },
         accent = care.accent,
         // Mixed most of the way to the console screen: the accent is a signal, not a slab.
@@ -791,10 +803,10 @@ private fun QuickCareButton(care: QuickCare, modifier: Modifier = Modifier) {
 @Composable
 private fun CalmStatus(pet: PetState, modifier: Modifier = Modifier) {
     val text = when {
-        pet.isEgg -> "The egg is warming up."
-        pet.isSleeping -> "${pet.name} is asleep. Nothing needed."
-        pet.isDead -> "${pet.name} is no longer with us."
-        else -> "Nothing urgent. ${pet.name} is doing fine."
+        pet.isEgg -> stringResource(R.string.calm_egg)
+        pet.isSleeping -> stringResource(R.string.calm_asleep, pet.name)
+        pet.isDead -> stringResource(R.string.calm_dead, pet.name)
+        else -> stringResource(R.string.calm_fine, pet.name)
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -832,9 +844,9 @@ private fun TrayChip(
     val tint = Color(item.tint)
     val washes = item.id == SOAP_ID
     val readOut = if (washes) {
-        "Wash $petName with ${item.name}, $count left. Or drag it onto $petName."
+        stringResource(R.string.cd_tray_wash, petName, item.name, count)
     } else {
-        "Feed ${item.name} to $petName, $count left. Or drag it onto $petName."
+        stringResource(R.string.cd_tray_feed, item.name, petName, count)
     }
     // The chip's own position, so a drag can be reported in the coordinates the scene is measured in.
     var origin by remember { mutableStateOf(Offset.Zero) }
@@ -927,7 +939,7 @@ private fun DragLayer(
                     contentPadding = PaddingValues(horizontal = pixelUnits(3), vertical = pixelUnits(2)),
                 ) {
                     Text(
-                        text = if (washes) "Rub to scrub" else "Let go to feed",
+                        text = stringResource(if (washes) R.string.drag_rub_to_scrub else R.string.drag_let_go_to_feed),
                         style = MaterialTheme.typography.labelMedium,
                         color = NeoColors.OnDark,
                         maxLines = 1,
@@ -976,11 +988,11 @@ private fun StatsStrip(pet: PetState, modifier: Modifier = Modifier) {
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        StatCell("FOOD", pet.stats.satiety, NeoColors.StatSatiety, Modifier.weight(1f))
-        StatCell("MOOD", pet.stats.happiness, NeoColors.StatHappiness, Modifier.weight(1f))
-        StatCell("ENERGY", pet.stats.energy, NeoColors.StatEnergy, Modifier.weight(1f))
-        StatCell("CLEAN", pet.stats.hygiene, NeoColors.StatHygiene, Modifier.weight(1f))
-        StatCell("HP", pet.stats.health, NeoColors.StatHealth, Modifier.weight(1f))
+        StatCell(stringResource(R.string.stat_short_food), pet.stats.satiety, NeoColors.StatSatiety, Modifier.weight(1f))
+        StatCell(stringResource(R.string.stat_short_mood), pet.stats.happiness, NeoColors.StatHappiness, Modifier.weight(1f))
+        StatCell(stringResource(R.string.stat_short_energy), pet.stats.energy, NeoColors.StatEnergy, Modifier.weight(1f))
+        StatCell(stringResource(R.string.stat_short_clean), pet.stats.hygiene, NeoColors.StatHygiene, Modifier.weight(1f))
+        StatCell(stringResource(R.string.stat_short_health), pet.stats.health, NeoColors.StatHealth, Modifier.weight(1f))
     }
 }
 
@@ -1009,14 +1021,14 @@ private fun StatsPanel(pet: PetState, showAll: Boolean, modifier: Modifier = Mod
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        StatBar("Satiety", pet.stats.satiety, NeoColors.StatSatiety)
-        StatBar("Happiness", pet.stats.happiness, NeoColors.StatHappiness)
-        StatBar("Energy", pet.stats.energy, NeoColors.StatEnergy)
-        StatBar("Hygiene", pet.stats.hygiene, NeoColors.StatHygiene)
-        StatBar("Health", pet.stats.health, NeoColors.StatHealth)
+        StatBar(stringResource(R.string.stat_satiety), pet.stats.satiety, NeoColors.StatSatiety)
+        StatBar(stringResource(R.string.stat_happiness), pet.stats.happiness, NeoColors.StatHappiness)
+        StatBar(stringResource(R.string.stat_energy), pet.stats.energy, NeoColors.StatEnergy)
+        StatBar(stringResource(R.string.stat_hygiene), pet.stats.hygiene, NeoColors.StatHygiene)
+        StatBar(stringResource(R.string.stat_health), pet.stats.health, NeoColors.StatHealth)
         if (showAll) {
-            StatBar("Discipline", pet.stats.discipline, NeoColors.StatDiscipline)
-            StatBar("Bond", pet.stats.bond, NeoColors.StatBond)
+            StatBar(stringResource(R.string.stat_discipline), pet.stats.discipline, NeoColors.StatDiscipline)
+            StatBar(stringResource(R.string.stat_bond), pet.stats.bond, NeoColors.StatBond)
         }
     }
 }
@@ -1078,20 +1090,25 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
     val owned = ItemCatalog.foods.filter { (pet.inventory[it.id] ?: 0) > 0 } +
         ItemCatalog.all.filter { it.kind == ItemKind.MEDICINE && (pet.inventory[it.id] ?: 0) > 0 }
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text("Pantry", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(stringResource(R.string.pantry_title), style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onSurface)
         Text(
-            text = "Satiety ${pet.stats.satiety.roundToInt()} · weight ${pet.weightGrams.roundToInt()} g",
+            text = stringResource(
+                R.string.pantry_subtitle,
+                pet.stats.satiety.roundToInt(),
+                pet.weightGrams.roundToInt(),
+            ),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(12.dp))
         if (owned.isEmpty()) {
-            Text("The pantry is empty.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.pantry_empty), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(12.dp))
-            Button(onClick = onShop, modifier = Modifier.fillMaxWidth()) { Text("Go to the shop") }
+            Button(onClick = onShop, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.pantry_go_to_shop)) }
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(owned) { item ->
+                    val itemReadOut = stringResource(R.string.cd_pantry_item, item.name, pet.inventory[item.id] ?: 0)
                     PixelPanel(
                         onClick = { onFeed(item.id) },
                         accent = Color(item.tint),
@@ -1099,7 +1116,7 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
                         modifier = Modifier
                             .width(104.dp)
                             .semantics(mergeDescendants = true) {
-                                contentDescription = "${item.name}, ${pet.inventory[item.id] ?: 0} left"
+                                contentDescription = itemReadOut
                             },
                     ) {
                         Column(
@@ -1124,7 +1141,7 @@ private fun FeedSheet(pet: PetState, onFeed: (String) -> Unit, onShop: () -> Uni
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                "x${pet.inventory[item.id] ?: 0}",
+                                stringResource(R.string.shop_owned_count, pet.inventory[item.id] ?: 0),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1160,7 +1177,7 @@ private fun AchievementBanner(
             Spacer(Modifier.width(10.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleMedium, color = NeoColors.OnDark)
-                Text("$description  ·  +$reward coins", style = MaterialTheme.typography.labelSmall, color = NeoColors.OnDarkMuted)
+                Text(stringResource(R.string.award_toast_detail, description, reward), style = MaterialTheme.typography.labelSmall, color = NeoColors.OnDarkMuted)
             }
         }
     }
@@ -1174,10 +1191,10 @@ private fun AchievementBanner(
 private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modifier = Modifier) {
     var step by remember { mutableIntStateOf(0) }
     val steps = listOf(
-        "Tap $petName to pet it. Double-tap to tickle, swipe up to toss it in the air." to "Say hello",
-        "Tap a mess on the floor to scoop it. Long-press $petName for a photo." to "Got it",
-        "Drag food from the tray onto $petName to feed it, and rub the soap over it to wash." to "Nice",
-        "Feed, play and clean to raise it well — how you care decides what it evolves into." to "Start",
+        stringResource(R.string.tip_gestures, petName) to stringResource(R.string.tip_gestures_next),
+        stringResource(R.string.tip_mess, petName) to stringResource(R.string.tip_mess_next),
+        stringResource(R.string.tip_tray, petName) to stringResource(R.string.tip_tray_next),
+        stringResource(R.string.tip_raise) to stringResource(R.string.tip_raise_next),
     )
     Box(
         modifier = modifier
@@ -1196,7 +1213,7 @@ private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modif
                 modifier = Modifier.padding(22.dp),
             ) {
                 Text(
-                    text = "TIP ${step + 1}/${steps.size}",
+                    text = stringResource(R.string.tip_counter, step + 1, steps.size),
                     style = MaterialTheme.typography.labelSmall,
                     color = NeoColors.NeonCyan,
                 )
@@ -1219,7 +1236,7 @@ private fun TutorialOverlay(petName: String, onDone: () -> Unit, modifier: Modif
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "Skip",
+                        text = stringResource(R.string.action_skip),
                         style = MaterialTheme.typography.labelSmall,
                         color = NeoColors.OnDarkMuted,
                     )
@@ -1239,10 +1256,15 @@ private fun OfflineReportCard(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Plurals, not "day(s)": Spanish and English both inflect, and the resource system already
+    // knows how. This was the one place in the app that punted on it in the copy itself.
     val away = when {
-        report.minutesAway >= 1440 -> "${report.minutesAway / 1440} day(s)"
-        report.minutesAway >= 60 -> "${report.minutesAway / 60} hour(s)"
-        else -> "${report.minutesAway} minutes"
+        report.minutesAway >= 1440 ->
+            pluralStringResource(R.plurals.away_days, (report.minutesAway / 1440).toInt(), report.minutesAway / 1440)
+        report.minutesAway >= 60 ->
+            pluralStringResource(R.plurals.away_hours, (report.minutesAway / 60).toInt(), report.minutesAway / 60)
+        else ->
+            pluralStringResource(R.plurals.away_minutes, report.minutesAway.toInt(), report.minutesAway)
     }
     Box(
         modifier = modifier
@@ -1258,25 +1280,25 @@ private fun OfflineReportCard(
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 Text(
-                    text = "WHILE YOU WERE AWAY",
+                    text = stringResource(R.string.away_title),
                     style = MaterialTheme.typography.labelSmall,
                     color = NeoColors.NeonCyan,
                 )
                 Text(
-                    text = "$away without you",
+                    text = stringResource(R.string.away_without_you, away),
                     style = MaterialTheme.typography.titleMedium,
                     color = NeoColors.OnDark,
                 )
                 Spacer(Modifier.height(10.dp))
                 report.lines.forEach { line ->
                     Row(modifier = Modifier.padding(vertical = 3.dp)) {
-                        Text("·  ", style = MaterialTheme.typography.bodyMedium, color = NeoColors.NeonCyan)
+                        Text(stringResource(R.string.bullet_prefix), style = MaterialTheme.typography.bodyMedium, color = NeoColors.NeonCyan)
                         Text(line, style = MaterialTheme.typography.bodyMedium, color = NeoColors.OnDark)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
                 Button(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("I'm back")
+                    Text(stringResource(R.string.away_dismiss))
                 }
             }
         }

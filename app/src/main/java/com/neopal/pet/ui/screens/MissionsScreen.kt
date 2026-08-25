@@ -39,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -122,7 +123,7 @@ fun MissionsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "MISSIONS",
+                    stringResource(R.string.missions_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -130,7 +131,7 @@ fun MissionsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    "Day ${pet.ageInPetDays(ui.config)} · new set in ${remaining(secondsLeft)}",
+                    stringResource(R.string.missions_day, pet.ageInPetDays(ui.config), remaining(secondsLeft)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -144,13 +145,13 @@ fun MissionsScreen(viewModel: PetViewModel, onBack: () -> Unit) {
             PixelPanel(
                 modifier = Modifier.fillMaxWidth(),
                 accent = NeoAccents.cyan,
-                title = "Today",
+                title = stringResource(R.string.missions_today),
                 contentPadding = PaddingValues(pixelUnits(2)),
                 titleTrailing = {
                     PixelBadge(
-                        text = "$finished/${missions.size}",
+                        text = stringResource(R.string.fraction, finished, missions.size),
                         color = if (finished == missions.size) NeoAccents.green else MaterialTheme.colorScheme.surface,
-                        contentDescription = "$finished of ${missions.size} missions finished",
+                        contentDescription = stringResource(R.string.cd_missions_finished, finished, missions.size),
                     )
                 },
             ) {
@@ -204,13 +205,19 @@ private fun MissionRow(progress: MissionProgress, modifier: Modifier = Modifier)
     }
     // Words, not just hues: "Collected" and "Ready to collect" are the whole state, said out loud.
     val state = when {
-        progress.claimed -> "Collected. "
-        progress.complete -> "Ready to collect. "
+        progress.claimed -> stringResource(R.string.missions_state_collected)
+        progress.complete -> stringResource(R.string.missions_state_ready)
         else -> ""
     }
-    val readOut = state + "${mission.title}. ${mission.description} " +
-        "${progress.done} of ${mission.target} done. " +
-        "Reward ${mission.rewardCoins} coins and ${mission.rewardXp} experience."
+    val readOut = state + stringResource(
+        R.string.cd_mission_row,
+        mission.title,
+        mission.description,
+        progress.done,
+        mission.target,
+        mission.rewardCoins,
+        mission.rewardXp,
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -270,7 +277,7 @@ private fun MissionRow(progress: MissionProgress, modifier: Modifier = Modifier)
                 )
                 Spacer(Modifier.width(pixelUnits(2)))
                 PixelDigits(
-                    text = "${progress.done}/${mission.target}",
+                    text = stringResource(R.string.fraction, progress.done, mission.target),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -280,7 +287,7 @@ private fun MissionRow(progress: MissionProgress, modifier: Modifier = Modifier)
         Column(horizontalAlignment = Alignment.End) {
             if (progress.claimed) {
                 Text(
-                    text = "COLLECTED",
+                    text = stringResource(R.string.missions_collected),
                     style = MaterialTheme.typography.labelSmall,
                     color = accent,
                     fontWeight = FontWeight.Bold,
@@ -288,14 +295,14 @@ private fun MissionRow(progress: MissionProgress, modifier: Modifier = Modifier)
                 )
             } else {
                 PixelBadge(
-                    text = "+${mission.rewardCoins}",
+                    text = stringResource(R.string.plus_value, mission.rewardCoins),
                     color = if (progress.complete) NeoAccents.gold else dimmedFor(NeoAccents.gold, panel, 0.55f),
                     background = panel,
                     contentDescription = "",
                 )
                 Spacer(Modifier.height(pixelUnits(1)))
                 Text(
-                    text = "+${mission.rewardXp} XP",
+                    text = stringResource(R.string.plus_xp, mission.rewardXp),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -323,19 +330,19 @@ private fun CollectButton(
     val panel = MaterialTheme.colorScheme.surfaceVariant
     val accent = if (armed) NeoAccents.gold else MaterialTheme.colorScheme.onSurfaceVariant
     val label = when {
-        armed -> "COLLECT +$coins coins"
-        allCollected -> "All collected today"
-        else -> "Nothing to collect yet"
+        armed -> stringResource(R.string.missions_collect_coins, coins)
+        allCollected -> stringResource(R.string.missions_all_collected)
+        else -> stringResource(R.string.missions_nothing_yet)
     }
     val detail = when {
-        armed -> "${missionCount(ready)} finished · +$xp XP"
-        allCollected -> "Come back when the day turns"
-        else -> "Finish a mission and the reward lands here"
+        armed -> stringResource(R.string.missions_finished_detail, missionCount(ready), xp)
+        allCollected -> stringResource(R.string.missions_come_back)
+        else -> stringResource(R.string.missions_finish_one)
     }
     val readOut = when {
-        armed -> "Collect ${missionCount(ready)}, $coins coins and $xp experience."
-        allCollected -> "Everything is already collected today."
-        else -> "Nothing to collect yet. $detail."
+        armed -> stringResource(R.string.cd_missions_collect, missionCount(ready), coins, xp)
+        allCollected -> stringResource(R.string.cd_missions_all_collected)
+        else -> stringResource(R.string.cd_missions_nothing_yet, detail)
     }
 
     PixelButton(
@@ -379,8 +386,12 @@ private fun CollectButton(
 /** The receipt. It is loud, it is brief, and it announces itself to a screen reader. */
 @Composable
 private fun CollectedBanner(collected: Collected, modifier: Modifier = Modifier) {
-    val readOut = "Collected ${missionCount(collected.missions)}. " +
-        "Plus ${collected.coins} coins and ${collected.xp} experience."
+    val readOut = stringResource(
+        R.string.cd_missions_receipt,
+        missionCount(collected.missions),
+        collected.coins,
+        collected.xp,
+    )
     PixelPanel(
         modifier = modifier
             .fillMaxWidth()
@@ -403,14 +414,14 @@ private fun CollectedBanner(collected: Collected, modifier: Modifier = Modifier)
             Spacer(Modifier.width(pixelUnits(2)))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "COLLECTED",
+                    text = stringResource(R.string.missions_collected),
                     style = MaterialTheme.typography.labelMedium,
                     color = NeoAccents.green,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                 )
                 Text(
-                    text = "+${collected.coins} coins · +${collected.xp} XP",
+                    text = stringResource(R.string.missions_receipt, collected.coins, collected.xp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -436,21 +447,21 @@ private fun StreakPanel(days: Int, best: Int, allDoneToday: Boolean, modifier: M
     val accent = if (alive) NeoAccents.gold else MaterialTheme.colorScheme.onSurfaceVariant
 
     val readOut = if (alive) {
-        "Care streak, $days ${dayWord(days)}. Best $best."
+        stringResource(R.string.cd_streak_alive, dayCount(days), best)
     } else {
-        "No care streak running. Best $best ${dayWord(best)}."
+        stringResource(R.string.cd_streak_none, dayCount(best))
     }
 
     PixelPanel(
         modifier = modifier.fillMaxWidth(),
         accent = accent,
-        title = "Care streak",
+        title = stringResource(R.string.streak_title),
         contentPadding = PaddingValues(pixelUnits(2)),
         titleTrailing = {
             PixelBadge(
                 text = "$best",
                 color = MaterialTheme.colorScheme.surface,
-                contentDescription = "Best streak $best ${dayWord(best)}",
+                contentDescription = stringResource(R.string.cd_streak_best, dayCount(best)),
             )
         },
     ) {
@@ -471,14 +482,18 @@ private fun StreakPanel(days: Int, best: Int, allDoneToday: Boolean, modifier: M
             Spacer(Modifier.width(pixelUnits(2)))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = if (alive) "${dayWord(days)} in a row" else "no streak running",
+                    text = if (alive) {
+                        pluralStringResource(R.plurals.streak_in_a_row, days)
+                    } else {
+                        stringResource(R.string.streak_none)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = "best $best ${dayWord(best)}",
+                    text = stringResource(R.string.streak_best, dayCount(best)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -492,18 +507,18 @@ private fun StreakPanel(days: Int, best: Int, allDoneToday: Boolean, modifier: M
         Spacer(Modifier.height(pixelUnits(2)))
 
         val worth = if (allDoneToday) {
-            "Every mission done — the day turns over with +$next coins."
+            stringResource(R.string.streak_worth_done, next)
         } else {
-            "Finish every mission before the day ends and the turnover pays +$next coins."
+            stringResource(R.string.streak_worth_pending, next)
         }
         StreakNote(
-            text = if (capped) "$worth The bonus is at its maximum." else worth,
+            text = if (capped) stringResource(R.string.streak_capped, worth) else worth,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(Modifier.height(pixelUnits(1)))
         StreakNote(
             icon = true,
-            text = "Miss a day, or come back to find one gone by, and the streak drops to zero.",
+            text = stringResource(R.string.streak_warning),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
@@ -530,14 +545,28 @@ private fun StreakNote(text: String, color: Color, icon: Boolean = false) {
     }
 }
 
-private fun missionCount(n: Int): String = if (n == 1) "1 mission" else "$n missions"
+/**
+ * "1 mission" / "3 missions", and "1 day" / "3 days".
+ *
+ * These were two hand-written `if (n == 1)` branches. English only has the two forms, so the
+ * branch was right and would have stayed right — until the first locale with three. `<plurals>`
+ * is the resource system's own answer to that, and it costs a `@Composable` on two one-liners.
+ */
+@Composable
+private fun missionCount(n: Int): String = pluralStringResource(R.plurals.mission_count, n, n)
 
-private fun dayWord(n: Int): String = if (n == 1) "day" else "days"
+@Composable
+private fun dayCount(n: Int): String = pluralStringResource(R.plurals.day_count, n, n)
 
 /** Coarse on purpose: a pet day is hours long, and a ticking second hand is not information. */
+@Composable
 private fun remaining(seconds: Long): String {
     val left = seconds.coerceAtLeast(0L)
     val hours = left / 3600L
     val minutes = (left % 3600L) / 60L
-    return if (hours > 0L) "${hours}h ${minutes}m" else "${minutes}m"
+    return if (hours > 0L) {
+        stringResource(R.string.duration_hours_minutes, hours, minutes)
+    } else {
+        stringResource(R.string.duration_minutes, minutes)
+    }
 }

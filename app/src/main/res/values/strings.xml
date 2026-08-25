@@ -232,4 +232,211 @@
     <string name="voice_listen_unasked">The microphone has not been asked for. It is asked the first time you press speak on the talking screen, and refusing is a complete answer — the keyboard is not a fallback, it is the way in.</string>
     <string name="voice_on_device">Keep recognition on this phone</string>
     <string name="voice_on_device_hint">A request, not a promise. With it on, a phone that has an on-device recogniser uses it and nothing you say leaves the handset. Without one, the system\'s own speech service handles the audio under its own policy — this app never receives it either way.</string>
+
+    <!-- Shared -->
+    <string name="action_close">Close</string>
+    <string name="conjunction_and"> and </string>
+    <string name="default_pet_name">Pip</string>
+
+    <!-- Game names. One set of words for the select grid, the header inside each game and the
+         name the finished game hands to the score line. They were three copies of the same
+         English before. -->
+    <string name="game_rhythm">Rhythm Tap</string>
+    <string name="game_memory">Memory Match</string>
+    <string name="game_catch">Snack Catch</string>
+    <string name="game_hide">Hide and Seek</string>
+    <string name="game_fetch">Fetch</string>
+    <string name="game_duet">Duet</string>
+    <string name="game_puzzle">Shape Sorter</string>
+
+    <!-- Game-select screen -->
+    <string name="games_title">PLAY</string>
+    <string name="games_blocked_title">No games right now</string>
+    <string name="games_blurb">Winning raises mood and bond, and burns energy. Play often for an Athletic evolution.</string>
+    <string name="games_record">Record: %1$d wins in %2$d games</string>
+    <string name="cd_best_score">Best score %1$d</string>
+    <string name="game_rhythm_blurb">4 lanes · 30 s\nTiming drill — big mood, small bond, ~10 energy</string>
+    <string name="game_memory_blurb">6 rounds\nRecall drill — steady mood and bond, ~8 energy</string>
+    <string name="game_catch_blurb">40 s · 3 lives\nReflex drill — best bond gain, ~12 energy</string>
+    <string name="game_hide_blurb">4 rounds · both sides\nPlayed with it, not against it — its genome hunts</string>
+    <string name="game_fetch_blurb">6 throws · 60 s\nIt learns your throw — and you can watch it guess</string>
+    <string name="game_duet_blurb">6 verses · no wrong note\nYou sing, it answers — nothing is being scored</string>
+    <string name="game_puzzle_blurb">4 boards · 95 s\nIt can solve this one alone — if it is clever enough</string>
+
+    <!-- Shop screen -->
+    <string name="shop_title">SHOP</string>
+    <string name="shop_tab_food">Food</string>
+    <string name="shop_tab_care">Care</string>
+    <string name="shop_tab_toys">Toys</string>
+    <string name="shop_tab_hats">Hats</string>
+    <string name="shop_tab_rooms">Rooms</string>
+    <string name="shop_equipped">EQUIPPED</string>
+    <string name="shop_in_use">In use</string>
+    <string name="shop_tap_to_equip">Tap to equip</string>
+    <string name="shop_owned">Owned</string>
+    <string name="shop_owned_count">x%1$d</string>
+    <string name="shop_you_have">You have %1$d</string>
+    <string name="shop_price">%1$d coins</string>
+    <string name="shop_price_and_purse">%1$d coins · you have %2$d</string>
+    <string name="shop_cosmetic_only">Pure decoration. It changes nothing but how your pet looks.</string>
+    <string name="shop_take_off">Take off</string>
+    <string name="shop_wear_it">Wear it</string>
+    <string name="shop_use_it">Use it</string>
+    <string name="shop_buy">Buy</string>
+    <string name="shop_not_enough_coins">Not enough coins</string>
+    <string name="cd_item_effect">%1$s %2$s</string>
+
+    <!-- New game / next generation -->
+    <string name="newgame_title">NEW PET</string>
+    <string name="newgame_generation">GENERATION %1$d</string>
+    <string name="newgame_carry_over">Coins, cosmetics and the album carry over.</string>
+    <string name="newgame_pick_an_egg">Pick an egg. Every family grows up differently.</string>
+    <string name="newgame_who_continues">Who continues</string>
+    <string name="newgame_heir_blurb">An heir keeps its own body and family, and whatever it was taught in time. The nursery sends something unrelated.</string>
+    <string name="newgame_nursery">From the nursery</string>
+    <string name="newgame_nursery_detail">A new family, nothing behind it</string>
+    <string name="newgame_name">Name</string>
+    <string name="newgame_start">START</string>
+
+    <!-- Home screen: dock, quick-care strip, meters, pantry, tips -->
+    <string name="action_missions">Missions</string>
+    <string name="action_lights_on">Lights on</string>
+    <string name="action_lights_off">Lights off</string>
+    <string name="action_mind">Mind</string>
+    <string name="action_talk">Talk</string>
+    <string name="action_colony">Colony</string>
+    <string name="action_diary">Diary</string>
+    <string name="action_memorial">Memorial</string>
+    <string name="action_skip">Skip</string>
+
+    <string name="home_snapshot_caption">%1$s, %2$s</string>
+    <string name="home_subtitle">%1$s · %2$s · day %3$d</string>
+    <string name="bullet_prefix">"·  "</string>
+
+    <string name="quick_give_dose">Give %1$s</string>
+    <string name="quick_is_sick">%1$s is sick</string>
+    <string name="quick_buy_medicine">Buy medicine</string>
+    <string name="quick_is_sick_no_medicine">%1$s is sick and the cabinet is empty</string>
+    <string name="quick_feed_food">Feed %1$s</string>
+    <string name="quick_satiety">Satiety %1$d</string>
+    <string name="quick_buy_food">Buy food</string>
+    <string name="quick_satiety_empty_pantry">Satiety %1$d and the pantry is empty</string>
+    <string name="quick_clean_room">Clean the room</string>
+    <string name="quick_scrub">Scrub with %1$s</string>
+    <string name="quick_hygiene">Hygiene %1$d</string>
+    <string name="quick_tuck_in">Tuck %1$s in</string>
+    <string name="quick_energy">Energy %1$d</string>
+    <string name="quick_play_game">Play a game</string>
+    <string name="quick_happiness">Happiness %1$d</string>
+    <string name="quick_pet_it">Pet %1$s</string>
+    <string name="quick_happiness_no_game">Happiness %1$d, not up for a game</string>
+    <string name="cd_quick_care">%1$s. %2$s</string>
+    <plurals name="quick_mess_on_floor">
+        <item quantity="one">%1$d mess on the floor</item>
+        <item quantity="other">%1$d messes on the floor</item>
+    </plurals>
+
+    <string name="calm_egg">The egg is warming up.</string>
+    <string name="calm_asleep">%1$s is asleep. Nothing needed.</string>
+    <string name="calm_dead">%1$s is no longer with us.</string>
+    <string name="calm_fine">Nothing urgent. %1$s is doing fine.</string>
+
+    <string name="cd_tray_wash">Wash %1$s with %2$s, %3$d left. Or drag it onto %1$s.</string>
+    <string name="cd_tray_feed">Feed %1$s to %2$s, %3$d left. Or drag it onto %2$s.</string>
+    <string name="drag_rub_to_scrub">Rub to scrub</string>
+    <string name="drag_let_go_to_feed">Let go to feed</string>
+
+    <!-- The five-across strip has room for a word, not a name: these are the short forms of
+         stat_satiety and friends, not separate facts. -->
+    <string name="stat_short_food">FOOD</string>
+    <string name="stat_short_mood">MOOD</string>
+    <string name="stat_short_energy">ENERGY</string>
+    <string name="stat_short_clean">CLEAN</string>
+    <string name="stat_short_health">HP</string>
+
+    <string name="pantry_title">Pantry</string>
+    <string name="pantry_subtitle">Satiety %1$d · weight %2$d g</string>
+    <string name="pantry_empty">The pantry is empty.</string>
+    <string name="pantry_go_to_shop">Go to the shop</string>
+    <string name="cd_pantry_item">%1$s, %2$d left</string>
+
+    <string name="award_toast_detail">"%1$s  ·  +%2$d coins"</string>
+
+    <string name="tip_counter">TIP %1$d/%2$d</string>
+    <string name="tip_gestures">Tap %1$s to pet it. Double-tap to tickle, swipe up to toss it in the air.</string>
+    <string name="tip_gestures_next">Say hello</string>
+    <string name="tip_mess">Tap a mess on the floor to scoop it. Long-press %1$s for a photo.</string>
+    <string name="tip_mess_next">Got it</string>
+    <string name="tip_tray">Drag food from the tray onto %1$s to feed it, and rub the soap over it to wash.</string>
+    <string name="tip_tray_next">Nice</string>
+    <string name="tip_raise">Feed, play and clean to raise it well — how you care decides what it evolves into.</string>
+    <string name="tip_raise_next">Start</string>
+
+    <string name="away_title">WHILE YOU WERE AWAY</string>
+    <string name="away_without_you">%1$s without you</string>
+    <string name="away_dismiss">I\'m back</string>
+    <plurals name="away_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <plurals name="away_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <plurals name="away_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+
+    <!-- Shared value formats -->
+    <string name="fraction">%1$d/%2$d</string>
+    <string name="plus_value">+%1$d</string>
+    <string name="plus_xp">+%1$d XP</string>
+    <string name="duration_hours_minutes">%1$dh %2$dm</string>
+    <string name="duration_minutes">%1$dm</string>
+    <plurals name="mission_count">
+        <item quantity="one">%1$d mission</item>
+        <item quantity="other">%1$d missions</item>
+    </plurals>
+    <plurals name="day_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+
+    <!-- Missions screen -->
+    <string name="missions_title">MISSIONS</string>
+    <string name="missions_day">Day %1$d · new set in %2$s</string>
+    <string name="missions_today">Today</string>
+    <string name="cd_missions_finished">%1$d of %2$d missions finished</string>
+    <string name="missions_state_collected">"Collected. "</string>
+    <string name="missions_state_ready">"Ready to collect. "</string>
+    <string name="cd_mission_row">%1$s. %2$s %3$d of %4$d done. Reward %5$d coins and %6$d experience.</string>
+    <string name="missions_collected">COLLECTED</string>
+    <string name="missions_collect_coins">COLLECT +%1$d coins</string>
+    <string name="missions_all_collected">All collected today</string>
+    <string name="missions_nothing_yet">Nothing to collect yet</string>
+    <string name="missions_finished_detail">%1$s finished · +%2$d XP</string>
+    <string name="missions_come_back">Come back when the day turns</string>
+    <string name="missions_finish_one">Finish a mission and the reward lands here</string>
+    <string name="cd_missions_collect">Collect %1$s, %2$d coins and %3$d experience.</string>
+    <string name="cd_missions_all_collected">Everything is already collected today.</string>
+    <string name="cd_missions_nothing_yet">Nothing to collect yet. %1$s.</string>
+    <string name="cd_missions_receipt">Collected %1$s. Plus %2$d coins and %3$d experience.</string>
+    <string name="missions_receipt">+%1$d coins · +%2$d XP</string>
+
+    <!-- Care streak panel -->
+    <string name="streak_title">Care streak</string>
+    <string name="streak_none">no streak running</string>
+    <string name="streak_best">best %1$s</string>
+    <string name="streak_worth_done">Every mission done — the day turns over with +%1$d coins.</string>
+    <string name="streak_worth_pending">Finish every mission before the day ends and the turnover pays +%1$d coins.</string>
+    <string name="streak_capped">%1$s The bonus is at its maximum.</string>
+    <string name="streak_warning">Miss a day, or come back to find one gone by, and the streak drops to zero.</string>
+    <string name="cd_streak_alive">Care streak, %1$s. Best %2$d.</string>
+    <string name="cd_streak_none">No care streak running. Best %1$s.</string>
+    <string name="cd_streak_best">Best streak %1$s</string>
+    <plurals name="streak_in_a_row">
+        <item quantity="one">day in a row</item>
+        <item quantity="other">days in a row</item>
+    </plurals>
 </resources>
