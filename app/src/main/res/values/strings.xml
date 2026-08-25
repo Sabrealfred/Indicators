@@ -566,4 +566,72 @@
     <string name="puzzle_result_fitted">"You fitted %1$d  ·  %2$s fitted %3$d"</string>
     <string name="puzzle_result_taught">"Taught bonus %1$d  ·  %2$s misjudged %3$d"</string>
     <string name="puzzle_result_boards">Boards cleared %1$d of %2$d</string>
+
+    <!-- Console frame rails -->
+    <string name="pad_up">Up</string>
+    <string name="pad_down">Down</string>
+    <string name="pad_left">Left</string>
+    <string name="pad_right">Right</string>
+    <string name="pad_menu">Menu</string>
+    <string name="pad_home">Home</string>
+    <string name="pad_confirm">Confirm</string>
+    <string name="cd_analog_stick">Analog stick</string>
+
+    <!-- The stage: floating stat deltas, touch zones, the mood bubble -->
+    <string name="stat_delta_up">+%1$d %2$s</string>
+    <string name="stat_delta_down">-%1$d %2$s</string>
+    <string name="cd_pet_it">Pet %1$s</string>
+    <string name="cd_stroke_zone">Stroke the %1$s</string>
+    <string name="cd_tickle_zone">Tickle the %1$s</string>
+    <string name="cd_tug_zone">Tug the %1$s</string>
+    <string name="cd_take_photograph">Take a photograph</string>
+    <string name="cd_zoom_in">Zoom in</string>
+    <string name="cd_zoom_out">Zoom out</string>
+    <string name="cd_reset_framing">Reset the framing</string>
+    <string name="cd_stage_egg">%1$s\'s egg.</string>
+    <string name="cd_stage_alive">%1$s, %2$s %3$s. Touch its head to please it, its tummy to tickle it, or its tail to annoy it. Pinch to frame a photograph, then press and hold to take it.</string>
+
+    <!-- The speech bubble over the creature. Derived by the UI from stat thresholds, not
+         authored anywhere in domain/ — a status light wearing speech, so it belongs here. -->
+    <string name="bubble_ellipsis">...</string>
+    <string name="bubble_refuse">No!</string>
+    <string name="bubble_asleep">Zzz</string>
+    <string name="bubble_sick">I feel awful...</string>
+    <string name="bubble_hungry">I\'m hungry!</string>
+    <string name="bubble_stinks">It stinks in here</string>
+    <string name="bubble_bath">I need a bath</string>
+    <string name="bubble_sleepy">So sleepy...</string>
+    <string name="bubble_bored">Play with me?</string>
+    <string name="bubble_delighted">This is the best!</string>
+
+    <!-- Stats screen: identity line, rename, generation comparison -->
+    <string name="action_save">Save</string>
+    <string name="stats_identity">%1$s · %2$s · %3$s · %4$s</string>
+    <string name="stats_rename">Rename</string>
+    <string name="cd_rename_pet">Rename %1$s</string>
+    <string name="stats_rename_hint">Twelve characters. It keeps everything else — the diary is still its diary.</string>
+    <string name="generations_title">Generations</string>
+    <string name="cd_generation">Generation %1$d</string>
+    <string name="generations_unrecorded_body">%1$s — this save is older than the log. Generation %2$d is being recorded, so the pet after it will have something to be measured against.</string>
+    <string name="generations_in_progress">Generation %1$d is a finished life. This one is still being lived, so its counts are still filling in.</string>
+    <plurals name="generations_unrecorded">
+        <item quantity="one">The generation before this one was never written down</item>
+        <item quantity="other">The %1$d generations before this one were never written down</item>
+    </plurals>
+    <string name="compare_now">Now</string>
+    <string name="compare_generation">Gen %1$d</string>
+    <string name="compare_pet_days">Pet days</string>
+    <string name="compare_stage">Stage</string>
+    <string name="compare_lifetime_care">Lifetime care</string>
+    <string name="compare_care">Care</string>
+    <string name="compare_mistakes_per_hour">Mistakes per hour</string>
+    <string name="compare_meals">Meals</string>
+    <string name="compare_peak_bond">Peak bond</string>
+    <string name="cd_compare_row">%1$s. This generation %2$s. Generation before %3$s.</string>
+    <string name="cd_compare_bars">%1$s. This generation %2$s percent. Generation %3$d %4$s percent.</string>
+    <string name="ending_unfinished">Unfinished</string>
+    <string name="ending_old_age">A whole life, ended by nothing but time.</string>
+    <string name="ending_cut_short">It never saw the end of %1$s.</string>
+    <string name="ending_replaced">Replaced rather than lost.</string>
+    <string name="cd_ending">Ending. %1$s. %2$s. %3$s</string>
 </resources>
