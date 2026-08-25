@@ -41,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -302,7 +303,7 @@ fun TalkScreen(
             }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "TALK",
+                    stringResource(R.string.talk_title),
                     style = MaterialTheme.typography.headlineMedium,
                     color = MaterialTheme.colorScheme.onBackground,
                     maxLines = 1,
@@ -310,7 +311,7 @@ fun TalkScreen(
                     modifier = Modifier.semantics { heading() },
                 )
                 Text(
-                    "${pet.name} · ${mind.routeLabel.lowercase()}",
+                    stringResource(R.string.talk_subtitle, pet.name, mind.routeLabel.lowercase()),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
@@ -434,7 +435,7 @@ private fun ConversationHeader(
         modifier = modifier.heightIn(min = MinTouchTarget),
     ) {
         Text(
-            text = "Conversation",
+            text = stringResource(R.string.talk_conversation),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -445,24 +446,25 @@ private fun ConversationHeader(
         PixelBadge(
             text = "$remembered",
             color = MaterialTheme.colorScheme.surface,
-            contentDescription = "$remembered of $cap lines remembered",
+            contentDescription = stringResource(R.string.cd_talk_remembered, remembered, cap),
         )
         Spacer(Modifier.weight(1f))
+        val forgetReadOut = if (remembered > 0) {
+            stringResource(R.string.cd_talk_forget, remembered, cap)
+        } else {
+            stringResource(R.string.cd_talk_nothing_to_forget)
+        }
         PixelButton(
             onClick = onClear,
             enabled = remembered > 0,
             accent = MaterialTheme.colorScheme.onSurfaceVariant,
             contentPadding = PaddingValues(horizontal = pixelUnits(2), vertical = pixelUnits(1)),
             modifier = Modifier.semantics(mergeDescendants = true) {
-                contentDescription = if (remembered > 0) {
-                    "Forget the conversation. $remembered of $cap lines remembered."
-                } else {
-                    "Nothing to forget. The conversation is empty."
-                }
+                contentDescription = forgetReadOut
             },
         ) {
             Text(
-                text = "FORGET",
+                text = stringResource(R.string.talk_forget),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -489,8 +491,8 @@ private fun ChatBubble(
     val panel = MaterialTheme.colorScheme.surfaceVariant
     val background = MaterialTheme.colorScheme.background
     val accent = if (turn.fromPet) NeoAccents.cyan else NeoAccents.gold
-    val speaker = if (turn.fromPet) petName else "You"
-    val readOut = "$speaker said: ${turn.text}. $elapsed."
+    val speaker = if (turn.fromPet) petName else stringResource(R.string.talk_you)
+    val readOut = stringResource(R.string.cd_talk_turn, speaker, turn.text, elapsed)
 
     Box(
         modifier = modifier,
@@ -553,7 +555,7 @@ private fun ChatBubble(
 @Composable
 private fun ThinkingLine(name: String, modifier: Modifier = Modifier) {
     val accent = NeoAccents.cyan
-    val readOut = "$name is thinking."
+    val readOut = stringResource(R.string.cd_talk_thinking, name)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -572,7 +574,7 @@ private fun ThinkingLine(name: String, modifier: Modifier = Modifier) {
         )
         Spacer(Modifier.width(pixelUnits(2)))
         Text(
-            text = "$name is turning it over…",
+            text = stringResource(R.string.talk_thinking, name),
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
@@ -590,16 +592,15 @@ private fun ThinkingLine(name: String, modifier: Modifier = Modifier) {
 @Composable
 private fun OpeningPanel(name: String, gate: TalkGate, modifier: Modifier = Modifier) {
     val body = if (gate == TalkGate.READY) {
-        "Ask $name anything. It answers as itself — it knows how it feels, what it has been " +
-            "doing and who is about, and it will tell you in its own words."
+        stringResource(R.string.talk_opening_ready, name)
     } else {
-        "Nothing has been said yet. Whatever you two end up saying will be kept here."
+        stringResource(R.string.talk_opening_quiet)
     }
 
     PixelPanel(
         modifier = modifier,
         accent = MaterialTheme.colorScheme.onSurfaceVariant,
-        title = "Nothing said yet",
+        title = stringResource(R.string.talk_opening_title),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Text(
@@ -691,9 +692,9 @@ private fun Composer(
     val accent = if (canSend) NeoAccents.green else MaterialTheme.colorScheme.onSurfaceVariant
     val left = MaxMessageChars - draft.length
     val sendReadOut = when {
-        thinking -> "Send. Waiting — $name is still thinking."
-        draft.isBlank() -> "Send. Nothing written yet."
-        else -> "Send to $name."
+        thinking -> stringResource(R.string.cd_talk_send_waiting, name)
+        draft.isBlank() -> stringResource(R.string.cd_talk_send_empty)
+        else -> stringResource(R.string.cd_talk_send, name)
     }
 
     Column(modifier = modifier) {
@@ -701,8 +702,8 @@ private fun Composer(
             PixelTextWell(
                 value = draft,
                 onValueChange = onDraftChange,
-                label = "Message to $name",
-                placeholder = "Say something",
+                label = stringResource(R.string.talk_message_to, name),
+                placeholder = stringResource(R.string.talk_say_something),
                 // Left usable while a reply is coming: typing the next thing you want to say is
                 // not the same as sending it, and only the button is barred.
                 minLines = 1,
@@ -731,7 +732,7 @@ private fun Composer(
                 )
                 Spacer(Modifier.width(pixelUnits(2)))
                 Text(
-                    text = "SEND",
+                    text = stringResource(R.string.talk_send),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -741,7 +742,11 @@ private fun Composer(
         if (left <= CounterShowsWithin) {
             Spacer(Modifier.height(pixelUnits(1)))
             Text(
-                text = if (left > 0) "$left ${letterWord(left)} left" else "That is as much as it can hold",
+                text = if (left > 0) {
+                    pluralStringResource(R.plurals.talk_characters_left, left, left)
+                } else {
+                    stringResource(R.string.talk_full)
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
@@ -767,45 +772,37 @@ private fun ClosedPanel(
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val settings = gate == TalkGate.NO_BRAIN || gate == TalkGate.TALK_OFF
 
+    // `TalkGate` was already the token; only the words for it moved. The `when` is exhaustive
+    // over the enum either way, so a new gate still fails to compile until it is given copy.
     val headline = when (gate) {
-        TalkGate.GONE -> "Nobody left to answer"
-        TalkGate.EGG -> "Still an egg"
-        TalkGate.NO_BRAIN -> "No brain connected"
-        TalkGate.TALK_OFF -> "Talking is switched off"
-        TalkGate.ASLEEP -> "$name is asleep"
+        TalkGate.GONE -> stringResource(R.string.talk_gate_gone_title)
+        TalkGate.EGG -> stringResource(R.string.talk_gate_egg_title)
+        TalkGate.NO_BRAIN -> stringResource(R.string.talk_gate_no_brain_title)
+        TalkGate.TALK_OFF -> stringResource(R.string.talk_gate_off_title)
+        TalkGate.ASLEEP -> stringResource(R.string.talk_gate_asleep_title, name)
         TalkGate.READY -> ""
     }
     val body = when (gate) {
-        TalkGate.GONE ->
-            "$name is no longer with us. Whatever was said is still here to read, and it stays " +
-                "here — the next generation starts its own conversation."
-        TalkGate.EGG ->
-            "$name has not hatched. There is nobody in there to talk to yet; it will come out on " +
-                "its own, and this is where you will hear from it first."
-        TalkGate.NO_BRAIN ->
-            "$name can only hold a conversation with a brain connected, and there is not one yet. " +
-                "You can set that up in Settings. Nothing else about the creature depends on it — " +
-                "it eats, sleeps and makes its own decisions either way."
-        TalkGate.TALK_OFF ->
-            "A brain is connected, but conversation is turned off for it. Switch it back on in " +
-                "Settings and $name will start answering again."
-        TalkGate.ASLEEP ->
-            "$name is asleep and will not answer while it is. Rest is doing it more good than " +
-                "conversation would; the lights are on the home screen if it truly cannot wait."
+        TalkGate.GONE -> stringResource(R.string.talk_gate_gone_body, name)
+        TalkGate.EGG -> stringResource(R.string.talk_gate_egg_body, name)
+        TalkGate.NO_BRAIN -> stringResource(R.string.talk_gate_no_brain_body, name)
+        TalkGate.TALK_OFF -> stringResource(R.string.talk_gate_off_body, name)
+        TalkGate.ASLEEP -> stringResource(R.string.talk_gate_asleep_body, name)
         TalkGate.READY -> ""
     }
 
+    val gateReadOut = stringResource(R.string.cd_talk_gate, headline, body)
     PixelPanel(
         modifier = modifier,
         accent = muted,
-        title = "Not talking",
+        title = stringResource(R.string.talk_gate_title),
         contentPadding = PaddingValues(pixelUnits(2)),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics(mergeDescendants = true) { contentDescription = "$headline. $body" },
+                .semantics(mergeDescendants = true) { contentDescription = gateReadOut },
         ) {
             Icon(
                 imageVector = if (settings) Icons.Filled.Settings else Icons.Filled.Psychology,
@@ -835,13 +832,14 @@ private fun ClosedPanel(
         // player to a screen with no answer on it is worse than no button.
         if (settings && onOpenSettings != null) {
             Spacer(Modifier.height(pixelUnits(2)))
+            val openSettingsReadOut = stringResource(R.string.cd_talk_open_settings)
             PixelButton(
                 onClick = onOpenSettings,
                 accent = NeoAccents.cyan,
                 modifier = Modifier
                     .fillMaxWidth()
                     .semantics(mergeDescendants = true) {
-                        contentDescription = "Open Settings to connect a brain."
+                        contentDescription = openSettingsReadOut
                     },
             ) {
                 Icon(
@@ -852,7 +850,7 @@ private fun ClosedPanel(
                 )
                 Spacer(Modifier.width(pixelUnits(2)))
                 Text(
-                    text = "OPEN SETTINGS",
+                    text = stringResource(R.string.talk_open_settings),
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -864,7 +862,6 @@ private fun ClosedPanel(
     }
 }
 
-private fun letterWord(n: Int): String = if (n == 1) "character" else "characters"
 
 /**
  * How long ago a line was said, in pet time.
@@ -873,13 +870,14 @@ private fun letterWord(n: Int): String = if (n == 1) "character" else "character
  * a log that reads "13 seconds ago" rewrites every one of its rows on every tick, and none of
  * those rewrites tell the player anything they did not already know.
  */
+@Composable
 private fun sinceLabel(seconds: Long): String {
     val past = seconds.coerceAtLeast(0L)
     val hours = past / 3600L
     val minutes = (past % 3600L) / 60L
     return when {
-        hours > 0L -> "${hours}h ${minutes}m ago"
-        minutes > 0L -> "${minutes}m ago"
-        else -> "just now"
+        hours > 0L -> stringResource(R.string.since_hours_minutes, hours, minutes)
+        minutes > 0L -> stringResource(R.string.since_minutes, minutes)
+        else -> stringResource(R.string.since_just_now)
     }
 }

@@ -634,4 +634,140 @@
     <string name="ending_cut_short">It never saw the end of %1$s.</string>
     <string name="ending_replaced">Replaced rather than lost.</string>
     <string name="cd_ending">Ending. %1$s. %2$s. %3$s</string>
+
+    <!-- Relative time, shared -->
+    <string name="since_hours_minutes">%1$dh %2$dm ago</string>
+    <string name="since_minutes">%1$dm ago</string>
+    <string name="since_just_now">just now</string>
+
+    <!-- Talk screen -->
+    <string name="talk_title">TALK</string>
+    <string name="talk_subtitle">%1$s · %2$s</string>
+    <string name="talk_conversation">Conversation</string>
+    <string name="talk_forget">FORGET</string>
+    <string name="talk_you">You</string>
+    <string name="talk_thinking">%1$s is turning it over…</string>
+    <string name="talk_opening_title">Nothing said yet</string>
+    <string name="talk_opening_ready">Ask %1$s anything. It answers as itself — it knows how it feels, what it has been doing and who is about, and it will tell you in its own words.</string>
+    <string name="talk_opening_quiet">Nothing has been said yet. Whatever you two end up saying will be kept here.</string>
+    <string name="talk_message_to">Message to %1$s</string>
+    <string name="talk_say_something">Say something</string>
+    <string name="talk_send">SEND</string>
+    <string name="talk_full">That is as much as it can hold</string>
+    <string name="talk_open_settings">OPEN SETTINGS</string>
+    <plurals name="talk_characters_left">
+        <item quantity="one">%1$d character left</item>
+        <item quantity="other">%1$d characters left</item>
+    </plurals>
+
+    <string name="talk_gate_title">Not talking</string>
+    <string name="talk_gate_gone_title">Nobody left to answer</string>
+    <string name="talk_gate_gone_body">%1$s is no longer with us. Whatever was said is still here to read, and it stays here — the next generation starts its own conversation.</string>
+    <string name="talk_gate_egg_title">Still an egg</string>
+    <string name="talk_gate_egg_body">%1$s has not hatched. There is nobody in there to talk to yet; it will come out on its own, and this is where you will hear from it first.</string>
+    <string name="talk_gate_no_brain_title">No brain connected</string>
+    <string name="talk_gate_no_brain_body">%1$s can only hold a conversation with a brain connected, and there is not one yet. You can set that up in Settings. Nothing else about the creature depends on it — it eats, sleeps and makes its own decisions either way.</string>
+    <string name="talk_gate_off_title">Talking is switched off</string>
+    <string name="talk_gate_off_body">A brain is connected, but conversation is turned off for it. Switch it back on in Settings and %1$s will start answering again.</string>
+    <string name="talk_gate_asleep_title">%1$s is asleep</string>
+    <string name="talk_gate_asleep_body">%1$s is asleep and will not answer while it is. Rest is doing it more good than conversation would; the lights are on the home screen if it truly cannot wait.</string>
+
+    <string name="cd_talk_remembered">%1$d of %2$d lines remembered</string>
+    <string name="cd_talk_forget">Forget the conversation. %1$d of %2$d lines remembered.</string>
+    <string name="cd_talk_nothing_to_forget">Nothing to forget. The conversation is empty.</string>
+    <string name="cd_talk_turn">%1$s said: %2$s. %3$s.</string>
+    <string name="cd_talk_thinking">%1$s is thinking.</string>
+    <string name="cd_talk_send_waiting">Send. Waiting — %1$s is still thinking.</string>
+    <string name="cd_talk_send_empty">Send. Nothing written yet.</string>
+    <string name="cd_talk_send">Send to %1$s.</string>
+    <string name="cd_talk_gate">%1$s. %2$s</string>
+    <string name="cd_talk_open_settings">Open Settings to connect a brain.</string>
+
+    <!-- Shared -->
+    <string name="cd_headline_body">%1$s. %2$s</string>
+    <string name="duration_a_moment">a moment</string>
+
+    <!-- Mind screen -->
+    <string name="mind_title">MIND</string>
+    <string name="mind_subtitle">%1$s · %2$s · intellect %3$d</string>
+    <string name="mind_panel_title">The mind</string>
+    <string name="mind_dormant_dead">Nothing left to read</string>
+    <string name="mind_dormant_dead_body">%1$s is no longer with us. The decision log closed with them.</string>
+    <string name="mind_dormant_young">Not awake yet</string>
+    <string name="mind_dormant_young_body">%1$s is still at the %2$s stage. A creature starts weighing its own days once it reaches childhood — until then every call is yours, and rightly so.</string>
+
+    <string name="mind_who_decides">Who decides</string>
+
+    <string name="mind_right_now">Right now</string>
+    <string name="mind_now_waiting">%1$s is waiting on you</string>
+    <string name="mind_now_waiting_body">Nothing is running the day but you. The skills below still matter — they are what it would be able to do if you ever handed it the reins.</string>
+    <string name="mind_now_between">%1$s is between decisions</string>
+    <string name="mind_now_between_body">It has not settled on anything yet. The brain commits to a choice for a stretch rather than re-deciding every second, so gaps like this are normal.</string>
+    <string name="mind_now_doing">%1$s is %2$s</string>
+    <string name="mind_now_doing_with">%1$s is %2$s with %3$s</string>
+    <string name="mind_now_timing">Started %1$s · another %2$s of it</string>
+
+    <string name="mind_plan_title">What it means to do</string>
+    <string name="mind_plan_out_of_time">Out of time — it will let this go.</string>
+    <string name="mind_plan_time_left">%1$s left to finish it</string>
+    <string name="mind_plan_caveat">A plan is what it intends, not what it is allowed. Each step is checked again when it gets there.</string>
+    <plurals name="mind_plan_extended">
+        <item quantity="one">It liked how this was going and gave itself one more step.</item>
+        <item quantity="other">It liked how this was going and gave itself %1$d more steps.</item>
+    </plurals>
+    <string name="cd_mind_plan">%1$s means to: %2$s Step %3$d of %4$d. %5$s</string>
+    <string name="cd_mind_steps_done">%1$d of %2$d steps done</string>
+
+    <string name="mind_decided_title">What it decided</string>
+    <string name="cd_mind_decisions">%1$d decisions logged</string>
+    <string name="mind_decided_none_off">Nothing logged. You are making the calls, so there is nothing for it to explain.</string>
+    <string name="mind_decided_none_yet">Nothing logged yet. The first thing it decides for itself will land here, with its reasons.</string>
+    <string name="mind_runner_up">Nearly %1$s instead.</string>
+    <string name="cd_mind_decision">"%1$s, %2$s. %3$s %4$sConfidence %5$s.%6$s"</string>
+
+    <string name="mind_weighing_title">What it is weighing</string>
+    <string name="cd_mind_blocked">%1$d of %2$d options are out of reach</string>
+    <string name="mind_weighing_off">You are making the calls, so none of this is being acted on. It is still what the creature wants — and what it would reach for first if you let it.</string>
+    <string name="mind_weighing_empty">Nothing on its mind at all just now.</string>
+    <string name="mind_cannot">Cannot: %1$s</string>
+    <string name="mind_cannot_sentence">Cannot: %1$s.</string>
+    <string name="mind_could_do_this">It could do this.</string>
+    <string name="cd_mind_consideration">%1$s, wanted %2$s. %3$s %4$s</string>
+    <string name="mind_thwarted_title">WANTS TO, CANNOT</string>
+    <string name="mind_thwarted_line">%1$s — %2$s</string>
+    <string name="cd_mind_thwarted">%1$s is what it wants most, and it cannot: %2$s.</string>
+
+    <string name="mind_learning_title">Learning</string>
+    <string name="mind_intellect">Intellect</string>
+    <string name="mind_intellect_ceiling">of %1$d — it decides what is within reach</string>
+    <string name="cd_mind_intellect">Intellect %1$d of %2$d.</string>
+    <string name="mind_nothing_in_reach">Nothing on the ladder is within reach. %1$s keeps getting cleverer all the same, and the next rung opens the moment the intellect is there.</string>
+    <string name="mind_studying">Studying %1$s</string>
+    <string name="cd_mind_studying">Studying %1$s, %2$s done.</string>
+    <string name="mind_tally">%1$s sat through · %2$s done unasked</string>
+    <plurals name="mind_sittings">
+        <item quantity="one">%1$d sitting</item>
+        <item quantity="other">%1$d sittings</item>
+    </plurals>
+    <plurals name="mind_things">
+        <item quantity="one">%1$d thing</item>
+        <item quantity="other">%1$d things</item>
+    </plurals>
+
+    <string name="mind_teach">TEACH</string>
+    <string name="mind_teach_blocked">Not the moment for a lesson</string>
+    <string name="mind_teach_target">One sitting towards %1$s</string>
+    <string name="mind_teach_no_target">Nothing new in reach — a sitting still raises intellect</string>
+    <string name="cd_mind_teach">Teach a lesson. %1$s.</string>
+    <string name="cd_mind_teach_blocked">Cannot teach. %1$s</string>
+
+    <string name="mind_ladder_title">The ladder</string>
+    <string name="cd_mind_skills">%1$d of %2$d skills learned</string>
+    <string name="mind_rung_known">"Known. "</string>
+    <string name="mind_rung_studying">"Studying now. "</string>
+    <string name="mind_rung_reachable">"Within reach. "</string>
+    <string name="mind_rung_out_of_reach">"Out of reach. "</string>
+    <string name="cd_mind_rung">%1$s. %2$s Needs an intellect of %3$d.%4$s</string>
+    <string name="mind_known">KNOWN</string>
+    <string name="mind_int">INT</string>
 </resources>
