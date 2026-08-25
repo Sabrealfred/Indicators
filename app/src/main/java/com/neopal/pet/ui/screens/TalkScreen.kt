@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -51,6 +52,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.neopal.pet.R
 import com.neopal.pet.data.EarsState
 import com.neopal.pet.data.Heard
+import com.neopal.pet.data.OnDeviceState
 import com.neopal.pet.data.SpeakerState
 import com.neopal.pet.domain.ChatTurn
 import com.neopal.pet.domain.CreatureVoice
@@ -58,8 +60,11 @@ import com.neopal.pet.domain.MicOffer
 import com.neopal.pet.domain.MicPermission
 import com.neopal.pet.domain.MicSurface
 import com.neopal.pet.domain.MindConfig
+import com.neopal.pet.domain.MindRoute
+import com.neopal.pet.domain.MindWiring
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.domain.Simulation
+import com.neopal.pet.domain.TalkBlock
 import com.neopal.pet.domain.TalkVoice
 import com.neopal.pet.domain.VoiceComposer
 import com.neopal.pet.ui.PetViewModel
@@ -74,11 +79,13 @@ import com.neopal.pet.ui.components.PixelTextWell
 import com.neopal.pet.ui.components.VoiceNote
 import com.neopal.pet.ui.components.bevelSafePadding
 import com.neopal.pet.ui.components.heardNote
+import com.neopal.pet.ui.components.onDeviceNote
 import com.neopal.pet.ui.components.pixelSurface
 import com.neopal.pet.ui.components.pixelUnits
 import com.neopal.pet.ui.components.rememberCreatureEars
 import com.neopal.pet.ui.components.rememberCreatureSpeaker
 import com.neopal.pet.ui.components.rememberMicAsking
+import com.neopal.pet.ui.components.rememberOnDeviceMind
 import com.neopal.pet.ui.components.rememberRecogniserPresent
 import com.neopal.pet.ui.components.speakerNote
 
@@ -111,14 +118,21 @@ private enum class TalkGate {
  * answer whatever else is true, so that comes before anything about brains; the missing brain
  * comes before the nap, because telling a player their pet is asleep when nothing would have
  * answered anyway sends them off to switch the lights on for nothing.
+ *
+ * The brain half is [MindWiring.talkBlock]'s and is read off the [route] rather than off the
+ * settings, which is the change a second brain forced. "Is there a key pasted in" stopped being
+ * the same question as "can this creature answer me" the moment a model could be sitting loaded
+ * on the phone with no account anywhere — and answering the second question with the first told
+ * a player holding a working brain to go and find a key.
  */
-private fun gateFor(pet: PetState, mind: MindConfig): TalkGate = when {
+private fun gateFor(pet: PetState, mind: MindConfig, route: MindRoute): TalkGate = when {
     pet.isDead -> TalkGate.GONE
     pet.isEgg -> TalkGate.EGG
-    !mind.usable -> TalkGate.NO_BRAIN
-    !mind.conversation -> TalkGate.TALK_OFF
-    pet.isSleeping -> TalkGate.ASLEEP
-    else -> TalkGate.READY
+    else -> when (MindWiring.talkBlock(mind, route)) {
+        TalkBlock.NO_BRAIN -> TalkGate.NO_BRAIN
+        TalkBlock.TALK_OFF -> TalkGate.TALK_OFF
+        null -> if (pet.isSleeping) TalkGate.ASLEEP else TalkGate.READY
+    }
 }
 
 /**
@@ -147,7 +161,29 @@ fun TalkScreen(
     val ui by viewModel.ui.collectAsState()
     val pet = ui.pet ?: return
     val mind = ui.config.mind
-    val gate = gateFor(pet, mind)
+
+    // ---- the brain on this phone ----------------------------------------------------------
+    //
+    // Built here and nowhere else, and given back when this screen goes. That is the whole
+    // lifetime argument: loading costs seconds so it cannot happen per message, and a resident
+    // multi-gigabyte engine is heat and battery so it cannot stay. The view model borrows it for
+    // as long as this composition lives and holds nothing afterwards — an engine owned by
+    // something that outlives the screen is an engine warm behind a backgrounded game.
+    //
+    // Nothing is loaded for a player who has not downloaded a model: the client reads the config
+    // when the lifecycle starts it, finds nothing on the disk, and stays idle.
+    val localMind = rememberOnDeviceMind { ui.config.localMind }
+    val localState: OnDeviceState by localMind.state.collectAsState()
+    DisposableEffect(viewModel, localMind) {
+        viewModel.attachOnDeviceMind(localMind)
+        onDispose { viewModel.attachOnDeviceMind(null) }
+    }
+
+    // Recomputed on every recomposition on purpose, and `localState` above is what makes those
+    // happen: the route changes the moment the engine finishes loading, and a composer that
+    // decided once at open would still be saying there was nowhere to think.
+    val route = viewModel.talkRoute()
+    val gate = gateFor(pet, mind, route)
 
     // Read once per composition. The flag lives in the view model rather than in a state object,
     // so this recomposes when the conversation itself changes — which is exactly when it flips,
@@ -334,6 +370,7 @@ fun TalkScreen(
                 surface = micSurface,
                 level = if (earsState.listening) earsState.level else null,
                 mouthNote = speakerNote(speakerState, voice.speaks),
+                brainNote = onDeviceNote(localState),
                 lastHeard = heard,
                 onMic = {
                     when (micSurface.offer) {
@@ -582,22 +619,29 @@ private fun OpeningPanel(name: String, gate: TalkGate, modifier: Modifier = Modi
  * talking screen that permanently reserves a strip for a feature nobody enabled is a talking
  * screen with less room for the conversation.
  *
- * Three separate sentences can land here and they are not interchangeable. [mouthNote] is about
- * the creature's voice failing, [surface]'s own note is about the microphone not being on offer,
- * and [lastHeard] is about the last attempt at listening. Collapsing them into one line would
- * mean a device with no text-to-speech quietly stops explaining itself the moment something else
- * goes wrong.
+ * Four separate sentences can land here and they are not interchangeable. [mouthNote] is about
+ * the creature's voice failing, [brainNote] is about the brain on this phone waking up or
+ * refusing to, [surface]'s own note is about the microphone not being on offer, and [lastHeard]
+ * is about the last attempt at listening. Collapsing them into one line would mean a device with
+ * no text-to-speech quietly stops explaining itself the moment something else goes wrong.
+ *
+ * [brainNote] sits last of the three that are about the app rather than about the player's last
+ * press, and it is usually absent: a loaded brain says nothing, and so does a player who never
+ * downloaded one. It speaks up for the ten seconds a load takes — where silence would read as a
+ * feature that does not work — and when it will not run at all, where the sentence is the only
+ * thing standing between a player and a download they have no use for.
  */
 @Composable
 private fun VoiceStrip(
     surface: MicSurface,
     level: Float?,
     mouthNote: String?,
+    brainNote: String?,
     lastHeard: String?,
     onMic: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val notes = listOfNotNull(surface.note, mouthNote, lastHeard)
+    val notes = listOfNotNull(surface.note, mouthNote, brainNote, lastHeard)
     if (!surface.actionable && notes.isEmpty()) return
 
     Row(

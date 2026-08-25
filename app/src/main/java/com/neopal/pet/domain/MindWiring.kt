@@ -83,6 +83,28 @@ object MindWiring {
     }
 
     /**
+     * Who to ask for an answer, in order, until one of them gives one.
+     *
+     * [MindRoute] names three parts and they are not a sequence: [MindRoute.answersNow] is who
+     * writes what the player reads, [MindRoute.mayReplace] is who is allowed to improve it later,
+     * and [MindRoute.ifSilent] is who covers. This turns them into the one order a caller with
+     * nothing on screen yet actually wants, and the interesting entry is the middle one.
+     *
+     * A route with a second brain allowed to *improve* an answer certainly permits it to *give*
+     * one when there is none. Without that, [MindRoute.OnDeviceThenRemote] with a local model that
+     * came back empty — a small model producing prose instead of JSON, which is an ordinary
+     * Tuesday — would drop straight to the written brain while a perfectly good remote route sat
+     * there configured and never asked. The player would lose an answer they were entitled to,
+     * and the failure would look exactly like a model with nothing to say.
+     *
+     * Deduplicated, because a route may name the same brain twice and asking a model that just
+     * declined to answer the identical question a second time is a second wait for the same
+     * silence.
+     */
+    fun askOrder(route: MindRoute): List<MindAnswerer> =
+        listOfNotNull(route.answersNow, route.mayReplace, route.ifSilent).distinct()
+
+    /**
      * The conversation with one of the creature's own lines rewritten, or null to leave it alone.
      *
      * This is [MindRoute.OnDeviceThenRemote] arriving: the model on the phone already said

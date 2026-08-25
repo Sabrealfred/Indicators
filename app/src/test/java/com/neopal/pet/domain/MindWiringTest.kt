@@ -118,6 +118,52 @@ class MindWiringTest {
         assertNull(MindWiring.talkBlock(configured.copy(conversation = false), route))
     }
 
+    // ------------------------------------------------------------------------- who to ask, in order
+
+    @Test
+    fun `a local model that says nothing does not cost the player the remote answer`() {
+        // The case worth a test of its own: a small model returning prose instead of JSON is an
+        // ordinary outcome, and without the middle entry the player would drop to the written
+        // brain with a configured remote route sitting there never asked.
+        val both = MindRouter.route(MindAsk.TALK_REPLY, onDeviceReady = true, remoteReady = true)
+        assertEquals(
+            listOf(MindAnswerer.ON_DEVICE, MindAnswerer.REMOTE, MindAnswerer.SCRIPTED),
+            MindWiring.askOrder(both),
+        )
+    }
+
+    @Test
+    fun `a route with one brain asks it and then gives up to the written one`() {
+        val local = MindRouter.route(MindAsk.TALK_REPLY, onDeviceReady = true, remoteReady = false)
+        assertEquals(listOf(MindAnswerer.ON_DEVICE, MindAnswerer.SCRIPTED), MindWiring.askOrder(local))
+
+        val remote = MindRouter.route(MindAsk.TALK_REPLY, onDeviceReady = false, remoteReady = true)
+        assertEquals(listOf(MindAnswerer.REMOTE, MindAnswerer.SCRIPTED), MindWiring.askOrder(remote))
+    }
+
+    @Test
+    fun `nobody is asked twice for the same question`() {
+        // A route may name the same brain as its cover as well as its answer. Asking a model that
+        // just declined the identical question again is a second wait for the same silence.
+        val distil = MindRouter.route(MindAsk.DISTIL, onDeviceReady = true, remoteReady = true)
+        val order = MindWiring.askOrder(distil)
+        assertEquals(order.distinct(), order)
+    }
+
+    @Test
+    fun `the scripted brain is never asked before a model that could answer`() {
+        for (ask in MindAsk.entries) {
+            for (onDevice in listOf(false, true)) {
+                for (remote in listOf(false, true)) {
+                    val order = MindWiring.askOrder(MindRouter.route(ask, onDevice, remote))
+                    val scripted = order.indexOf(MindAnswerer.SCRIPTED)
+                    if (scripted < 0) continue
+                    assertEquals("$ask asked the written brain first", order.size - 1, scripted)
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------------ the second answer landing
 
     private fun chat(vararg turns: Pair<Boolean, String>): List<ChatTurn> =
