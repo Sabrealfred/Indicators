@@ -1,8 +1,15 @@
 package com.neopal.pet.data
 
 import com.neopal.pet.domain.ChatTurn
+import com.neopal.pet.domain.Consideration
+import com.neopal.pet.domain.Decision
+import com.neopal.pet.domain.Lesson
+import com.neopal.pet.domain.MindChoice
 import com.neopal.pet.domain.MindReply
 import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.Plan
+import com.neopal.pet.domain.RunRecord
+import com.neopal.pet.domain.ToolId
 
 /**
  * What is handed to a model running on the handset, and what is made of what comes back.
@@ -11,11 +18,12 @@ import com.neopal.pet.domain.PetBrief
  * `RemoteMindClient.kt` has no Android imports either: **this file compiles here.** There is no
  * Android SDK in this project's local harness and `com.google.ai.edge.litertlm` cannot be resolved
  * from it, so anything in the same file as the engine is checked by nothing until CI. That
- * separation earned itself immediately: the engine was reverted when the library turned out to
- * need a newer Kotlin than this project compiles with, and this file did not move. Everything
- * that could be got wrong without a device — how much of a conversation goes into the prompt, what
- * happens to the player's own words on the way in, what happens to the model's on the way out —
- * lives on this side of that line and has a test suite.
+ * separation earned itself twice over: the engine was reverted when the library turned out to
+ * need a newer Kotlin than this project compiles with, and this file did not move — then the
+ * engine came back on a newer Kotlin, and this file did not have to move for that either.
+ * Everything that could be got wrong without a device — how much of a conversation goes into the
+ * prompt, what happens to the player's own words on the way in, what happens to the model's on the
+ * way out — lives on this side of that line and has a test suite.
  *
  * ---- what is *not* re-implemented here ----------------------------------------------------
  *
@@ -135,5 +143,106 @@ internal object OnDeviceWire {
     fun answer(raw: String?): MindReply? {
         val text = raw?.takeIf { it.isNotBlank() } ?: return null
         return MindWire.interpretReply(text.take(MindWire.MAX_RESPONSE_CHARS))
+    }
+
+    // ---- the other three jobs the router can send here ----------------------------------------
+    //
+    // `docs/CEREBRO-LOCAL.md` §4 sends a decision, an errand and a distilled life to the remote
+    // model when there is one and **to the phone when there is not** — and `MindRouter` implements
+    // exactly that. So the prompts exist here rather than the engine refusing three of the four
+    // things it can be asked. Which of them actually runs is the router's business and not this
+    // file's; this file's business is that when one is asked for, the question is well formed.
+    //
+    // Every one of them is the same construction as [conversation]: the remote route's own system
+    // and user prompts, unmodified, with the shape of the answer repeated at the very end. Not one
+    // instruction is rewritten for a smaller model. If a 1 B model needs different words, that is
+    // a thing to find out from a handset and change with a measurement in hand — inventing a
+    // second set of prompts here, unmeasured, would mean two sets to keep in step and no way to
+    // tell which was better.
+
+    /**
+     * The shape of the answer, taken from the end of the prompt that already states it.
+     *
+     * Every `…SystemPrompt` in [MindWire] ends with the JSON object it wants back, because
+     * remotely that is a system message and the player's words arrive after it. Here everything is
+     * one block, so the instruction would otherwise sit hundreds of tokens from the end — and a
+     * small model follows the last instruction it read far more reliably than the best one.
+     *
+     * Read off the prompt rather than copied into four constants. A copy is a thing that can
+     * disagree, and the copy nobody remembers to update is always the one in the newer file. This
+     * cannot disagree: it is the same characters.
+     */
+    private fun shapeOf(systemPrompt: String): String =
+        systemPrompt.trimEnd().substringAfterLast('\n')
+
+    /** System prompt, then the question, then the shape again. The order everything here uses. */
+    private fun oneBlock(systemPrompt: String, userPrompt: String): String = buildString {
+        appendLine(systemPrompt.trimEnd())
+        appendLine()
+        appendLine(userPrompt.trimEnd())
+        appendLine()
+        appendLine("Answer with one JSON object and nothing else, in this exact shape:")
+        append(shapeOf(systemPrompt))
+    }
+
+    /**
+     * The prompt for picking one of the options the game has already ruled legal, or null when
+     * there is nothing worth asking about.
+     *
+     * The same two guards the remote route uses, and for the same reason rather than out of
+     * symmetry: an empty list has no answer, and a list where nothing is available has only one,
+     * so generating either is heat spent to be told what was already known.
+     */
+    fun decision(brief: PetBrief, options: List<Consideration>): String? {
+        if (options.isEmpty() || options.none { it.available }) return null
+        return oneBlock(MindWire.chooseSystemPrompt(brief), MindWire.chooseUserPrompt(brief, options))
+    }
+
+    /** The prompt for setting the creature an errand, or null when it could not begin anything. */
+    fun errand(brief: PetBrief, tools: Map<ToolId, String>, options: List<Consideration>): String? {
+        if (options.none { it.available }) return null
+        return oneBlock(MindWire.planSystemPrompt(brief), MindWire.planUserPrompt(brief, tools, options))
+    }
+
+    /**
+     * The prompt for turning a finished life into what the next one inherits.
+     *
+     * No guard, because there is no such thing as a life with nothing in it: by the time this is
+     * asked, `Lineage.distilLocally` has already written the child's inheritance and anything this
+     * produces can only reword it or leave it alone.
+     */
+    fun distillation(brief: PetBrief, record: RunRecord, decisions: List<Decision>): String =
+        oneBlock(MindWire.distilSystemPrompt(), MindWire.distilUserPrompt(brief, record, decisions))
+
+    /**
+     * What the creature chose, or null.
+     *
+     * The index is validated against the very list that was sent, exactly as it is remotely. That
+     * is what makes a small model safe to let decide at all: it is choosing a temperament from a
+     * menu the simulation already ruled legal, so the worst a confused reply can do is choose a
+     * legal thing badly — a creature with poor judgement, which this game is allowed to have.
+     */
+    fun choice(raw: String?, options: List<Consideration>): MindChoice? {
+        val text = raw?.takeIf { it.isNotBlank() } ?: return null
+        return MindWire.interpretChoice(text.take(MindWire.MAX_RESPONSE_CHARS), options)
+    }
+
+    /**
+     * The errand the creature set itself, or null.
+     *
+     * **Unstamped**, the same as the remote route's: `Errands.sanitise` takes `madeAtSeconds` from
+     * whatever it is handed and there is no clock on this side, so the caller must re-stamp it
+     * against the creature's own age before storing it. A plan left at zero is not merely
+     * inaccurate — `Plan.isStale` measures from that field, so every plan would arrive expired.
+     */
+    fun errandOf(raw: String?): Plan? {
+        val text = raw?.takeIf { it.isNotBlank() } ?: return null
+        return MindWire.interpretPlan(text.take(MindWire.MAX_RESPONSE_CHARS))
+    }
+
+    /** What the life taught, or nothing — which is not a failure, only a line that starts fresh. */
+    fun lessons(raw: String?, generation: Int): List<Lesson> {
+        val text = raw?.takeIf { it.isNotBlank() } ?: return emptyList()
+        return MindWire.interpretLessons(text.take(MindWire.MAX_RESPONSE_CHARS), generation)
     }
 }

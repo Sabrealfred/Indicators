@@ -1,7 +1,11 @@
 package com.neopal.pet.data
 
+import com.neopal.pet.domain.ActivityKind
 import com.neopal.pet.domain.ChatTurn
+import com.neopal.pet.domain.Consideration
 import com.neopal.pet.domain.PetBrief
+import com.neopal.pet.domain.RunRecord
+import com.neopal.pet.domain.ToolId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -12,11 +16,11 @@ import org.junit.Test
 /**
  * The half of the on-device brain that can be checked without a phone.
  *
- * There is no engine class in the tree right now: the one that existed imported
- * `com.google.ai.edge.litertlm`, and that library needs a newer Kotlin than this project compiles
- * with, so it was taken back out. What survives is the half that never needed a phone — building
- * the prompt and reading the answer — and this is the suite that holds it. Whatever engine
- * eventually runs underneath, this part is already decided and already checked.
+ * The engine class next door imports `com.google.ai.edge.litertlm` and cannot be compiled here at
+ * all, so everything that could be got wrong without a phone was kept out of it: building the
+ * prompt and reading the answer. This is the suite that holds that half. Whatever engine runs
+ * underneath, and whichever version of the library it is pinned to, this part is already decided
+ * and already checked.
  */
 class OnDeviceWireTest {
 
@@ -199,5 +203,114 @@ class OnDeviceWireTest {
         val long = "x".repeat(MindWire.MAX_REPLY_CHARS * 3)
         val reply = OnDeviceWire.answer("""{"say": "$long"}""")
         assertEquals(MindWire.MAX_REPLY_CHARS, reply?.text?.length)
+    }
+
+    // ------------------------------------------------- the other three jobs the router can send
+
+    private val options = listOf(
+        Consideration(ActivityKind.EAT, utility = 0.8f, reason = "I am hungry.", blockedBy = null),
+        Consideration(ActivityKind.SLEEP, utility = 0.3f, reason = "I am tired.", blockedBy = "It is daytime."),
+    )
+
+    private val blockedOnly = listOf(options.last())
+
+    private val record = RunRecord(generation = 3, name = "Mossling", careScore = 0.7f)
+
+    @Test
+    fun `each of the three carries the remote route's own prompts, unrewritten`() {
+        // Not one instruction is reworded for a smaller model. If a 1 B model needs different
+        // words, that is a change to make with a measurement from a handset, not a second set of
+        // prompts invented here for two to keep in step.
+        val decision = OnDeviceWire.decision(brief, options)!!
+        assertTrue(decision.contains(MindWire.chooseSystemPrompt(brief).trimEnd()))
+        assertTrue(decision.contains(MindWire.chooseUserPrompt(brief, options).trimEnd()))
+
+        val errand = OnDeviceWire.errand(brief, emptyMap(), options)!!
+        assertTrue(errand.contains(MindWire.planSystemPrompt(brief).trimEnd()))
+
+        val distilled = OnDeviceWire.distillation(brief, record, emptyList())
+        assertTrue(distilled.contains(MindWire.distilSystemPrompt().trimEnd()))
+    }
+
+    @Test
+    fun `the shape of the answer is the last thing read in all four prompts`() {
+        // The property the whole one-block form depends on: a small model follows the last
+        // instruction it saw. It is checked for every job rather than for the one that was
+        // written first, because a system prompt that stops ending with its shape would leave
+        // this repeating the wrong line and nothing would say so.
+        val prompts = listOf(
+            MindWire.chooseSystemPrompt(brief) to OnDeviceWire.decision(brief, options)!!,
+            MindWire.planSystemPrompt(brief) to OnDeviceWire.errand(brief, emptyMap(), options)!!,
+            MindWire.distilSystemPrompt() to OnDeviceWire.distillation(brief, record, emptyList()),
+        )
+        for ((system, prompt) in prompts) {
+            val shape = system.trimEnd().substringAfterLast('\n')
+            assertTrue("a system prompt no longer ends with a JSON shape: $shape", shape.startsWith("{"))
+            assertTrue("the shape is not the last thing read", prompt.trimEnd().endsWith(shape))
+        }
+    }
+
+    @Test
+    fun `the question comes after the character sheet in all three`() {
+        val decision = OnDeviceWire.decision(brief, options)!!
+        assertTrue(decision.indexOf("Your options:") > decision.indexOf("deciding what to do next"))
+    }
+
+    @Test
+    fun `nothing worth deciding is not asked about`() {
+        // Heat spent to be told what was already known. The same two guards the remote route
+        // uses, for the same reason rather than out of symmetry.
+        assertNull(OnDeviceWire.decision(brief, emptyList()))
+        assertNull(OnDeviceWire.decision(brief, blockedOnly))
+        assertNull(OnDeviceWire.errand(brief, emptyMap(), blockedOnly))
+        assertNull(OnDeviceWire.errand(brief, emptyMap(), emptyList()))
+    }
+
+    @Test
+    fun `what it looked around and found goes into the errand`() {
+        val errand = OnDeviceWire.errand(brief, mapOf(ToolId.entries.first() to "a plate of something"), options)!!
+        assertTrue(errand.contains("a plate of something"))
+    }
+
+    @Test
+    fun `a choice is an index into the list that was sent`() {
+        val choice = OnDeviceWire.choice("""{"index": 0, "reason": "I am starving."}""", options)
+        assertEquals(0, choice?.index)
+        // The rule that makes a small model safe to let decide: an unavailable option is refused
+        // however confidently it was picked.
+        assertNull(OnDeviceWire.choice("""{"index": 1, "reason": "bed."}""", options))
+        assertNull(OnDeviceWire.choice("""{"index": 9, "reason": "elsewhere."}""", options))
+    }
+
+    @Test
+    fun `prose where a decision was asked for is silence`() {
+        assertNull(OnDeviceWire.choice("I think I shall eat.", options))
+        assertNull(OnDeviceWire.choice(null, options))
+        assertNull(OnDeviceWire.errandOf("Here is my three-phase plan."))
+        assertNull(OnDeviceWire.errandOf(null))
+        assertTrue(OnDeviceWire.lessons("Once upon a time.", 3).isEmpty())
+        assertTrue(OnDeviceWire.lessons(null, 3).isEmpty())
+    }
+
+    @Test
+    fun `every reader is capped against a model that has started looping`() {
+        // Same quadratic brace matcher, same cap, three more ways in. A local model looping costs
+        // nothing, which is what makes it likelier here than on a metered wire.
+        val looping = "{".repeat(MindWire.MAX_RESPONSE_CHARS * 2)
+        // Timed one at a time rather than all three together, and that is worth a word: capped,
+        // each of these still takes seconds, so three in one clock reads as a broken cap when the
+        // cap is working exactly as it does for the reply path next door. What is being asserted
+        // is that the input was cut, not that the parser is fast — it is not, and the engine
+        // wrapper is what bounds it, by running the parse inside the answer's own budget.
+        for (read in listOf<() -> Unit>(
+            { assertNull(OnDeviceWire.choice(looping, options)) },
+            { assertNull(OnDeviceWire.errandOf(looping)) },
+            { assertTrue(OnDeviceWire.lessons(looping, 3).isEmpty()) },
+        )) {
+            val started = System.nanoTime()
+            read()
+            val elapsedMillis = (System.nanoTime() - started) / 1_000_000
+            assertTrue("the cap did not bite: took ${elapsedMillis}ms", elapsedMillis < 30_000)
+        }
     }
 }
