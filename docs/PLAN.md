@@ -288,6 +288,33 @@ para nada bajo `ui/`, `data/` o `work/`, y menos aún para código mezclado desd
 Los tests puros cubren el dominio; para todo lo demás, la ausencia de conflicto no es evidencia de
 nada.
 
+### La anotación que existe y no obliga a nada
+
+Al mover 745 textos a `strings.xml`, CI se puso roja con tres errores en un fichero:
+
+```
+Functions which invoke @Composable functions must be marked with the @Composable annotation
+```
+
+`stringResource` es `@Composable`, así que llamarla obliga a que lo sea también quien la llama. El
+sustituto del banco **sí lleva la anotación** — está transcrita fielmente. Lo que no hay es el
+*plugin* del compilador de Compose, que es quien la hace cumplir. Anotación presente, nadie
+comprobando. Así que la llamada compila aquí y falla allí.
+
+Es una variante nueva de la lección del `@DslMarker`, y peor: allí faltaba la anotación en el
+sustituto y se podía arreglar añadiéndola. Aquí **está** y no sirve, porque lo que falta no es una
+anotación sino un compilador. **No hay forma local de detectar esta clase de error**, y conviene
+decirlo en vez de fingir que sí.
+
+Escribí un detector por texto y lo tiré: daba 106 impactos de los que 103 eran falsos —atribuía
+cada llamada a la última `fun` vista, así que un lambda composable anidado dentro de una función
+normal se le contaba a la de fuera. Un comprobador que grita 103 veces en falso es peor que no
+tener ninguno: la siguiente persona aprende a ignorarlo.
+
+Lo que **sí** vale, y es lo que se usó: Kotlin reporta todos los errores del módulo, no se detiene
+en el primer fichero. Cuando CI dice «tres errores en un fichero», son tres, y son ahí. Confiar en
+esa enumeración es más barato y más exacto que cualquier heurística local.
+
 ---
 
 ## 7. Orden sugerido

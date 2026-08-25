@@ -223,7 +223,13 @@ fun ModelStoragePanel(modifier: Modifier = Modifier) {
 /**
  * The one line that is true whatever else is on screen: how much of this phone this feature is
  * using. Shown even at zero, because "nothing" is the answer most players want confirmed.
+ *
+ * `@Composable` because it reads a resource, and the real `stringResource` is composable. The
+ * local harness cannot catch this: its `@Composable` is a hand-written annotation with no compiler
+ * plugin behind it, so the annotation is present and nothing enforces it. CI is the only
+ * detector for the whole class.
  */
+@Composable
 private fun storageLine(bytes: Long): String =
     if (bytes <= 0L) {
         stringResource(R.string.model_storage_none)
