@@ -875,4 +875,33 @@
     <string name="colony_bloodlines">Bloodlines %1$d per cent apart. Below %2$d per cent a pair only repeats itself and the match is refused.</string>
     <string name="colony_palette_caveat">Drawn in %1$s colours. Either family can carry, so the egg is as likely to hatch a %2$s — the palette changes, the shape above does not.</string>
     <string name="colony_average_caveat">This is the halfway point between the two, not a roll. The real egg lands near it, sometimes one trait further out.</string>
+
+    <string name="unnamed_pal">Your pal</string>
+
+    <!-- Colony read-outs -->
+    <string name="cd_colony_pal">%1$s, %2$s. %3$s. %4$sFondness %5$d of 100. %6$s</string>
+    <string name="cd_colony_present">"In the room now. "</string>
+    <string name="cd_colony_absent">"Away at the moment. "</string>
+    <string name="cd_colony_chosen">" Chosen for the pairing preview."</string>
+    <string name="cd_colony_fond_enough">Fond enough to court.</string>
+    <string name="cd_colony_mark_sentence">%1$d more before %2$s at %3$d.</string>
+    <string name="cd_condition_met">"Already true. "</string>
+    <string name="cd_condition_unmet">"Still outstanding. "</string>
+    <string name="cd_colony_egg">Egg with %1$s, a %2$s. %3$s</string>
+    <string name="cd_colony_egg_ready">Ready to hatch.</string>
+    <string name="cd_colony_egg_progress">%1$d per cent incubated, %2$s left.</string>
+
+    <!-- Memory Match -->
+    <string name="memory_flash_your_turn">YOUR TURN</string>
+
+    <!-- Duet -->
+    <string name="duet_opening">Sing anything on the five pads, then hand over. %1$s will answer.</string>
+
+    <!-- Hide and Seek: the sentence around the prop, not the prop's own noun -->
+    <string name="cd_hide_in">Hide in %1$s</string>
+    <string name="cd_hide_bolt_for">Bolt for %1$s</string>
+    <string name="cd_hide_look_in">Look in %1$s</string>
+    <string name="cd_hide_you_are_here">%1$s, you are hiding here</string>
+    <string name="cd_hide_already_searched">%1$s, already searched</string>
+    <string name="cd_hide_already_emptied">%1$s, already emptied</string>
 </resources>

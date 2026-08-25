@@ -81,6 +81,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
 
     // Set from inside a click handler, so read here and assigned as values.
     val title = stringResource(R.string.game_memory)
+    val flashYourTurn = stringResource(R.string.memory_flash_your_turn)
     val flashNice = stringResource(R.string.memory_flash_nice)
     val flashWrong = stringResource(R.string.memory_flash_wrong)
 
@@ -112,7 +113,7 @@ fun MemoryGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         inputIndex = 0
         turnStart = System.currentTimeMillis()
         playingBack = false
-        flashText = "YOUR TURN"
+        flashText = flashYourTurn
         flashColor = NeoColors.NeonCyan
         flashTick += 1
     }

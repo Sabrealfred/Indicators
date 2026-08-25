@@ -330,14 +330,15 @@ private fun PalRow(
     val mark = nextMarkFor(pal)
     val affinity = pal.affinity.roundToInt()
 
-    val readOut = buildString {
-        append("${pal.name}, ${pal.relation.displayName.lowercase()}. ")
-        append("${describe(pal.species, pal.stage, pal.genome)}. ")
-        append(if (pal.present) "In the room now. " else "Away at the moment. ")
-        append("Fondness $affinity of 100. ")
-        append(markSentence(pal, mark))
-        if (chosen) append(" Chosen for the pairing preview.")
-    }
+    val readOut = stringResource(
+        R.string.cd_colony_pal,
+        pal.name,
+        pal.relation.displayName.lowercase(),
+        describe(pal.species, pal.stage, pal.genome),
+        stringResource(if (pal.present) R.string.cd_colony_present else R.string.cd_colony_absent),
+        affinity,
+        markSentence(pal, mark),
+    ) + if (chosen) stringResource(R.string.cd_colony_chosen) else ""
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -580,8 +581,8 @@ private fun Condition(
     }
     val prefix = when {
         neutral -> ""
-        met -> "Already true. "
-        else -> "Still outstanding. "
+        met -> stringResource(R.string.cd_condition_met)
+        else -> stringResource(R.string.cd_condition_unmet)
     }
     Row(
         verticalAlignment = Alignment.Top,
@@ -838,8 +839,16 @@ private fun EggRow(
     val ready = egg.isReady(ageSeconds)
     val accent = if (ready) NeoAccents.gold else NeoAccents.green
 
-    val readOut = "Egg with $otherParent, a ${egg.species.displayName}. " +
-        if (ready) "Ready to hatch." else "${(done * 100f).roundToInt()} per cent incubated, ${clock(left)} left."
+    val readOut = stringResource(
+        R.string.cd_colony_egg,
+        otherParent,
+        egg.species.displayName,
+        if (ready) {
+            stringResource(R.string.cd_colony_egg_ready)
+        } else {
+            stringResource(R.string.cd_colony_egg_progress, (done * 100f).roundToInt(), clock(left))
+        },
+    )
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -1352,11 +1361,14 @@ private fun nextMarkFor(pal: Pal): Float? = when {
 }
 
 /** The mark, said out loud, for the row's read-out. */
+@Composable
 private fun markSentence(pal: Pal, mark: Float?): String {
-    if (mark == null) return "Fond enough to court."
+    if (mark == null) return stringResource(R.string.cd_colony_fond_enough)
     val gap = (mark - pal.affinity).roundToInt().coerceAtLeast(1)
-    val rung = if (mark == Pal.FRIEND_AT) "friendship" else "courting"
-    return "$gap more before $rung at ${mark.roundToInt()}."
+    val rung = stringResource(
+        if (mark == Pal.FRIEND_AT) R.string.colony_rung_friendship else R.string.colony_rung_courting,
+    )
+    return stringResource(R.string.cd_colony_mark_sentence, gap, rung, mark.roundToInt())
 }
 
 /** The same fact under the meter, short enough to sit on one line on a narrow phone. */

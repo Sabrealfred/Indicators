@@ -378,9 +378,8 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     /** A replay adds nothing and advances nothing. It is a second listen, not a turn. */
     var replaying by remember { mutableStateOf(false) }
     var liveDegree by remember { mutableIntStateOf(-1) }
-    var announcement by remember {
-        mutableStateOf("Sing anything on the five pads, then hand over. $petName will answer.")
-    }
+    val openingLine = stringResource(R.string.duet_opening, petName)
+    var announcement by remember { mutableStateOf(openingLine) }
 
     var yourNotes by remember { mutableIntStateOf(0) }
     var theirNotes by remember { mutableIntStateOf(0) }

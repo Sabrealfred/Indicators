@@ -201,7 +201,8 @@ fun PuzzleGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     // reading it live would make "NEW RECORD" impossible to ever show.
     val best = remember { pet.highScores[GAME_ID] ?: 0 }
     val motion = if (ui.config.reducedMotion) 0.3f else 1f
-    val petName = pet.name.ifBlank { "Your pal" }
+    val unnamedPal = stringResource(R.string.unnamed_pal)
+    val petName = pet.name.ifBlank { unnamedPal }
 
     // Seeded from the pet rather than the clock: the same creature at the same moment of its life
     // deals itself the same boards, which is what makes a run reproducible at all.

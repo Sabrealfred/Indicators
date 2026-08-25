@@ -678,17 +678,24 @@ fun HideAndSeekGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             val tappable = started && !finished &&
                 (phase == HidePhase.CHOOSE || phase == HidePhase.SEEKER_HUNT || phase == HidePhase.PLAYER_HUNT)
             board.forEachIndexed { index, spot ->
+                // The prop's own noun is still `HideProp.label`'s English -- see the commit that
+                // moved the games. What moved here is the sentence built around it.
                 val label = spot.prop.label
-                val action = when {
-                    phase == HidePhase.CHOOSE -> "Hide in $label"
-                    phase == HidePhase.SEEKER_HUNT -> "Bolt for $label"
-                    else -> "Look in $label"
-                }
+                val action = stringResource(
+                    when (phase) {
+                        HidePhase.CHOOSE -> R.string.cd_hide_in
+                        HidePhase.SEEKER_HUNT -> R.string.cd_hide_bolt_for
+                        else -> R.string.cd_hide_look_in
+                    },
+                    label,
+                )
                 val emptied = (checkedMask shr index) and 1 == 1
                 val state = when {
-                    index == playerSpot && phase != HidePhase.PLAYER_HUNT -> "$label, you are hiding here"
-                    emptied && phase == HidePhase.PLAYER_HUNT -> "$label, already searched"
-                    emptied -> "$label, already emptied"
+                    index == playerSpot && phase != HidePhase.PLAYER_HUNT ->
+                        stringResource(R.string.cd_hide_you_are_here, label)
+                    emptied && phase == HidePhase.PLAYER_HUNT ->
+                        stringResource(R.string.cd_hide_already_searched, label)
+                    emptied -> stringResource(R.string.cd_hide_already_emptied, label)
                     else -> label
                 }
                 Box(
