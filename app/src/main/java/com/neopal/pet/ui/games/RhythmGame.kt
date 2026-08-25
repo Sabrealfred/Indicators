@@ -35,7 +35,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -65,6 +67,7 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
     // Frozen at entry: finishGame writes the new record before the result card renders, so
     // reading it live would make "NEW RECORD" impossible to ever show.
     val best = remember { ui.pet?.highScores?.get(GAME_ID) ?: 0 }
+    val title = stringResource(R.string.game_rhythm)
     val lanes = 4
     val laneColors = listOf(NeoColors.NeonCyan, NeoColors.NeonRed, NeoColors.NeonYellow, NeoColors.NeonGreen)
 
@@ -133,7 +136,7 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         viewModel.finishGame(
             won = accuracy >= 0.6f,
             score = accuracy,
-            gameName = "Rhythm Tap",
+            gameName = title,
             gameId = GAME_ID,
             points = score,
         )
@@ -149,9 +152,13 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             .padding(12.dp),
     ) {
         GameHeader(
-            title = "Rhythm Tap",
-            left = "Score $score",
-            right = if (combo > 1) "Combo x$combo" else "Best $best",
+            title = title,
+            left = stringResource(R.string.game_score, score),
+            right = if (combo > 1) {
+                stringResource(R.string.rhythm_combo, combo)
+            } else {
+                stringResource(R.string.game_best, best)
+            },
             progress = (time / duration).coerceIn(0f, 1f),
             onExit = onExit,
         )
@@ -264,11 +271,11 @@ fun RhythmGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         if (finished) {
             val accuracy = if (total == 0) 0 else hits * 100 / total
             GameResult(
-                title = if (accuracy >= 60) "CLEARED!" else "SONG OVER",
+                title = stringResource(if (accuracy >= 60) R.string.rhythm_result_win else R.string.rhythm_result_lose),
                 lines = listOf(
-                    "Score $score" + if (score > best) "  ★ NEW RECORD" else "",
-                    "Accuracy $accuracy%  ·  $perfects perfect",
-                    "Best combo $bestCombo",
+                    stringResource(if (score > best) R.string.game_score_record else R.string.game_score, score),
+                    stringResource(R.string.rhythm_result_accuracy, accuracy, perfects),
+                    stringResource(R.string.rhythm_result_combo, bestCombo),
                 ),
                 onExit = onExit,
             )

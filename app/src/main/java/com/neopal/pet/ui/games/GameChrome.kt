@@ -39,7 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.ui.components.NeoAccents
 import com.neopal.pet.ui.theme.NeoColors
 import kotlinx.coroutines.delay
@@ -58,7 +60,7 @@ fun GameHeader(
             IconButton(onClick = onExit) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.nav_back),
                     // The header sits on colorScheme.background, so the arrow has to be
                     // onBackground. The fixed NeoColors.OnDark it used to carry is a
                     // dark-theme near-white: 16.71:1 on the dark chassis, 1.01:1 on the
@@ -122,7 +124,7 @@ fun GameResult(title: String, lines: List<String>, onExit: () -> Unit) {
                     Text(it, style = MaterialTheme.typography.bodyMedium, color = NeoColors.OnDark)
                 }
                 Spacer(Modifier.height(10.dp))
-                Button(onClick = onExit) { Text("Back to the room") }
+                Button(onClick = onExit) { Text(stringResource(R.string.game_back_to_room)) }
             }
         }
     }
@@ -155,7 +157,7 @@ fun CountdownGate(onReady: () -> Unit) {
             label = "countdown-$count",
         )
         Text(
-            text = if (count > 0) "$count" else "GO!",
+            text = if (count > 0) "$count" else stringResource(R.string.game_go),
             style = MaterialTheme.typography.displayLarge,
             color = if (count > 0) NeoColors.OnDark else NeoColors.NeonGreen,
             modifier = Modifier.graphicsLayer { scaleX = scale; scaleY = scale },
@@ -191,7 +193,7 @@ fun JudgementFlash(text: String?, color: Color, tick: Int) {
 fun BestChip(best: Int, modifier: Modifier = Modifier) {
     if (best <= 0) return
     Text(
-        text = "BEST $best",
+        text = stringResource(R.string.game_best_chip, best),
         style = MaterialTheme.typography.labelSmall,
         color = NeoColors.NeonYellow,
         modifier = modifier,

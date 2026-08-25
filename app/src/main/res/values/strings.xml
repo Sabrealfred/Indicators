@@ -439,4 +439,131 @@
         <item quantity="one">day in a row</item>
         <item quantity="other">days in a row</item>
     </plurals>
+
+    <!-- Shared game chrome. The double spaces around the separators are load-bearing, which is
+         why these values are wrapped in quotes: AAPT collapses whitespace runs otherwise. -->
+    <string name="game_back_to_room">Back to the room</string>
+    <string name="game_go">GO!</string>
+    <string name="game_best_chip">BEST %1$d</string>
+    <string name="game_score">Score %1$d</string>
+    <string name="game_score_record">"Score %1$d  ★ NEW RECORD"</string>
+    <string name="game_best">Best %1$d</string>
+    <string name="game_time_up">TIME UP</string>
+    <string name="cd_step_less">Less %1$s</string>
+    <string name="cd_step_more">More %1$s</string>
+
+    <!-- Snack Catch -->
+    <string name="catch_score_line">"Score %1$d  ·  %2$d/%3$d"</string>
+    <string name="catch_combo">COMBO x%1$d</string>
+    <string name="catch_lives">Lives %1$d</string>
+    <string name="catch_hint">Drag to move. Catch the food, dodge the pills — gold is worth triple.</string>
+    <string name="catch_flash_golden">GOLDEN x3</string>
+    <string name="catch_flash_ouch">OUCH</string>
+    <string name="catch_flash_streak_lost">STREAK LOST</string>
+    <string name="catch_result_win">FEAST!</string>
+    <string name="catch_result_caught">"Caught %1$d  ·  Dropped %2$d"</string>
+    <string name="catch_result_combo">"Best combo x%1$d  ·  Lives left %2$d"</string>
+
+    <!-- Memory Match -->
+    <string name="memory_round">Round %1$d/%2$d</string>
+    <string name="memory_flash_nice">NICE</string>
+    <string name="memory_flash_wrong">WRONG</string>
+    <string name="memory_get_ready">Get ready...</string>
+    <string name="memory_watch">Watch the pattern...</string>
+    <string name="memory_repeat">Repeat it back</string>
+    <string name="memory_result_win">PERFECT MEMORY!</string>
+    <string name="memory_result_lose">MISSED IT</string>
+    <string name="memory_result_reached">Sequence reached %1$d of %2$d</string>
+    <string name="memory_result_speed">Speed bonus %1$d</string>
+
+    <!-- Rhythm Tap -->
+    <string name="rhythm_combo">Combo x%1$d</string>
+    <string name="rhythm_result_win">CLEARED!</string>
+    <string name="rhythm_result_lose">SONG OVER</string>
+    <string name="rhythm_result_accuracy">"Accuracy %1$d%%  ·  %2$d perfect"</string>
+    <string name="rhythm_result_combo">Best combo %1$d</string>
+
+    <!-- Fetch -->
+    <string name="fetch_score_line">"Score %1$d  ·  %2$d/%3$d"</string>
+    <string name="fetch_read">Read %1$d%%</string>
+    <string name="fetch_gain">"%1$s  (+%2$d)"</string>
+    <string name="fetch_flash_reading">READING YOU</string>
+    <string name="fetch_flash_snatch">SNATCH!</string>
+    <string name="fetch_flash_read">READ +150</string>
+    <string name="fetch_throw_heading">Throw</string>
+    <string name="fetch_throw">THROW</string>
+    <string name="fetch_angle">Angle</string>
+    <string name="fetch_degrees">%1$d°</string>
+    <string name="fetch_power">Power</string>
+    <string name="fetch_hint_idle">Drag up and out to throw — steeper goes higher, faster goes further.</string>
+    <string name="fetch_hint_watch">Watch where it decides to stand.</string>
+    <string name="fetch_result_win">ALL FETCHED!</string>
+    <string name="fetch_result_fetched">"Fetched %1$d of %2$d  ·  %3$d out of the air"</string>
+    <string name="fetch_result_read">"Read %1$d%%  ·  anticipated %2$d throws"</string>
+    <string name="cd_fetch_throw">Throw the ball at %1$d degrees, %2$d per cent power</string>
+    <string name="cd_fetch_status">Score %1$d. Fetch %2$d of %3$d. Read %4$d per cent.</string>
+    <string name="cd_fetch_field">Fetch field. %1$s %2$s %3$s</string>
+
+    <!-- Duet -->
+    <string name="duet_verse">Verse %1$d of %2$d</string>
+    <string name="duet_they_sing">%1$s sings</string>
+    <string name="duet_your_turn">Your turn</string>
+    <string name="duet_song_so_far">The song so far</string>
+    <string name="duet_sing">Sing %1$s</string>
+    <string name="duet_take_it_back">Take it back</string>
+    <string name="duet_hear_again">Hear it again</string>
+    <string name="duet_over_to_you">Over to you</string>
+    <string name="duet_you_start">You start</string>
+    <string name="duet_result_title">THE SONG ENDS</string>
+    <string name="duet_result_notes">You sang %1$d notes, %2$s answered with %3$d</string>
+    <string name="duet_result_echoes">You picked its line back up %1$d times</string>
+    <string name="duet_result_own_line">You kept a line of your own throughout</string>
+    <string name="cd_duet_song">The song so far: %1$d notes from you and %2$d from %3$s, drawn as blocks with pitch as height.</string>
+    <string name="cd_duet_answering">%1$s is answering, note %2$d of %3$d</string>
+    <string name="cd_duet_your_phrase">Your phrase: %1$d of %2$d notes</string>
+    <string name="cd_duet_pad">Sing %1$s, pad %2$d of %3$d</string>
+    <string name="cd_duet_take_it_back">Take back the last note you sang</string>
+    <string name="cd_duet_hear_again">Hear the last answer from %1$s again</string>
+    <string name="cd_duet_hand_over">Hand your phrase of %1$d notes to %2$s</string>
+    <string name="cd_duet_let_it_start">Let %1$s start this verse</string>
+
+    <!-- Hide and Seek -->
+    <string name="hide_final_score">Final score %1$d</string>
+    <string name="hide_status">"%1$s  ·  Score %2$d"</string>
+    <string name="hide_score_line">"Score %1$d  ·  Won %2$d/%3$d"</string>
+    <string name="hide_pick_a_side">PICK A SIDE</string>
+    <string name="hide_you_hide">YOU HIDE</string>
+    <string name="hide_you_seek">YOU SEEK</string>
+    <string name="hide_who_first">Who hides first?</string>
+    <string name="hide_sides_swap">Rounds swap over, so you play both sides either way.</string>
+    <string name="hide_i_hide">I hide</string>
+    <string name="hide_they_hide">%1$s hides</string>
+    <string name="hide_instincts">Instincts</string>
+    <string name="hide_result_win">WELL PLAYED!</string>
+    <string name="hide_result_draw">HONOURS EVEN</string>
+    <string name="hide_result_lose">OUT-FOXED</string>
+    <string name="hide_result_rounds">"Rounds won %1$d of %2$d  ·  hidden %3$s s"</string>
+    <string name="hide_result_searched">"%1$s searched %2$d places  ·  doubled back %3$d"</string>
+    <string name="hide_result_quickest">"You lifted %1$d lids  ·  quickest find %2$s s"</string>
+    <string name="hide_result_never_found">"You lifted %1$d lids  ·  never found %2$s"</string>
+    <string name="gene_curiosity">Curiosity</string>
+    <string name="gene_company">Company</string>
+    <string name="gene_vigour">Vigour</string>
+    <string name="gene_wit">Wit</string>
+    <string name="cd_gene_value">%1$s %2$d out of 10</string>
+
+    <!-- Shape Sorter -->
+    <string name="puzzle_board_of">Board %1$d of %2$d</string>
+    <string name="puzzle_hint">Tap a piece, then tap the hole it belongs in.</string>
+    <string name="puzzle_place_held">Place the held piece</string>
+    <string name="puzzle_put_down">Put down</string>
+    <string name="puzzle_pick_up">Pick up</string>
+    <string name="puzzle_pet_watching">%1$s is watching. The shapes start to click at %2$d intellect.</string>
+    <string name="puzzle_pet_autonomy_off">%1$s can see the answers, but autonomy is off.</string>
+    <string name="puzzle_pet_will_join">%1$s will join in once you have started the board.</string>
+    <string name="puzzle_pet_solving">%1$s is solving alongside you. Sit back, or race it.</string>
+    <string name="puzzle_result_win">TRAY EMPTY!</string>
+    <string name="puzzle_result_fitted">"You fitted %1$d  ·  %2$s fitted %3$d"</string>
+    <string name="puzzle_result_taught">"Taught bonus %1$d  ·  %2$s misjudged %3$d"</string>
+    <string name="puzzle_result_boards">Boards cleared %1$d of %2$d</string>
 </resources>

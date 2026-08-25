@@ -40,6 +40,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -48,6 +49,7 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.domain.MiniGame
@@ -512,11 +514,15 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                 .padding(10.dp),
         ) {
             GameHeader(
-                title = "Duet",
-                left = "Verse ${min(verse + 1, Verses)} of $Verses",
+                title = stringResource(R.string.game_duet),
+                left = stringResource(R.string.duet_verse, min(verse + 1, Verses), Verses),
                 // Deliberately not the score. There is a number and it is nobody's business
                 // until the song is over.
-                right = if (phase == Phase.THEIRS) "$petName sings" else "Your turn",
+                right = if (phase == Phase.THEIRS) {
+                    stringResource(R.string.duet_they_sing, petName)
+                } else {
+                    stringResource(R.string.duet_your_turn)
+                },
                 progress = progress,
                 onExit = onExit,
             )
@@ -531,13 +537,19 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
             Spacer(Modifier.height(8.dp))
 
             Text(
-                text = "The song so far",
+                text = stringResource(R.string.duet_song_so_far),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.semantics { heading() },
             )
             Spacer(Modifier.height(4.dp))
 
+            val songReadOut = stringResource(R.string.cd_duet_song, yourNotes, theirNotes, petName)
+            val phraseReadOut = if (phase == Phase.THEIRS) {
+                stringResource(R.string.cd_duet_answering, petName, min(played, reply.size), reply.size)
+            } else {
+                stringResource(R.string.cd_duet_your_phrase, phraseCount, phraseCap)
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -545,10 +557,7 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     .heightIn(min = 64.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF12141B))
-                    .semantics {
-                        contentDescription = "The song so far: $yourNotes notes from you and " +
-                            "$theirNotes from $petName, drawn as blocks with pitch as height."
-                    },
+                    .semantics { contentDescription = songReadOut },
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawLedger()
@@ -563,13 +572,7 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     .height(62.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(Color(0xFF171A22))
-                    .semantics {
-                        contentDescription = if (phase == Phase.THEIRS) {
-                            "$petName is answering, note ${min(played, reply.size)} of ${reply.size}"
-                        } else {
-                            "Your phrase: $phraseCount of $phraseCap notes"
-                        }
-                    },
+                    .semantics { contentDescription = phraseReadOut },
             ) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     drawLedger()
@@ -592,6 +595,8 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                     val degree = PadLowDegree + index
                     val lit = liveDegree == degree
                     val enabled = phase == Phase.YOURS && phraseCount < phraseCap
+                    val singLabel = stringResource(R.string.duet_sing, PadNames[index])
+                    val padReadOut = stringResource(R.string.cd_duet_pad, PadNames[index], index + 1, Pads)
                     Box(
                         modifier = Modifier
                             .weight(1f)
@@ -609,15 +614,13 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                             .clickable(
                                 enabled = enabled,
                                 role = Role.Button,
-                                onClickLabel = "Sing ${PadNames[index]}",
+                                onClickLabel = singLabel,
                             ) {
                                 phrase[phraseCount] = degree
                                 phraseCount += 1
                                 sing(degree, soundOn)
                             }
-                            .semantics {
-                                contentDescription = "Sing ${PadNames[index]}, pad ${index + 1} of $Pads"
-                            },
+                            .semantics { contentDescription = padReadOut },
                     ) {
                         // The pads are themselves a ladder: taller block, higher note.
                         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -640,26 +643,30 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 DuetButton(
-                    label = if (phraseCount > 0) "Take it back" else "Hear it again",
+                    label = stringResource(
+                        if (phraseCount > 0) R.string.duet_take_it_back else R.string.duet_hear_again,
+                    ),
                     enabled = phase == Phase.YOURS && (phraseCount > 0 || lastReply.isNotEmpty()),
                     accent = NeoColors.OnDarkMuted,
                     description = if (phraseCount > 0) {
-                        "Take back the last note you sang"
+                        stringResource(R.string.cd_duet_take_it_back)
                     } else {
-                        "Hear the last answer from $petName again"
+                        stringResource(R.string.cd_duet_hear_again, petName)
                     },
                     modifier = Modifier.weight(1f),
                 ) {
                     if (phraseCount > 0) phraseCount -= 1 else hearAgain()
                 }
                 DuetButton(
-                    label = if (phraseCount > 0) "Over to you" else "You start",
+                    label = stringResource(
+                        if (phraseCount > 0) R.string.duet_over_to_you else R.string.duet_you_start,
+                    ),
                     enabled = phase == Phase.YOURS,
                     accent = voice.accent,
                     description = if (phraseCount > 0) {
-                        "Hand your phrase of $phraseCount notes to $petName"
+                        stringResource(R.string.cd_duet_hand_over, phraseCount, petName)
                     } else {
-                        "Let $petName start this verse"
+                        stringResource(R.string.cd_duet_let_it_start, petName)
                     },
                     modifier = Modifier.weight(1f),
                 ) {
@@ -671,15 +678,15 @@ fun DuetGameScreen(viewModel: PetViewModel, onExit: () -> Unit) {
         if (phase == Phase.DONE) {
             val points = tally(yourNotes, theirNotes, echoes, sungVerses)
             GameResult(
-                title = "THE SONG ENDS",
+                title = stringResource(R.string.duet_result_title),
                 lines = listOf(
-                    "You sang $yourNotes notes, $petName answered with $theirNotes",
+                    stringResource(R.string.duet_result_notes, yourNotes, petName, theirNotes),
                     if (echoes > 0) {
-                        "You picked its line back up $echoes times"
+                        stringResource(R.string.duet_result_echoes, echoes)
                     } else {
-                        "You kept a line of your own throughout"
+                        stringResource(R.string.duet_result_own_line)
                     },
-                    "Score $points" + if (points > best) "  ★ NEW RECORD" else "",
+                    stringResource(if (points > best) R.string.game_score_record else R.string.game_score, points),
                 ),
                 onExit = onExit,
             )
