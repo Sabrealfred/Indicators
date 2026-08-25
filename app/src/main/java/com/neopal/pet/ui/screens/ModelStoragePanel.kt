@@ -226,9 +226,9 @@ fun ModelStoragePanel(modifier: Modifier = Modifier) {
  */
 private fun storageLine(bytes: Long): String =
     if (bytes <= 0L) {
-        "Using no storage on this device."
+        stringResource(R.string.model_storage_none)
     } else {
-        "Using ${ModelFetchRules.describeBytes(bytes)} of this device's storage."
+        stringResource(R.string.model_storage_used, ModelFetchRules.describeBytes(bytes))
     }
 
 private fun open(context: android.content.Context, url: String) {

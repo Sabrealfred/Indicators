@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.neopal.pet.R
 import com.neopal.pet.audio.ChiptuneEngine
 import com.neopal.pet.audio.Sfx
 import com.neopal.pet.data.Notifier
@@ -525,25 +526,25 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
         val lines = mutableListOf<String>()
         events.filterIsInstance<GameEvent.Evolved>().lastOrNull()?.let {
-            lines += "Evolved into a ${it.to.displayName} (${it.branch.displayName})."
+            lines += say(R.string.away_evolved, it.to.displayName, it.branch.displayName)
         }
-        if (events.any { it is GameEvent.Hatched }) lines += "The egg hatched while you were out."
+        if (events.any { it is GameEvent.Hatched }) lines += say(R.string.away_hatched)
         if (after.isDead) {
-            lines += "${after.name} passed away: ${after.deathReason?.displayName ?: "unknown"}."
+            lines += say(R.string.away_died, after.name, after.deathReason?.displayName ?: say(R.string.cause_unknown))
         } else {
             val messes = after.poops - before.poops
-            if (messes > 0) lines += "Made $messes mess${if (messes > 1) "es" else ""} on the floor."
-            if (after.isSick && !before.isSick) lines += "Caught something and needs medicine."
+            if (messes > 0) lines += many(R.plurals.away_messes, messes)
+            if (after.isSick && !before.isSick) lines += say(R.string.away_sick)
             val hunger = before.stats.satiety - after.stats.satiety
-            if (hunger > 15f) lines += "Got hungry — satiety fell ${hunger.toInt()} points."
-            if (after.isSleeping && !before.isSleeping) lines += "Fell asleep on its own."
+            if (hunger > 15f) lines += say(R.string.away_hungry, hunger.toInt())
+            if (after.isSleeping && !before.isSleeping) lines += say(R.string.away_slept)
             val mistakes = after.careMistakes - before.careMistakes
-            if (mistakes > 0) lines += "Logged $mistakes care mistake${if (mistakes > 1) "s" else ""}."
+            if (mistakes > 0) lines += many(R.plurals.away_mistakes, mistakes)
         }
         events.filterIsInstance<GameEvent.LeveledUp>().lastOrNull()?.let {
-            lines += "You reached keeper level ${it.level}."
+            lines += say(R.string.away_levelled, it.level)
         }
-        if (lines.isEmpty()) lines += "Nothing eventful. ${after.name} held up fine."
+        if (lines.isEmpty()) lines += say(R.string.away_uneventful, after.name)
         return OfflineReport(minutesAway = minutes, lines = lines, petName = after.name)
     }
 
@@ -607,8 +608,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 deltas = statDeltas(pet, updated),
             )
         }
-        val label = if (reward.missions.size == 1) reward.missions.first().title else "${reward.missions.size} missions"
-        showToast("$label complete — +${reward.coins} coins")
+        val label = if (reward.missions.size == 1) {
+            reward.missions.first().title
+        } else {
+            many(R.plurals.mission_count, reward.missions.size)
+        }
+        showToast(say(R.string.toast_missions_complete, label, reward.coins))
         handleEvents(events, offline = false)
         persist(updated)
     }
@@ -789,7 +794,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
         val route = talkRoute()
         if (!route.runsAModel) {
             play(Sfx.DENY)
-            showToast("${pet.name} has nowhere to think yet. Connect a brain in Settings.")
+            showToast(say(R.string.toast_no_brain, pet.name))
             return
         }
 
@@ -815,7 +820,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
             val now = _ui.value.pet ?: return@launch
             if (first == null) {
                 play(Sfx.DENY)
-                showToast("${now.name} did not answer.")
+                showToast(say(R.string.toast_no_answer, now.name))
                 return@launch
             }
             val answered = now.copy(
@@ -940,7 +945,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                     .takeLast(Simulation.MAX_CHAT_TURNS),
             )
             _ui.update { it.copy(pet = spoken) }
-            showToast("${now.name} said something.")
+            showToast(say(R.string.toast_said_something, now.name))
             persist(spoken)
         }
     }
@@ -951,6 +956,12 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
      * Only firsts and turning points. A creature that remarked on every meal would be a
      * notification, and people turn notifications off.
      */
+    // NOT localised, and not an oversight. These are the *prompt* handed to a language model,
+    // not anything a player reads. Translating them would change what the creature is asked and
+    // therefore what it says, which is a product decision about the model and has nothing to do
+    // with what language the buttons are in. If NeoPal ever speaks Spanish, this is written in
+    // whatever language the model is being asked to answer in — a different question, decided
+    // somewhere else. See docs/STRINGS.md.
     private fun unpromptedLine(event: GameEvent): String? = when (event) {
         is GameEvent.Evolved -> "You have just grown into a ${event.to.displayName}. Say something about it."
         is GameEvent.LearnedSkill -> "You have just worked out how to ${event.skill.displayName.lowercase()}. Mention it."
@@ -1062,36 +1073,54 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
 
     // ---------------------------------------------------------------- plumbing
 
+    /**
+     * Words, for the half of this class that produces them.
+     *
+     * An `AndroidViewModel` already holds an `Application`, so reading a resource here costs
+     * nothing and threads nothing: the `Context` was already in the constructor. This is the
+     * boundary §6.1 is about — the view model is UI, `domain/` is not, and only one of the two
+     * gets to know what language the phone is in.
+     */
+    private fun say(id: Int, vararg args: Any): String =
+        getApplication<Application>().getString(id, *args)
+
+    private fun many(id: Int, count: Int, vararg args: Any): String =
+        getApplication<Application>().resources
+            .getQuantityString(id, count, count, *args)
+
+    /** The pet's name, or a stand-in for the window where a toast outlives the creature. */
+    private fun petNameOrDefault(): String = _ui.value.pet?.name ?: say(R.string.your_pet)
+
     private fun handleEvents(events: List<GameEvent>, offline: Boolean) {
         events.forEach { event ->
             when (event) {
                 is GameEvent.Hatched -> {
                     triggerAnimation(PetAnimation.HATCH)
                     play(Sfx.HATCH)
-                    showToast("The egg hatched!")
+                    showToast(say(R.string.toast_hatched))
                 }
                 is GameEvent.Evolved -> {
                     triggerAnimation(PetAnimation.EVOLVE)
                     play(Sfx.EVOLVE)
                     _ui.update { it.copy(evolutionSplash = true) }
-                    showToast("Evolved into ${event.to.displayName} (${event.branch.displayName})!")
+                    showToast(say(R.string.toast_evolved, event.to.displayName, event.branch.displayName))
                 }
                 is GameEvent.LeveledUp -> {
                     if (!offline) triggerAnimation(PetAnimation.LEVEL_UP)
                     play(Sfx.LEVEL_UP)
-                    showToast("Keeper level ${event.level}!")
+                    showToast(say(R.string.toast_keeper_level, event.level))
                 }
                 is GameEvent.Died -> {
                     triggerAnimation(PetAnimation.DEAD)
                     play(Sfx.DEATH)
-                    showToast("${_ui.value.pet?.name ?: "Your pet"} passed away: ${event.reason.displayName}.")
+                    showToast(say(R.string.toast_died, petNameOrDefault(), event.reason.displayName))
                     // The other moment the out-of-sandbox copy exists for. A death is when a save
                     // becomes a record rather than a game in progress, and it is also when a
                     // player is most likely to uninstall.
                     _ui.value.pet?.let { mirror(it, force = true) }
                 }
-                is GameEvent.GotSick -> showToast("Your pet caught something.")
-                is GameEvent.Recovered -> showToast("Fully recovered!")
+                is GameEvent.GotSick -> showToast(say(R.string.toast_got_sick))
+                is GameEvent.Recovered -> showToast(say(R.string.toast_recovered))
                 is GameEvent.Pooped -> if (!offline) play(Sfx.BACK)
                 is GameEvent.Unlocked -> {
                     _ui.update { it.copy(achievementBanner = event.achievement) }
@@ -1104,33 +1133,33 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 // the player goes looking for it rather than having it thrown at them.
                 is GameEvent.LearnedSkill -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("Learned to ${event.skill.displayName.lowercase()} without being asked.")
+                    showToast(say(R.string.toast_learned_skill, event.skill.displayName.lowercase()))
                 }
                 is GameEvent.MetPal -> {
                     if (!offline) play(Sfx.SELECT)
-                    showToast("${event.pal.name} came by.")
+                    showToast(say(R.string.toast_pal_visited, event.pal.name))
                 }
                 is GameEvent.Befriended -> {
                     play(Sfx.HAPPY)
-                    showToast("${event.pal.name} is a friend now.")
+                    showToast(say(R.string.toast_befriended, event.pal.name))
                 }
                 is GameEvent.Paired -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("${_ui.value.pet?.name ?: "Your pet"} and ${event.pal.name} paired off.")
+                    showToast(say(R.string.toast_paired, petNameOrDefault(), event.pal.name))
                 }
                 is GameEvent.EggLaid -> {
                     play(Sfx.CONFIRM)
-                    showToast("There's an egg in the nest.")
+                    showToast(say(R.string.toast_egg_laid))
                 }
                 is GameEvent.ChildHatched -> {
                     if (!offline) triggerAnimation(PetAnimation.HATCH)
                     play(Sfx.HATCH)
-                    showToast("${event.child.name} hatched.")
+                    showToast(say(R.string.toast_child_hatched, event.child.name))
                 }
 
                 is GameEvent.LearnedFromExperience -> {
                     play(Sfx.LEVEL_UP)
-                    showToast("Worked something out on its own.")
+                    showToast(say(R.string.toast_self_taught))
                 }
 
                 // The other end of the line ChildHatched opens: a child that has grown up and
@@ -1142,7 +1171,7 @@ class PetViewModel(application: Application) : AndroidViewModel(application) {
                 is GameEvent.PalLeft -> when (event.departure) {
                     Departure.MOVED_OUT -> {
                         if (!offline) play(Sfx.CONFIRM)
-                        showToast("${event.name} has grown up and moved out.")
+                        showToast(say(R.string.toast_moved_out, event.name))
                     }
                     Departure.WENT_HOME, Departure.FORGOTTEN -> Unit
                 }

@@ -105,7 +105,7 @@ class WidgetSnapshotTest {
             val projected = Simulation.advance(saved, at, GameConfig.Default).state
             val gameSays = CareActions.topNeed(projected)
             if (snap.face == WidgetFace.ALIVE) {
-                assertEquals("need disagrees with topNeed", gameSays, snap.need?.label)
+                assertEquals("need disagrees with topNeed", gameSays, snap.need)
                 if (snap.need != null) seenNeeds++
             } else {
                 assertNull(snap.need)
@@ -118,13 +118,18 @@ class WidgetSnapshotTest {
     fun `every need the game can name has a face on the widget`() {
         // One state per branch of CareActions.topNeed, so a sixth need added there fails here
         // rather than showing up on a home screen as a chip that never appears.
+        //
+        // The assertion used to compare `snap.need?.label` against the English `topNeed`
+        // returned, which is why the enum here and the enum in the game were allowed to be two
+        // different enums with two different vocabularies. Both are `PetNeed` now, so the test
+        // compares identities and the compiler carries the rest.
         fun needOf(state: PetState) = WidgetSnapshot.of(state, nowMillis = now).need
         val full = Stats(satiety = 100f, happiness = 100f, energy = 100f, hygiene = 100f, health = 100f)
-        assertEquals(WidgetNeed.SICK, needOf(alive().copy(stats = full, isSick = true)))
-        assertEquals(WidgetNeed.FOOD, needOf(alive().copy(stats = full.copy(satiety = 0f))))
-        assertEquals(WidgetNeed.PLAY, needOf(alive().copy(stats = full.copy(happiness = 0f))))
-        assertEquals(WidgetNeed.REST, needOf(alive().copy(stats = full.copy(energy = 0f))))
-        assertEquals(WidgetNeed.DIRTY, needOf(alive().copy(stats = full.copy(hygiene = 0f))))
+        assertEquals(PetNeed.SICK, needOf(alive().copy(stats = full, isSick = true)))
+        assertEquals(PetNeed.HUNGRY, needOf(alive().copy(stats = full.copy(satiety = 0f))))
+        assertEquals(PetNeed.BORED, needOf(alive().copy(stats = full.copy(happiness = 0f))))
+        assertEquals(PetNeed.SLEEPY, needOf(alive().copy(stats = full.copy(energy = 0f))))
+        assertEquals(PetNeed.DIRTY, needOf(alive().copy(stats = full.copy(hygiene = 0f))))
         // And a settled pet is left alone.
         assertNull(needOf(alive().copy(stats = full)))
     }
@@ -206,7 +211,7 @@ class WidgetSnapshotTest {
     fun `nothing in the tin is said out loud rather than shown as a missing button`() {
         val starving = alive().copy(stats = alive().stats.copy(satiety = 2f), inventory = emptyMap())
         val snap = WidgetSnapshot.of(starving, nowMillis = now)
-        assertEquals(WidgetNeed.FOOD, snap.need)
+        assertEquals(PetNeed.HUNGRY, snap.need)
         assertNull(snap.offer)
         assertTrue(snap.detail.contains("nothing left"))
     }
@@ -220,7 +225,7 @@ class WidgetSnapshotTest {
         )
         assertNull(WidgetSnapshot.bestMedicineFor(ill))
         val snap = WidgetSnapshot.of(ill, nowMillis = now)
-        assertEquals(WidgetNeed.SICK, snap.need)
+        assertEquals(PetNeed.SICK, snap.need)
         assertNull(snap.offer)
     }
 
@@ -377,7 +382,7 @@ class WidgetSnapshotTest {
         val projected = Simulation.advance(hungryLater, at, GameConfig.Default).state
         assertTrue("the save itself never moved", hungryLater.stats.satiety - projected.stats.satiety > 20f)
         assertNotNull("three hours of neglect and the widget says nothing", later.need)
-        assertEquals(CareActions.topNeed(projected), later.need?.label)
+        assertEquals(CareActions.topNeed(projected), later.need)
     }
 
     // ------------------------------------------------------------------ helpers

@@ -10,6 +10,35 @@ enum class PetAnimation {
 }
 
 /**
+ * The one thing a creature most wants right now.
+ *
+ * This used to be five English words. [topNeed] returned one of them, `HomeScreen` compared the
+ * result against string literals to pick a quick-care button, and `WidgetSnapshot` had a second
+ * enum whose whole job was to match those same words back into a case — a round trip through
+ * English to get from a decision to a decision. Its own comment admitted the failure mode: "a
+ * widget that has fallen behind a change in the game says nothing rather than guessing", which is
+ * what happens when the two spellings drift apart. Nothing warns you; the chip just stops.
+ *
+ * So the identity travels as this, and the words for it are the reader's problem. That is the
+ * rule §6.1 of docs/PLAN.md is really about, stated once where it is cheapest to see: the domain
+ * says *what*, the UI says *what it is called*. The domain keeps no `Context` and gains no
+ * import, and the `when` in `HomeScreen` is now exhaustive over five cases, so a sixth need is a
+ * compile error at every site that has to handle it instead of a literal nobody updated.
+ *
+ * [label] is what the widget currently prints. It is the last of the English still here and it
+ * stays for now on purpose: the widget builds its own copy inside this pure file so a
+ * `RemoteViews` can be assembled off the main thread, and moving that is a separate change with
+ * a different shape. See docs/STRINGS.md.
+ */
+enum class PetNeed(val label: String) {
+    SICK("Sick"),
+    HUNGRY("Hungry"),
+    DIRTY("Dirty"),
+    SLEEPY("Sleepy"),
+    BORED("Bored"),
+}
+
+/**
  * Whose hands did it.
  *
  * A care action changes two separate things and they were treated as one: the *world* (the tin
@@ -517,16 +546,16 @@ object CareActions {
     fun count(state: PetState, itemId: String): Int = state.inventory[itemId] ?: 0
 
     /** Highest-priority need, used for the "what does it want" hint bubble. */
-    fun topNeed(state: PetState): String? {
+    fun topNeed(state: PetState): PetNeed? {
         if (state.isDead || state.isEgg) return null
         val needs = listOf(
-            "Hungry" to (100f - state.stats.satiety),
-            "Bored" to (100f - state.stats.happiness),
-            "Sleepy" to (100f - state.stats.energy),
-            "Dirty" to (100f - state.stats.hygiene) + state.poops * 15f,
-            "Sick" to if (state.isSick) 200f else 0f,
+            PetNeed.HUNGRY to (100f - state.stats.satiety),
+            PetNeed.BORED to (100f - state.stats.happiness),
+            PetNeed.SLEEPY to (100f - state.stats.energy),
+            PetNeed.DIRTY to (100f - state.stats.hygiene) + state.poops * 15f,
+            PetNeed.SICK to if (state.isSick) 200f else 0f,
         )
-        val (label, severity) = needs.maxBy { it.second }
-        return if (severity >= min(65f, 100f)) label else null
+        val (need, severity) = needs.maxBy { it.second }
+        return if (severity >= min(65f, 100f)) need else null
     }
 }

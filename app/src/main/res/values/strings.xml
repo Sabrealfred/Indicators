@@ -904,4 +904,60 @@
     <string name="cd_hide_you_are_here">%1$s, you are hiding here</string>
     <string name="cd_hide_already_searched">%1$s, already searched</string>
     <string name="cd_hide_already_emptied">%1$s, already emptied</string>
+
+    <string name="your_pet">Your pet</string>
+    <string name="cause_unknown">unknown</string>
+
+    <!-- The "while you were away" report -->
+    <string name="away_evolved">Evolved into a %1$s (%2$s).</string>
+    <string name="away_hatched">The egg hatched while you were out.</string>
+    <string name="away_died">%1$s passed away: %2$s.</string>
+    <string name="away_sick">Caught something and needs medicine.</string>
+    <string name="away_hungry">Got hungry — satiety fell %1$d points.</string>
+    <string name="away_slept">Fell asleep on its own.</string>
+    <string name="away_levelled">You reached keeper level %1$d.</string>
+    <string name="away_uneventful">Nothing eventful. %1$s held up fine.</string>
+    <plurals name="away_messes">
+        <item quantity="one">Made %1$d mess on the floor.</item>
+        <item quantity="other">Made %1$d messes on the floor.</item>
+    </plurals>
+    <plurals name="away_mistakes">
+        <item quantity="one">Logged %1$d care mistake.</item>
+        <item quantity="other">Logged %1$d care mistakes.</item>
+    </plurals>
+
+    <!-- Toasts raised by the view model -->
+    <string name="toast_missions_complete">%1$s complete — +%2$d coins</string>
+    <string name="toast_no_brain">%1$s has nowhere to think yet. Connect a brain in Settings.</string>
+    <string name="toast_no_answer">%1$s did not answer.</string>
+    <string name="toast_said_something">%1$s said something.</string>
+    <string name="toast_hatched">The egg hatched!</string>
+    <string name="toast_evolved">Evolved into %1$s (%2$s)!</string>
+    <string name="toast_keeper_level">Keeper level %1$d!</string>
+    <string name="toast_died">%1$s passed away: %2$s.</string>
+    <string name="toast_got_sick">Your pet caught something.</string>
+    <string name="toast_recovered">Fully recovered!</string>
+    <string name="toast_learned_skill">Learned to %1$s without being asked.</string>
+    <string name="toast_pal_visited">%1$s came by.</string>
+    <string name="toast_befriended">%1$s is a friend now.</string>
+    <string name="toast_paired">%1$s and %2$s paired off.</string>
+    <string name="toast_egg_laid">There\'s an egg in the nest.</string>
+    <string name="toast_child_hatched">%1$s hatched.</string>
+    <string name="toast_self_taught">Worked something out on its own.</string>
+    <string name="toast_moved_out">%1$s has grown up and moved out.</string>
+
+    <!-- Generation verdict, stats screen -->
+    <string name="verdict_ahead">%1$s has already outgrown generation %2$d.</string>
+    <string name="verdict_behind">Generation %1$d reached %2$s. %3$s is not there yet.</string>
+    <string name="verdict_quicker">Same stage as generation %1$d, and %2$s quicker about it.</string>
+    <string name="verdict_slower">Same stage as generation %1$d, %2$s later.</string>
+    <string name="verdict_level">Neck and neck with generation %1$d so far.</string>
+
+    <!-- On-device model storage -->
+    <string name="model_storage_none">Using no storage on this device.</string>
+    <string name="model_storage_used">Using %1$s of this device\'s storage.</string>
+
+    <!-- Updater -->
+    <string name="update_installer_open">The system installer is open. If you confirm, NeoPal closes and comes back as the new build; if you back out, the downloaded file is still here.</string>
+    <string name="update_no_per_app_screen">This version of Android has no per-app screen for this. The switch is under Settings, Security, \"unknown sources\".</string>
 </resources>

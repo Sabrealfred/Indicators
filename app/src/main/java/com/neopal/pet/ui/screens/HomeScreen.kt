@@ -101,6 +101,7 @@ import com.neopal.pet.domain.Memorial
 import com.neopal.pet.domain.Item
 import com.neopal.pet.domain.ItemCatalog
 import com.neopal.pet.domain.ItemKind
+import com.neopal.pet.domain.PetNeed
 import com.neopal.pet.domain.PetState
 import com.neopal.pet.ui.PetViewModel
 import com.neopal.pet.ui.Routes
@@ -246,21 +247,27 @@ fun HomeScreen(
 
     // One highlight at a time: the dock should answer "what now?" without doing it for you.
     val urgent = CareActions.topNeed(pet)
-    fun cue(need: String): Int = if (urgent == need) 1 else 0
+    fun cue(need: PetNeed): Int = if (urgent == need) 1 else 0
     // A finished mission is the only thing in this game that waits to be collected, so it gets
     // the dock's own badge rather than a strip of its own — the pet keeps every pixel it had.
     val collectable = viewModel.missions().count { it.claimable }
     // True when the brain wanted something and could not have it for want of a skill. Anything
     // else it is blocked on — an empty pantry, broad daylight — is not the player's cue to teach.
+    // KNOWN BUG, left deliberately and written down in docs/STRINGS.md §2.3: this compares an
+    // English sentence the domain wrote against an English literal the UI holds. It is the same
+    // shape `CareActions.topNeed` had until this branch turned it into `PetNeed`, and it fails
+    // the same silent way — reword `Brain`'s blocker and the badge stops appearing, with nothing
+    // to say so. It is not fixed here because the fix is `blockedBy: Blocker?` across all of
+    // `Brain`, which is a change about the brain and not about strings.
     val wantsTeaching = pet.autonomy != Autonomy.OFF &&
         viewModel.considerations().any { it.blockedBy == "not learned yet" }
     val actions = listOf(
-        HomeAction(stringResource(R.string.action_feed), Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue("Hungry")) { showFeedSheet = true },
+        HomeAction(stringResource(R.string.action_feed), Icons.Filled.Restaurant, NeoColors.StatSatiety, enabled = !pet.isDead, badge = cue(PetNeed.HUNGRY)) { showFeedSheet = true },
         HomeAction(stringResource(R.string.action_clean), Icons.Filled.CleaningServices, NeoColors.StatHygiene, enabled = !pet.isDead, badge = pet.poops) { viewModel.cleanRoom() },
-        HomeAction(stringResource(R.string.action_play), Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue("Bored")) { onOpen(Routes.GAMES) },
+        HomeAction(stringResource(R.string.action_play), Icons.Filled.SportsEsports, NeoColors.NeonCyan, enabled = CareActions.canPlay(pet) == null, badge = cue(PetNeed.BORED)) { onOpen(Routes.GAMES) },
         HomeAction(stringResource(R.string.action_missions), Icons.Filled.Assignment, NeoColors.NeonYellow, badge = collectable) { onOpen(Routes.MISSIONS) },
         HomeAction(stringResource(R.string.action_medicine), Icons.Filled.Medication, NeoColors.StatHealth, enabled = !pet.isDead, badge = if (pet.isSick) 1 else 0) { viewModel.useMedicine() },
-        HomeAction(stringResource(if (pet.lightsOff) R.string.action_lights_on else R.string.action_lights_off), Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue("Sleepy")) { viewModel.toggleLights() },
+        HomeAction(stringResource(if (pet.lightsOff) R.string.action_lights_on else R.string.action_lights_off), Icons.Filled.Lightbulb, NeoColors.StatEnergy, enabled = !pet.isDead, badge = cue(PetNeed.SLEEPY)) { viewModel.toggleLights() },
         HomeAction(stringResource(R.string.action_praise), Icons.Filled.ThumbUp, NeoColors.StatBond, enabled = !pet.isDead) { viewModel.praise() },
         HomeAction(stringResource(R.string.action_scold), Icons.Filled.ThumbDown, NeoColors.StatDiscipline, enabled = !pet.isDead) { viewModel.scold() },
         // The badge is the pet asking to be taught: an autonomous creature that wants something
@@ -489,8 +496,11 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
         }
     }
 
+    // Exhaustive over `PetNeed` because the subject is an enum now, so a sixth need cannot be
+    // added to the game without this `when` refusing to compile. It used to be five string
+    // literals with an `else -> null`, which is the same code that silently shows nothing.
     return when (CareActions.topNeed(pet)) {
-        "Hungry" -> {
+        PetNeed.HUNGRY -> {
             val food = ItemCatalog.foods.filter { owned(it.id) }.maxByOrNull { it.satiety }
             if (food != null) {
                 QuickCare(
@@ -509,7 +519,7 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
             }
         }
 
-        "Dirty" -> when {
+        PetNeed.DIRTY -> when {
             pet.poops > 0 -> QuickCare(
                 label = stringResource(R.string.quick_clean_room),
                 reason = pluralStringResource(R.plurals.quick_mess_on_floor, pet.poops, pet.poops),
@@ -532,7 +542,7 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
             ) { viewModel.cleanRoom() }
         }
 
-        "Sleepy" -> QuickCare(
+        PetNeed.SLEEPY -> QuickCare(
             label = stringResource(R.string.quick_tuck_in, pet.name),
             reason = stringResource(R.string.quick_energy, pet.stats.energy.roundToInt()),
             icon = Icons.Filled.Lightbulb,
@@ -540,7 +550,7 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
         ) { viewModel.putToSleep() }
 
         // Too tired or too ill to play is still boredom; petting is the one thing always accepted.
-        "Bored" -> if (CareActions.canPlay(pet) == null) {
+        PetNeed.BORED -> if (CareActions.canPlay(pet) == null) {
             QuickCare(
                 label = stringResource(R.string.quick_play_game),
                 reason = stringResource(R.string.quick_happiness, pet.stats.happiness.roundToInt()),
@@ -556,7 +566,9 @@ private fun quickCareFor(pet: PetState, viewModel: PetViewModel, onOpen: (String
             ) { viewModel.petPet() }
         }
 
-        else -> null
+        // Sickness is handled above, before the need is even asked for, because the medicine
+        // branch has to choose an item and not just a verb.
+        PetNeed.SICK, null -> null
     }
 }
 

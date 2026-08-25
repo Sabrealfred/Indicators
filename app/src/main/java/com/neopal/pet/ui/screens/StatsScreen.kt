@@ -394,17 +394,26 @@ private fun Ending(last: RunRecord) {
 }
 
 /** One honest sentence about the comparison, including "too early to tell". */
+@Composable
 private fun verdict(pet: PetState, last: RunRecord, nowDays: Int, thenDays: Int): String = when {
     pet.stage.order > last.stage.order ->
-        "${pet.name} has already outgrown generation ${last.generation}."
+        stringResource(R.string.verdict_ahead, pet.name, last.generation)
     pet.stage.order < last.stage.order ->
-        "Generation ${last.generation} reached ${last.stage.displayName}. ${pet.name} is not there yet."
+        stringResource(R.string.verdict_behind, last.generation, last.stage.displayName, pet.name)
     nowDays < thenDays ->
-        "Same stage as generation ${last.generation}, and ${thenDays - nowDays} pet day(s) quicker about it."
+        stringResource(
+            R.string.verdict_quicker,
+            last.generation,
+            pluralStringResource(R.plurals.day_count, thenDays - nowDays, thenDays - nowDays),
+        )
     nowDays > thenDays ->
-        "Same stage as generation ${last.generation}, ${nowDays - thenDays} pet day(s) later."
+        stringResource(
+            R.string.verdict_slower,
+            last.generation,
+            pluralStringResource(R.plurals.day_count, nowDays - thenDays, nowDays - thenDays),
+        )
     else ->
-        "Neck and neck with generation ${last.generation} so far."
+        stringResource(R.string.verdict_level, last.generation)
 }
 
 @Composable

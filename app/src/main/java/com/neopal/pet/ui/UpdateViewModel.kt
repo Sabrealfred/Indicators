@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.neopal.pet.R
 import com.neopal.pet.data.CheckTrigger
 import com.neopal.pet.data.InstallLaunch
 import com.neopal.pet.data.UpdateService
@@ -204,8 +205,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         // Named `outcome` rather than `launch`, which is a coroutine builder in scope here.
         when (val outcome = service.startInstall()) {
             InstallLaunch.Started -> note(
-                "The system installer is open. If you confirm, NeoPal closes and comes back as " +
-                    "the new build; if you back out, the downloaded file is still here.",
+                getApplication<Application>().getString(R.string.update_installer_open),
             )
             // The permission was revoked between the screen being drawn and the button being
             // pressed. Re-reading it swings the plan over to the permission gate, which is the
@@ -219,8 +219,7 @@ class UpdateViewModel(application: Application) : AndroidViewModel(application) 
         val intent = service.unknownSourcesSettingsIntent()
         if (intent == null) {
             note(
-                "This version of Android has no per-app screen for this. The switch is under " +
-                    "Settings, Security, \"unknown sources\".",
+                getApplication<Application>().getString(R.string.update_no_per_app_screen),
             )
             return
         }
