@@ -1,0 +1,36 @@
+name: LedgerBank platform
+
+on:
+  push:
+    branches: [main, "claude/**", "ccr-**"]
+    paths: ["platform/**", ".github/workflows/platform.yml"]
+  pull_request:
+    paths: ["platform/**", ".github/workflows/platform.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: API tests + web build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: platform/package-lock.json
+      - run: npm ci
+      - name: API typecheck
+        run: npm run typecheck --workspace api
+      - name: API tests (ledger invariants, payments, cards, AP/AR, books, permissions)
+        run: npm test --workspace api
+      - name: Web typecheck
+        run: npm run typecheck --workspace web
+      - name: Web build
+        run: npm run build --workspace web
