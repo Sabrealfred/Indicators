@@ -1,0 +1,15 @@
+# One-click demo deploy of the LedgerBank platform (platform/) on Render.
+# Free plan: the service sleeps when idle and the demo database is re-seeded
+# on each cold start, so changes made in the demo do not persist.
+services:
+  - type: web
+    name: ledgerbank-demo
+    runtime: node
+    plan: free
+    rootDir: platform
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

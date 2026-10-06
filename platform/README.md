@@ -27,6 +27,14 @@ Open http://localhost:3000 and log in (password `demo1234` for everyone):
 | priya@acmerobotics.dev | Bookkeeper | books, AP/AR; payments need admin approval |
 | diego@acmerobotics.dev | Employee | own cards and reimbursements only |
 
+### Host the demo
+
+`npm run build && npm start` runs everything as one service on `$PORT` (the API stays private
+on 4000 behind the web app's `/api` proxy), so any Node host works. On Render, the repository's
+[`render.yaml`](../render.yaml) does it in one step: **New → Blueprint**, pick this repository and
+branch, and deploy. The free plan sleeps when idle and re-seeds the demo data on every cold start.
+The demo logins are public, so keep only fake data in a hosted copy.
+
 Other commands: `npm test` (API test suite), `npm run reset --workspace api` (wipe and re-seed),
 `docker compose up --build` (containerized).
 
