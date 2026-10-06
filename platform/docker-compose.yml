@@ -1,0 +1,12 @@
+services:
+  api:
+    build: { context: ., dockerfile: api/Dockerfile }
+    ports: ["4000:4000"]
+    volumes: ["ledgerbank-data:/data"]
+  web:
+    build: { context: ., dockerfile: web/Dockerfile, args: { API_URL: "http://api:4000" } }
+    environment: { API_URL: "http://api:4000" }
+    ports: ["3000:3000"]
+    depends_on: [api]
+volumes:
+  ledgerbank-data:

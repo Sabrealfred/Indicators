@@ -15,6 +15,13 @@ conversa, elige entre las opciones que el juego ya validó y se pone sus propios
 - Estado vivo de lo hecho y lo que falta: **[docs/PLAN.md](docs/PLAN.md)**
 - Los 100 items del backlog: **[docs/IMPROVEMENTS.md](docs/IMPROVEMENTS.md)**
 
+## LedgerBank (plataforma financiera)
+
+Este repo también aloja **[platform/](platform/README.md)**: una plataforma de banca empresarial +
+contabilidad estilo Mercury (cuentas, pagos ACH/wire, tarjetas, crédito, treasury, bill pay,
+facturación, reembolsos y libros contables de partida doble) con base de datos dummy y un
+simulador de la red bancaria. Es independiente de la app Android: `cd platform && npm install && npm run dev`.
+
 ## Descargar el APK
 
 Cada push a `main` o a una rama `claude/**` compila en GitHub Actions y refresca una

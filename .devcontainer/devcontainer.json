@@ -1,0 +1,15 @@
+{
+  // GitHub Codespaces / Dev Containers setup for the LedgerBank demo in platform/.
+  // Opening a codespace installs dependencies and starts the API and web app;
+  // the web app opens on port 3000. Demo login: demo@ledgerbank.dev / demo1234.
+  "name": "LedgerBank demo",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "cd platform && npm ci",
+  "postAttachCommand": "cd platform && npm run dev",
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "LedgerBank web", "onAutoForward": "openBrowser" },
+    "4000": { "label": "LedgerBank API (internal)", "onAutoForward": "silent" }
+  },
+  "hostRequirements": { "cpus": 2, "memory": "4gb" }
+}
