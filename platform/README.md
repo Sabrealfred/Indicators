@@ -27,6 +27,13 @@ Open http://localhost:3000 and log in (password `demo1234` for everyone):
 | priya@acmerobotics.dev | Bookkeeper | books, AP/AR; payments need admin approval |
 | diego@acmerobotics.dev | Employee | own cards and reimbursements only |
 
+### Open it in GitHub Codespaces
+
+On the repository page: **Code → Codespaces → Create codespace on this branch**. The
+[dev container](../.devcontainer/devcontainer.json) installs dependencies and runs `npm run dev`;
+the app opens on port 3000 when it is ready (about 2–3 minutes the first time). The forwarded
+port is private to your GitHub account unless you change its visibility in the **Ports** tab.
+
 ### Host the demo
 
 `npm run build && npm start` runs everything as one service on `$PORT` (the API stays private
