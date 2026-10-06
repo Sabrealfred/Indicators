@@ -55,7 +55,7 @@ export default function CreditPage() {
         <Stat label="Cashback earned" value={money(cashbackTotal)} tone="pos" hint="1.5% on every purchase" />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Utilization" className="lg:col-span-2">
           <div className="flex items-baseline justify-between">
             <span className="text-2xl font-semibold tabular">{util.toFixed(1)}%</span>

@@ -152,7 +152,7 @@ function SecretNumber({ label, value }: { label: string; value: string }) {
 
 function Details({ account: a }: { account: Account }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card title="Account & routing numbers">
         <div className="divide-y divide-line">
           <SecretNumber label="Account number" value={a.account_number} />

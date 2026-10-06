@@ -66,7 +66,7 @@ export default function TreasuryPage() {
         <Stat label="Interest earned" value={money(totalInterest)} tone="pos" hint={`${money(ytd)} this year`} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Monthly interest" className="lg:col-span-2">
           {!interest.data ? <Loading /> : !monthly.length ? <Empty title="No interest paid yet" hint="Interest is credited at month-end." /> : (
             <div className="flex h-[180px] items-end gap-2 sm:gap-4">

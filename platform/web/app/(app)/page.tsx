@@ -88,7 +88,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Cash flow" className="lg:col-span-2"><CashflowChart data={d.monthly_cashflow} /></Card>
         <Card title="Accounts" padded={false}>
           <ul className="divide-y divide-line">
@@ -109,7 +109,7 @@ export default function Home() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2"><RecentTransactions rows={tx.data?.rows} /></div>
         <Card title="Top spend · 30 days">
           {d.top_spend_categories.length ? (

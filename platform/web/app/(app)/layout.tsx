@@ -64,6 +64,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (!ready || !me.data) return <div className="p-10 text-muted">{me.error ?? 'Loading…'}</div>;
   const role = me.data.user.role;
+  // The nav item that owns this path (longest prefix) decides who may open it, so a typed URL
+  // shows a clear message instead of a page full of refused API calls.
+  const owner = NAV.flatMap((g) => g.items).filter((it) => (it.href === '/' ? path === '/' : path === it.href || path.startsWith(it.href + '/'))).sort((a, b) => b.href.length - a.href.length)[0];
+  const allowed = !owner?.roles || owner.roles.includes(role);
   const active = (href: string) => (href === '/' ? path === '/' : href === '/books' ? path === '/books' : path.startsWith(href));
 
   const logout = async () => {
@@ -119,7 +123,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <button onClick={() => setMenu(true)} className="rounded border border-line px-2 py-1" aria-label="Menu">☰</button>
             <span className="font-semibold">{me.data.organization.name}</span>
           </div>
-          <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">{children}</main>
+          <main className="mx-auto max-w-6xl px-4 py-8 sm:px-8">
+            {allowed ? children : (
+              <div className="py-20 text-center">
+                <div className="text-lg font-semibold">You don&apos;t have access to this page</div>
+                <p className="mt-1 text-muted">Your role ({role}) can&apos;t open {owner?.label}. Ask an admin if you need it.</p>
+                <Link href="/" className="mt-4 inline-block font-medium text-brand-600">Back to Home</Link>
+              </div>
+            )}
+          </main>
         </div>
       </div>
     </SessionContext.Provider>

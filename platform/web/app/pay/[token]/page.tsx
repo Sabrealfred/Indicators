@@ -76,7 +76,7 @@ export default function HostedInvoicePage() {
 
   return (
     <Shell>
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_340px]">
         {/* Invoice document */}
         <article className="rounded-xl border border-line bg-surface p-5 shadow-[0_1px_2px_rgba(0,0,0,0.03)] sm:p-8">
           <header className="flex flex-wrap items-start justify-between gap-4">
